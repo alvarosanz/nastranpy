@@ -11,6 +11,10 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
         elif re.search('^[a-zA-Z]', line):
 
             if card:
+
+                if is_free_field:
+                    card = get_fields_from_free_field_string(card)
+
                 card = process_fields(card, not raw_output)
 
                 if not raw_output:
@@ -54,7 +58,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
                     continue
 
                 if is_free_field:
-                    card = line[:-1].split(',')
+                    card = line[:-1]
                 else:
                     card = [card_type]
 
@@ -68,8 +72,6 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
                 continue
 
             comment = ''
-            card += fields_from_empty_lines
-            fields_from_empty_lines = list()
 
             if line[0] == '*':
                 is_large_field = True
@@ -80,12 +82,19 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
                 n_fields = 8
 
             if is_free_field:
-                card += line[:-1].split(',')[1:]
+                card += line[:-1]
             else:
+                card += fields_from_empty_lines
+                fields_from_empty_lines = list()
+
                 for i in range(n_fields):
                     card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
 
     if card:
+
+        if is_free_field:
+            card = get_fields_from_free_field_string(card)
+
         card = process_fields(card, not raw_output)
 
         if not raw_output:
@@ -93,6 +102,16 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
             card.comment = card_comment
 
         yield card
+
+
+def get_fields_from_free_field_string(free_field_string):
+    fields = [field for field in (x.strip() for x in free_field_string.split(',')) if
+              not field[:1] in ('+', '*')]
+
+    if fields[0][-1] == '*':
+        fields[0] = fields[0][:-1]
+
+    return fields
 
 
 def process_fields(fields, convert_to_numbers):
