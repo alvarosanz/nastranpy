@@ -8,6 +8,7 @@ class Card(object):
         self.free_field = free_field
         self.is_commented = False
         self.comment = ''
+        self.print_comment = True
         self.include = None
 
     def __repr__(self):
@@ -15,6 +16,12 @@ class Card(object):
 
     def __str__(self):
         self.clear_tail()
+
+        if self.print_comment:
+            comment = self.comment
+        else:
+            comment = ''
+
         return print_card(self.fields, large_field=self.large_field, free_field=self.free_field,
                           comment=self.comment, is_commented=self.is_commented)
 

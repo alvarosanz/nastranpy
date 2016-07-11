@@ -1,21 +1,30 @@
 import re
 from nastran_tools.bdf.cards.card import Card
 
-def cards_in_file(file, card_types=[], raw_output=False, only_ids=False):
+def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_comments=False):
     card = list()
+    comment = ''
 
     for line in file:
-
-        if re.search('^[a-zA-Z]', line):
+        if re.search('^ *\$', line):
+            comment += line
+        elif re.search('^[a-zA-Z]', line):
 
             if card:
                 card = process_fields(card, not raw_output)
 
                 if not raw_output:
                     card = Card(card, large_field=is_large_field, free_field=is_free_field)
+                    card.comment = card_comment
 
                 yield card
 
+            if ignore_comments:
+                card_comment = ''
+            else:
+                card_comment = comment
+
+            comment = ''
             card = list()
             fields_from_empty_lines = list()
             card_type = line[:8].strip()
@@ -52,12 +61,13 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False):
                     for i in range(n_fields):
                         card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
 
-        elif card and not re.search('^ *\$', line):
+        elif card:
 
             if not line[:-1].strip():
                 fields_from_empty_lines += ['' for i in range(8)]
                 continue
 
+            comment = ''
             card += fields_from_empty_lines
             fields_from_empty_lines = list()
 
@@ -80,6 +90,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False):
 
         if not raw_output:
             card = Card(card, large_field=is_large_field, free_field=is_free_field)
+            card.comment = card_comment
 
         yield card
 
