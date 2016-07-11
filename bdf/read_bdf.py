@@ -3,12 +3,6 @@ from nastran_tools.bdf.cards.card import Card
 
 def cards_in_file(file, card_types=[], raw_output=False, only_ids=False):
     card = list()
-    card_type = ''
-    item_id = 0
-    is_free_field = False
-    is_large_field = False
-    field_length = 8
-    n_fields = 8
 
     for line in file:
 
@@ -18,30 +12,31 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False):
                 card = process_fields(card, not raw_output)
 
                 if not raw_output:
-                    card = Card(card)
+                    card = Card(card, large_field=is_large_field, free_field=is_free_field)
 
                 yield card
-                card = list()
+
+            card = list()
+            fields_from_empty_lines = list()
+            card_type = line[:8].strip()
+            item_id = line[8:16].strip()
+            is_free_field = False
+            is_large_field = False
+            field_length = 8
+            n_fields = 8
 
             if ',' in line[:8]: # Free-field format
                 is_free_field = True
-                fields = line.split(',')
-                card_type = fields[0].upper()
-                item_id = fields[1]
-            elif line[:8].strip()[-1] == '*': # Large-field format
-                is_free_field = False
+                card_type, item_id = line.split(',')[:2]
+
+            if card_type[-1] == '*': # Large-field format
                 is_large_field = True
                 field_length = 16
                 n_fields = 4
-                card_type = line[:8].strip()[:-1].upper()
+                card_type = card_type[:-1]
                 item_id = line[8:24].strip()
-            else:  # Small-field format
-                is_free_field = False
-                is_large_field = False
-                field_length = 8
-                n_fields = 8
-                card_type = line[:8].strip().upper()
-                item_id = line[8:16].strip()
+
+            card_type = card_type.upper()
 
             if not card_types or card_type in card_types:
 
@@ -57,12 +52,26 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False):
                     for i in range(n_fields):
                         card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
 
-        elif card and not re.search('^ *\$', line) and len(line[:-1].strip()):
+        elif card and not re.search('^ *\$', line):
+
+            if not line[:-1].strip():
+                fields_from_empty_lines += ['' for i in range(8)]
+                continue
+
+            card += fields_from_empty_lines
+            fields_from_empty_lines = list()
+
+            if line[0] == '*':
+                is_large_field = True
+                field_length = 16
+                n_fields = 4
+            else:
+                field_length = 8
+                n_fields = 8
 
             if is_free_field:
                 card += line[:-1].split(',')[1:]
             else:
-
                 for i in range(n_fields):
                     card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
 
@@ -70,7 +79,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False):
         card = process_fields(card, not raw_output)
 
         if not raw_output:
-            card = Card(card)
+            card = Card(card, large_field=is_large_field, free_field=is_free_field)
 
         yield card
 

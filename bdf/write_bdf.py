@@ -11,16 +11,17 @@ def print_card(fields, large_field=False, free_field=False,
     else:
         field_length= 8
         n_fields = 8
-        continuation_mark = '+'
+
+        if use_continuation_marks:
+            continuation_mark = '+'
+        else:
+            continuation_mark = ''
 
     if free_field:
         separator = ','
     else:
         separator = ''
         card = card.ljust(8)
-
-    if not use_continuation_marks:
-        continuation_mark = ''
 
     if is_commented:
         comment_mark = '$ '
