@@ -1,4 +1,34 @@
+from enum import Enum
 from nastran_tools.bdf.write_bdf import print_card
+
+
+class Item(Enum):
+    grid = 'grid'
+    elem = 'elem'
+    prop = 'prop'
+    mat = 'mat'
+    coord = 'coord'
+    load = 'load'
+    spc = 'spc'
+    mpc = 'mpc'
+
+
+def iterate_items_factory(item_type):
+
+    def wrapped(self):
+
+        for field in self.fields:
+
+            try:
+
+                if field.item_type is item_type:
+                    yield field
+
+            except AttributeError:
+                pass
+
+    return wrapped
+
 
 class Card(object):
 
@@ -9,6 +39,7 @@ class Card(object):
         self.is_commented = False
         self.comment = ''
         self.print_comment = True
+        self.item_type = None
         self.include = None
 
     def __repr__(self):
@@ -77,3 +108,6 @@ class Card(object):
 
         return fields
 
+
+for item_type in Item:
+    setattr(Card, item_type.name + 's', iterate_items_factory(item_type))
