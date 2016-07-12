@@ -15,14 +15,13 @@ class Card(object):
         return "'{} {}: {}'".format(self.type, self.id, super().__repr__())
 
     def __str__(self):
-        self.clear_tail()
 
         if self.print_comment:
             comment = self.comment
         else:
             comment = ''
 
-        return print_card(self.fields, large_field=self.large_field, free_field=self.free_field,
+        return print_card(self.get_fields(), large_field=self.large_field, free_field=self.free_field,
                           comment=self.comment, is_commented=self.is_commented)
 
     @property
@@ -64,3 +63,17 @@ class Card(object):
                 break
 
         del self.fields[last_index + 1:]
+
+    def get_fields(self):
+        self.clear_tail()
+        fields = list()
+
+        for field in self.fields:
+
+            try:
+                fields.append(field.id)
+            except AttributeError:
+                fields.append(field)
+
+        return fields
+
