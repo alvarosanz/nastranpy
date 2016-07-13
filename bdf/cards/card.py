@@ -19,13 +19,10 @@ def iterate_items_factory(item_type):
 
         for field in self.fields:
 
-            try:
+            if isinstance(field, Card):
 
                 if field.item_type is item_type:
                     yield field
-
-            except AttributeError:
-                pass
 
     return wrapped
 
@@ -96,17 +93,17 @@ class Card(object):
         del self.fields[last_index + 1:]
 
     def get_fields(self):
-        self.clear_tail()
-        fields = list()
+        fields = list(self.fields)
 
-        for field in self.fields:
+        for index, field in enumerate(fields):
 
-            try:
-                fields.append(field.id)
-            except AttributeError:
-                fields.append(field)
+            if field != '':
+                last_index = index
 
-        return fields
+                if isinstance(field, Card):
+                    fields[index] = field.id
+
+        return fields[:last_index + 1]
 
 
 for item_type in Item:

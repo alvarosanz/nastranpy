@@ -43,18 +43,19 @@ def print_card(fields, large_field=False, free_field=False,
             else:
                 card += comment_mark + continuation_mark.ljust(8)
 
+        if field != '':
+            card_length = len(card)
+
         card += separator + print_field(field, field_length, free_field)
 
-    card += '\n'
-
-    return comment + comment_mark + card
+    return comment + comment_mark + card[:card_length] + '\n'
 
 
 def print_field(value, field_length=8, free_field=False):
 
-    if type(value) is float:
+    if isinstance(value, float):
         field = print_double(value, field_length=field_length)
-    elif type(value) is int:
+    elif isinstance(value, int):
         field = str(value).rjust(field_length)
     else:
         field = value.upper().rjust(field_length)
