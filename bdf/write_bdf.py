@@ -69,23 +69,31 @@ def print_field(value, field_length=8, free_field=False):
 def print_double(value, field_length=8):
     f_format = '{{0: {}.{}{}}}'.format(field_length, field_length - 1, 'f')
     E_format = '{{0: {}.{}{}}}'.format(field_length, field_length - 1, 'E')
+    exponent = ''
+    available_chars = field_length
 
     if value == 0:
-        return '0.'.rjust(field_length)
+        significant = '0.0'
     elif (-100000 < value and value <= -0.001 or
         0.001 <= value and value < 100000):
-        str_value = f_format.format(value)
-        return (str_value[0] + str_value[1:field_length].strip('0')).rjust(field_length)
+        value_str = f_format.format(value)
+        significant = value_str[0] + value_str[1:field_length].strip('0')
     else:
-        str_value = E_format.format(value)
-        i = str_value.index('E')
-        significant = str_value[:i][:field_length].strip('0')
-        exponent = str_value[i + 1:]
+        value_str = E_format.format(value)
+        E_index = value_str.index('E')
+        significant = value_str[:E_index][:field_length].strip('0')
+        exponent = value_str[E_index + 1:]
 
         if exponent[1] == '0':
             exponent = exponent[0] + exponent[2:]
 
-        if len(significant + exponent) > field_length:
-            return (significant[:field_length-len(exponent)] + exponent).rjust(field_length)
+        available_chars = field_length - len(exponent)
 
-        return (significant + exponent).rjust(field_length)
+        if len(significant) < available_chars:
+            exponent = 'E' + exponent
+            available_chars -= 1
+
+    if significant[-1] == '.':
+        significant += '0'
+
+    return (significant[:available_chars] + exponent).rjust(field_length)
