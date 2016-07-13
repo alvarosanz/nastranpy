@@ -3,14 +3,14 @@ from nastran_tools.bdf.write_bdf import print_card
 
 
 class Item(Enum):
-    grid = 'grid'
-    elem = 'elem'
-    prop = 'prop'
-    mat = 'mat'
-    coord = 'coord'
-    load = 'load'
-    spc = 'spc'
-    mpc = 'mpc'
+    coord = 1
+    elem = 2
+    grid = 3
+    mat = 4
+    prop = 5
+    mpc = 6
+    spc = 7
+    load = 8
 
 
 def iterate_items_factory(item_type):
@@ -37,7 +37,7 @@ class Card(object):
         self.comment = ''
         self.print_comment = True
         self.item_type = None
-        self.include = None
+        self._include = None
 
     def __repr__(self):
         return "'{} {}: {}'".format(self.type, self.id, super().__repr__())
@@ -104,6 +104,19 @@ class Card(object):
                     fields[index] = field.id
 
         return fields[:last_index + 1]
+
+    @property
+    def include(self):
+        return self._include
+
+    @include.setter
+    def include(self, value):
+
+        if self._include:
+            self._include.cards.remove(self)
+
+        self._include = value
+        self._include.cards.add(self)
 
 
 for item_type in Item:
