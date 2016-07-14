@@ -38,6 +38,7 @@ class Card(object):
         self.print_comment = True
         self.item_type = None
         self._include = None
+        self.notify = None
 
     def __repr__(self):
         return "'{} {}: {}'".format(self.type, self.id, super().__repr__())
@@ -62,6 +63,10 @@ class Card(object):
 
     @id.setter
     def id(self, value):
+
+        if self.notify:
+            self.notify(self, new_id=value)
+
         self.fields[1] = int(value)
 
     def __getitem__(self, index):
