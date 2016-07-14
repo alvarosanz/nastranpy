@@ -1,4 +1,3 @@
-from nastran_tools.bdf.cards.card import Item
 from nastran_tools.bdf.read_bdf import cards_in_file
 
 class Include(object):
@@ -13,7 +12,7 @@ class Include(object):
         if ids:
             return len(ids), min(ids), max(ids)
         else:
-            return 0, None, None
+            return 0, '', ''
 
     def read(self):
 

@@ -1,5 +1,5 @@
 import re
-from nastran_tools.bdf.cards.card import Card
+from nastran_tools.bdf.cards.card_interfaces import card_factory
 
 def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_comments=False):
     card = list()
@@ -18,7 +18,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
                 card = process_fields(card, not raw_output)
 
                 if not raw_output:
-                    card = Card(card, large_field=is_large_field, free_field=is_free_field)
+                    card = card_factory(card, large_field=is_large_field, free_field=is_free_field)
                     card.comment = card_comment
 
                 yield card
@@ -98,7 +98,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
         card = process_fields(card, not raw_output)
 
         if not raw_output:
-            card = Card(card, large_field=is_large_field, free_field=is_free_field)
+            card = card_factory(card, large_field=is_large_field, free_field=is_free_field)
             card.comment = card_comment
 
         yield card

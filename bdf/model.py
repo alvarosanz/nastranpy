@@ -1,4 +1,5 @@
 import os
+import csv
 from nastran_tools.bdf.cards.card import Item
 from nastran_tools.bdf.include import Include
 
@@ -10,6 +11,9 @@ class Model(object):
         self.cards = {item_type: dict() for item_type in Item}
         self.unsupported_cards = set()
         self.includes = list()
+
+        for item_type in Item:
+            setattr(self, item_type.name + 's', self.cards[item_type])
 
     def read(self, link_items=True):
         os.chdir(self.path)
@@ -55,4 +59,58 @@ class Model(object):
 
                     self.cards[item.item_type].pop(item.id)
                     self.cards[item.item_type][value] = item
+
+    def get_unsupported(self):
+        return {card.type for card in self.unsupported_cards}
+
+    def get_info(self):
+        print('Model path: {}\n'.format(self.path))
+        print('Includes: {}\n'.format(len(self.includes)))
+
+        for item_type in Item:
+            print('{}: {}'.format((item_type.name + 's').title(), len(self.cards[item_type])))
+
+        if self.unsupported_cards:
+            print('\nUnsupported cards: {}\n'.format(len(self.unsupported_cards)))
+            print('\t{}\n'.format(self.get_unsupported()))
+
+
+    def print_summary(self, file=None):
+
+        if not file:
+            os.chdir(self.path)
+            file = 'model_summary.csv'
+
+        with open(file, 'w') as f:
+            csv_writer = csv.writer(f, lineterminator='\n')
+            row = ['Include']
+
+            for item_type in Item:
+                item_type_name = (item_type.name + 's').title()
+                row += ['{}: number'.format(item_type_name),
+                        '{}: min'.format(item_type_name),
+                        '{}: max'.format(item_type_name)]
+
+            csv_writer.writerow(row)
+
+            for include in self.includes:
+                row = [include.file]
+
+                for item_type in Item:
+                    row += include.get_info(item_type)
+
+                csv_writer.writerow(row)
+
+    def print_cards(self, cards, file=None):
+
+        if not file:
+            os.chdir(self.path)
+            file = 'cards.csv'
+
+        with open(file, 'w') as f:
+            csv_writer = csv.writer(f, lineterminator='\n')
+
+            for card in cards:
+                csv_writer.writerow(card.get_fields())
+
 
