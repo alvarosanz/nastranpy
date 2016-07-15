@@ -1,6 +1,10 @@
 def print_card(fields, large_field=False, free_field=False,
-               comment='', is_commented=False,
+               comment='', is_commented=False, comment_symbol='$: ',
                use_continuation_marks=True):
+
+    if is_commented and comment:
+        comment = '\n'.join((comment_symbol + line for line in comment.splitlines())) + '\n'
+
     card = fields[0]
 
     if large_field:
@@ -24,7 +28,7 @@ def print_card(fields, large_field=False, free_field=False,
         card = card.ljust(8)
 
     if is_commented:
-        comment_mark = '$ '
+        comment_mark = comment_symbol
     else:
         comment_mark = ''
 
@@ -43,12 +47,12 @@ def print_card(fields, large_field=False, free_field=False,
             else:
                 card += comment_mark + continuation_mark.ljust(8)
 
+        card += separator + print_field(field, field_length, free_field)
+
         if field != '':
             card_length = len(card)
 
-        card += separator + print_field(field, field_length, free_field)
-
-    return comment + comment_mark + card[:card_length] + '\n'
+    return comment + comment_mark + card[:card_length]
 
 
 def print_field(value, field_length=8, free_field=False):

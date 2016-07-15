@@ -1,6 +1,7 @@
 import re
 from nastran_tools.bdf.cards.card_interfaces import card_factory
 
+
 def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_comments=False):
     card = list()
     comment = ''
@@ -18,7 +19,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
                 card = process_fields(card, not raw_output)
 
                 if not raw_output:
-                    card = card_factory(card, large_field=is_large_field, free_field=is_free_field)
+                    card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
                     card.comment = card_comment
 
                 yield card
@@ -31,8 +32,8 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
             comment = ''
             card = list()
             fields_from_empty_lines = list()
-            card_type = line[:8].strip()
-            item_id = line[8:16].strip()
+            card_name = line[:8].strip()
+            card_id = line[8:16].strip()
             is_free_field = False
             is_large_field = False
             field_length = 8
@@ -40,27 +41,27 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
 
             if ',' in line[:8]: # Free-field format
                 is_free_field = True
-                card_type, item_id = line.split(',')[:2]
+                card_name, card_id = line.split(',')[:2]
 
-            if card_type[-1] == '*': # Large-field format
+            if card_name[-1] == '*': # Large-field format
                 is_large_field = True
                 field_length = 16
                 n_fields = 4
-                card_type = card_type[:-1]
-                item_id = line[8:24].strip()
+                card_name = card_name[:-1]
+                card_id = line[8:24].strip()
 
-            card_type = card_type.upper()
+            card_name = card_name.upper()
 
-            if not card_types or card_type in card_types:
+            if not card_types or card_name in card_types:
 
                 if only_ids:
-                    yield [card_type, int(item_id)]
+                    yield [card_name, int(card_id)]
                     continue
 
                 if is_free_field:
                     card = line[:-1]
                 else:
-                    card = [card_type]
+                    card = [card_name]
 
                     for i in range(n_fields):
                         card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
@@ -98,7 +99,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
         card = process_fields(card, not raw_output)
 
         if not raw_output:
-            card = card_factory(card, large_field=is_large_field, free_field=is_free_field)
+            card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
             card.comment = card_comment
 
         yield card

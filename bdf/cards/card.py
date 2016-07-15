@@ -1,33 +1,9 @@
-from enum import Enum
 from nastran_tools.bdf.write_bdf import print_card
 
 
-class Item(Enum):
-    coord = 1
-    elem = 2
-    grid = 3
-    mat = 4
-    prop = 5
-    mpc = 6
-    spc = 7
-    load = 8
-
-
-def iterate_items_factory(item_type):
-
-    def wrapped(self):
-
-        for field in self.fields:
-
-            if isinstance(field, Card):
-
-                if field.item_type is item_type:
-                    yield field
-
-    return wrapped
-
-
 class Card(object):
+    type = None
+    tag = None
 
     def __init__(self, fields, large_field=False, free_field=False):
         self.fields = list(fields)
@@ -36,25 +12,40 @@ class Card(object):
         self.is_commented = False
         self.comment = ''
         self.print_comment = True
-        self.item_type = None
         self._include = None
         self.notify = None
 
     def __repr__(self):
-        return "'{} {}: {}'".format(self.type, self.id, super().__repr__())
+        return "'{} {}: {}'".format(self.name, self.id, super().__repr__())
 
     def __str__(self):
+        return print_card(self.get_fields(), large_field=False, free_field=False,
+                          comment='', is_commented=False)
 
-        if self.print_comment:
-            comment = self.comment
-        else:
-            comment = ''
+    def print_card(self, large_field=None, free_field=None, comment=None,
+                   is_commented=None, comment_symbol='$: '):
 
-        return print_card(self.get_fields(), large_field=self.large_field, free_field=self.free_field,
-                          comment=self.comment, is_commented=self.is_commented)
+        if large_field is None:
+            large_field = self.large_field
+
+        if free_field is None:
+            free_field = self.free_field
+
+        if comment is None:
+
+            if self.print_comment:
+                comment = self.comment
+            else:
+                comment = ''
+
+        if is_commented is None:
+            is_commented = self.is_commented
+
+        return print_card(self.get_fields(), large_field=large_field, free_field=free_field,
+                          comment=comment, is_commented=is_commented, comment_symbol=comment_symbol)
 
     @property
-    def type(self):
+    def name(self):
         return self.fields[0]
 
     @property
@@ -64,10 +55,12 @@ class Card(object):
     @id.setter
     def id(self, value):
 
-        if self.notify:
-            self.notify(self, new_id=value)
+        if self.fields[1] != value:
 
-        self.fields[1] = int(value)
+            if self.notify:
+                self.notify(self, new_id=value)
+
+            self.fields[1] = int(value)
 
     def __getitem__(self, index):
 
@@ -92,7 +85,7 @@ class Card(object):
 
         for last_index in range(len(self.fields) - 1, -1, -1):
 
-            if self.fields[last_index] != '':
+            if not self.fields[last_index] in ('', None):
                 break
 
         del self.fields[last_index + 1:]
@@ -102,11 +95,14 @@ class Card(object):
 
         for index, field in enumerate(fields):
 
-            if field != '':
+            if not field in ('', None):
                 last_index = index
 
                 if isinstance(field, Card):
                     fields[index] = field.id
+
+            if field is None:
+                fields[index] = ''
 
         return fields[:last_index + 1]
 
@@ -117,12 +113,10 @@ class Card(object):
     @include.setter
     def include(self, value):
 
-        if self._include:
-            self._include.cards.remove(self)
+        if not self._include is value:
 
-        self._include = value
-        self._include.cards.add(self)
+            if self._include:
+                self._include.cards.remove(self)
 
-
-for item_type in Item:
-    setattr(Card, item_type.name + 's', iterate_items_factory(item_type))
+            self._include = value
+            self._include.cards.add(self)
