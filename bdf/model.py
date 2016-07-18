@@ -284,6 +284,32 @@ class Model(object):
             for card in sorted_cards(cards):
                 csv_writer.writerow(card.get_fields())
 
+    def create_card(self, fields, include, large_field=False, free_field=False):
+        card = card_factory.get_card(card, large_field=large_field, free_field=free_field)
+        self._classify_card(card)
+
+        try:
+            card.include = self.includes[include]
+        except KeyError:
+            card.include = include
+
+    def delete_card(self, card):
+
+        if any(card in other_card for other_card in self.cards()):
+            raise ValueError('This card is referred by other card/s!')
+
+        if card.type in self.items:
+            del self.items[card.type][card.id]
+        elif card.type in self.sets:
+            self.sets[card.type][card.id].cards.remove(card)
+
+            if not self.sets[card.type][card.id].cards:
+                del self.sets[card.type][card.id]
+        else:
+            self.unsupported_cards.remove(card)
+
+        card.include = None
+
     def renumber(self, card_type, cards=None, start=None, end=None, step=None,
                  id_pattern=None, correlation=None):
         card_type = str2type(card_type)
