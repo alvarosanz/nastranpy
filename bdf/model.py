@@ -147,10 +147,10 @@ class Model(object):
         if new_key in mapping:
             raise ValueError(error_message)
 
-        if old_key in mapping:
-            del mapping[old_key]
+        if not caller is mapping[old_key]:
+            raise ValueError('There is a conflict!')
 
-        mapping[new_key] = caller
+        mapping[new_key] = mapping.pop(old_key)
 
     def cards(self, card_type=None):
 
