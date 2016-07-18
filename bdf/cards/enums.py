@@ -22,6 +22,11 @@ class Tag(Enum):
     eSpring = 6
     ePlot = 7
 
+class Coord(Enum):
+    rectangular = 1
+    cylindrical = 2
+    spherical = 3
+
 
 def str2type(value):
     mapping = {card_type.name: card_type for card_type in list(Item) + list(Set)}

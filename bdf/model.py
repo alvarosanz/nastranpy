@@ -71,6 +71,9 @@ class Model(object):
                 self._link_card(card)
 
             print('\rCards linked succesfully!')
+            print('\rArranging grids...', end='')
+            self._arrange_grids()
+            print('\rGrids arranged succesfully!')
 
     @timeit
     def write(self, includes=None):
@@ -120,10 +123,37 @@ class Model(object):
                 card.items = [self.items[type][id] if id else None for id, type in card.items]
                 card.sets = [self.sets[type][id] if id else None for id, type in card.sets]
             except KeyError:
-                raise KeyError('Cannot link the following card:\n{}'.format(card))
+                raise KeyError('Cannot link the following card: {}'.format(card))
 
         except AttributeError:
             pass
+
+    def _arrange_grids(self):
+        pending_coords = set(self.cards(Item.coord))
+        pending_grids = set(self.cards(Item.grid))
+
+        for i in range(5):
+
+            for j in range(5):
+
+                for coord in pending_coords.copy():
+
+                    try:
+                        coord.update()
+                        pending_coords.remove(coord)
+                    except TypeError:
+                        pending_coords.add(coord)
+
+            for grid in pending_grids.copy():
+
+                try:
+                    grid.update()
+                    pending_grids.remove(grid)
+                except TypeError:
+                    pending_grids.add(grid)
+
+        if pending_coords or pending_grids:
+            raise ValueError('Cannot arrange some coord/grids!')
 
     def _update(self, caller, **kwargs):
 

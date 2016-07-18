@@ -33,45 +33,45 @@ card_interfaces = {
                                      [None, 'G44'], [None, 'G45'], [None, 'G46'], [None, 'G55'], [None, 'G56'], [None, 'G66'], [None, 'RHO'], [None, 'A1'],
                                      [None, 'A2'], [None, 'A3'], [None, 'A4'], [None, 'A5'], [None, 'A6'], [None, 'TREF'], [None, 'GE']]),
     # Elements
-    'CROD': class_factory(Item.elem, ['CROD', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2']], tag=Tag.e1D),
-    'CONROD': class_factory(Item.elem, ['CONROD', None, [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.mat, 'MID', 'material'], [None, 'A'], [None, 'J'], [None, 'C'], [None, 'NSM']], tag=Tag.e1D),
-    'CBAR': class_factory(Item.elem, ['CBAR', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'GA'], [Item.grid, 'grids', 'GB'], [Item.grid, 'X1', 'G0'], [None, 'X2'], [None, 'X3'], [None, 'OFFT'],
+    'CROD': class_factory(Item.elem, ['CROD', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2']], tag=Tag.e1D),
+    'CONROD': class_factory(Item.elem, ['CONROD', None, [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.mat, 'MID', Item.mat.name], [None, 'A'], [None, 'J'], [None, 'C'], [None, 'NSM']], tag=Tag.e1D),
+    'CBAR': class_factory(Item.elem, ['CBAR', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'GA'], [Item.grid, 'grids', 'GB'], [Item.grid, 'X1', 'G0'], [None, 'X2'], [None, 'X3'], [None, 'OFFT'],
                                       [None, 'PA'], [None, 'PB'], [None, 'W1A'], [None, 'W2A'], [None, 'W3A'], [None, 'W1B'], [None, 'W2B'], [None, 'W3B']], tag=Tag.e1D),
-    'CBEAM': class_factory(Item.elem, ['CBEAM', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'GA'], [Item.grid, 'grids', 'GB'], [Item.grid, 'X1', 'G0'], [None, 'X2'], [None, 'X3'], [None, 'OFFT', 'BIT'],
+    'CBEAM': class_factory(Item.elem, ['CBEAM', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'GA'], [Item.grid, 'grids', 'GB'], [Item.grid, 'X1', 'G0'], [None, 'X2'], [None, 'X3'], [None, 'OFFT', 'BIT'],
                                       [None, 'PA'], [None, 'PB'], [None, 'W1A'], [None, 'W2A'], [None, 'W3A'], [None, 'W1B'], [None, 'W2B'], [None, 'W3B'],
                                       [Item.grid, 'SA'], [Item.grid, 'SB']], tag=Tag.e1D),
-    'CQUAD4': class_factory(Item.elem, ['CQUAD4', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.coord, 'THETA', 'MCID'], [None, 'ZOFFS'],
+    'CQUAD4': class_factory(Item.elem, ['CQUAD4', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.coord, 'THETA', 'MCID'], [None, 'ZOFFS'],
                                         None, [None, 'TFLAG'], [None, 'T1'], [None, 'T2'], [None, 'T3'], [None, 'T4']], tag=Tag.e2D),
-    'CTRIA3': class_factory(Item.elem, ['CTRIA3', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.coord, 'THETA', 'MCID'], [None, 'ZOFFS'], None,
+    'CTRIA3': class_factory(Item.elem, ['CTRIA3', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.coord, 'THETA', 'MCID'], [None, 'ZOFFS'], None,
                                         None, [None, 'TFLAG'], [None, 'T1'], [None, 'T2'], [None, 'T3']], tag=Tag.e2D),
-    'CTETRA': class_factory(Item.elem, ['CTETRA', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.grid, 'grids', 'G5'], [Item.grid, 'grids', 'G6'],
+    'CTETRA': class_factory(Item.elem, ['CTETRA', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.grid, 'grids', 'G5'], [Item.grid, 'grids', 'G6'],
                                         [Item.grid, 'grids', 'G7'], [Item.grid, 'grids', 'G8'], [Item.grid, 'grids', 'G9'], [Item.grid, 'grids', 'G10']], tag=Tag.e3D),
-    'CPENTA': class_factory(Item.elem, ['CPENTA', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.grid, 'grids', 'G5'], [Item.grid, 'grids', 'G6'],
+    'CPENTA': class_factory(Item.elem, ['CPENTA', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.grid, 'grids', 'G5'], [Item.grid, 'grids', 'G6'],
                                         [Item.grid, 'grids', 'G7'], [Item.grid, 'grids', 'G8'], [Item.grid, 'grids', 'G9'], [Item.grid, 'grids', 'G10'], [Item.grid, 'grids', 'G11'], [Item.grid, 'grids', 'G12'], [Item.grid, 'grids', 'G13'], [Item.grid, 'grids', 'G14'],
                                         [Item.grid, 'grids', 'G15']], tag=Tag.e3D),
-    'CHEXA': class_factory(Item.elem, ['CHEXA', None, [Item.prop, 'PID', 'property'], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.grid, 'grids', 'G5'], [Item.grid, 'grids', 'G6'],
+    'CHEXA': class_factory(Item.elem, ['CHEXA', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'grids', 'G1'], [Item.grid, 'grids', 'G2'], [Item.grid, 'grids', 'G3'], [Item.grid, 'grids', 'G4'], [Item.grid, 'grids', 'G5'], [Item.grid, 'grids', 'G6'],
                                         [Item.grid, 'grids', 'G7'], [Item.grid, 'grids', 'G8'], [Item.grid, 'grids', 'G9'], [Item.grid, 'grids', 'G10'], [Item.grid, 'grids', 'G11'], [Item.grid, 'grids', 'G12'], [Item.grid, 'grids', 'G13'], [Item.grid, 'grids', 'G14'],
                                         [Item.grid, 'grids', 'G15'], [Item.grid, 'grids', 'G16'], [Item.grid, 'grids', 'G17'], [Item.grid, 'grids', 'G18'], [Item.grid, 'grids', 'G19'], [Item.grid, 'grids', 'G20'], ], tag=Tag.e3D),
     'RBE2': class_factory(Item.elem, ['RBE2', None], tag=Tag.eRigid), # To implement
     'RBE3': class_factory(Item.elem, ['RBE3', None], tag=Tag.eRigid), # To implement
-    'CBUSH': class_factory(Item.elem, ['CBUSH', None, [Item.prop, 'PID', 'property'], [Item.grid, 'GA'], [Item.grid, 'GB'], [Item.grid, 'X1', 'G0'], [None, 'X2'], [None, 'X3'], [Item.coord, 'CID'],
+    'CBUSH': class_factory(Item.elem, ['CBUSH', None, [Item.prop, 'PID', Item.prop.name], [Item.grid, 'GA'], [Item.grid, 'GB'], [Item.grid, 'X1', 'G0'], [None, 'X2'], [None, 'X3'], [Item.coord, 'CID'],
                                        [None, 'S'], [Item.coord, 'OCID'], [None, 'S1'], [None, 'S2'], [None, 'S3']], tag=Tag.eSpring),
     'CONM2': class_factory(Item.elem, ['CONM2', None, [Item.grid, 'G'], [Item.coord, 'CID'], [None, 'M'], [None, 'X1'], [None, 'X2'], [None, 'X3'], None,
                                        [None, 'I11'], [None, 'I21'], [None, 'I22'], [None, 'I31'], [None, 'I32'], [None, 'I33']], tag=Tag.e0D),
     'PLOTEL': class_factory(Item.elem, ['PLOTEL', None, [Item.grid, 'G1'], [Item.grid, 'G2']], tag=Tag.ePlot),
     # Properties
-    'PROD': class_factory(Item.prop, ['PROD', None, [Item.mat, 'MID', 'material'], [None, 'A'], [None, 'J'], [None, 'C'], [None, 'NSM']]),
-    'PBAR': class_factory(Item.prop, ['PBAR', None, [Item.mat, 'MID', 'material'], [None, 'A'], [None, 'I1'], [None, 'I2'], [None, 'J'], [None, 'NSM'], None,
+    'PROD': class_factory(Item.prop, ['PROD', None, [Item.mat, 'MID', Item.mat.name], [None, 'A'], [None, 'J'], [None, 'C'], [None, 'NSM']]),
+    'PBAR': class_factory(Item.prop, ['PBAR', None, [Item.mat, 'MID', Item.mat.name], [None, 'A'], [None, 'I1'], [None, 'I2'], [None, 'J'], [None, 'NSM'], None,
                                       [None, 'C1'], [None, 'C2'], [None, 'D1'], [None, 'D2'], [None, 'E1'], [None, 'E2'], [None, 'F1'], [None, 'F2'],
                                       [None, 'K1'], [None, 'K2'], [None, 'I12']]),
-    'PBARL': class_factory(Item.prop, ['PBARL', None, [Item.mat, 'MID', 'material'], [None, 'GROUP'], [None, 'TYPE']]), # To implement NSM and DIMs
-    'PBEAM': class_factory(Item.prop, ['PBEAM', None, [Item.mat, 'MID', 'material']]), # To implement NSM and DIMs
-    'PBEAML': class_factory(Item.prop, ['PBEAML', None, [Item.mat, 'MID', 'material'], [None, 'GROUP'], [None, 'TYPE']]), # To implement NSM and DIMs
+    'PBARL': class_factory(Item.prop, ['PBARL', None, [Item.mat, 'MID', Item.mat.name], [None, 'GROUP'], [None, 'TYPE']]), # To implement NSM and DIMs
+    'PBEAM': class_factory(Item.prop, ['PBEAM', None, [Item.mat, 'MID', Item.mat.name]]), # To implement NSM and DIMs
+    'PBEAML': class_factory(Item.prop, ['PBEAML', None, [Item.mat, 'MID', Item.mat.name], [None, 'GROUP'], [None, 'TYPE']]), # To implement NSM and DIMs
     'PSHELL': class_factory(Item.prop, ['PSHELL', None, [Item.mat, 'MID1'], [None, 'T'], [Item.mat, 'MID2'], [None, 'BMIR'], [Item.mat, 'MID3'], [None, 'TST'], [None, 'NSM'],
                                         [None, 'Z1'], [None, 'Z2'], [Item.mat, 'MID4']]),
     'PCOMP': class_factory(Item.prop, ['PCOMP', None]), # To implement
     'PCOMPG': class_factory(Item.prop, ['PCOMPG', None]), # To implement
-    'PSOLID': class_factory(Item.prop, ['PSOLID', None, [Item.mat, 'MID', 'material'], [Item.coord, 'CORDM'], [None, 'IN'], [None, 'STRESS'], [None, 'ISOP'], [None, 'FCTN'], [None, 'COROT']]),
+    'PSOLID': class_factory(Item.prop, ['PSOLID', None, [Item.mat, 'MID', Item.mat.name], [Item.coord, 'CORDM'], [None, 'IN'], [None, 'STRESS'], [None, 'ISOP'], [None, 'FCTN'], [None, 'COROT']]),
     'PBUSH': class_factory(Item.prop, ['PBUSH', None]), # To implement
     # MPCs
     'MPC': class_factory(Set.mpc, ['MPC', None]), # To implement

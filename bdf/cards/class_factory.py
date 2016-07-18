@@ -1,12 +1,15 @@
 from nastranpy.bdf.cards.enums import Item, Set, Tag
 from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.set_card import SetCard
+from nastranpy.bdf.cards.coord_card import CoordCard
 
 
 def class_factory(card_type, fields_pattern, tag=None):
 
     if card_type in Set:
         cls_parents = (SetCard,)
+    elif card_type is Item.coord:
+        cls_parents = (CoordCard,)
     else:
         cls_parents = (Card,)
 
