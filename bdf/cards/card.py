@@ -119,4 +119,6 @@ class Card(object):
                 self._include.cards.remove(self)
 
             self._include = value
-            self._include.cards.add(self)
+
+            if self._include:
+                self._include.cards.add(self)

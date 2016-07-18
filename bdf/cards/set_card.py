@@ -32,4 +32,6 @@ class SetCard(Card):
                 self._set.cards.remove(self)
 
             self._set = value
-            self._set.cards.add(self)
+
+            if self._set:
+                self._set.cards.add(self)
