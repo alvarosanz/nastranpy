@@ -1,6 +1,6 @@
 from enum import Enum
-from nastran_tools.bdf.cards.card import Card
-from nastran_tools.bdf.include import Include
+from nastranpy.bdf.cards.card import Card
+from nastranpy.bdf.include import Include
 
 
 def get_list(value):

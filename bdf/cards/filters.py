@@ -1,6 +1,6 @@
-from nastran_tools.bdf.cards.enums import str2type, str2tag
-from nastran_tools.bdf.object_handling import get_list
-from nastran_tools.bdf.id_pattern import IdPattern
+from nastranpy.bdf.cards.enums import str2type, str2tag
+from nastranpy.bdf.object_handling import get_list
+from nastranpy.bdf.id_pattern import IdPattern
 
 
 def filter_factory(filters):

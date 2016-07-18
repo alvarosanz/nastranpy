@@ -1,4 +1,4 @@
-from nastran_tools.bdf.write_bdf import print_card
+from nastranpy.bdf.write_bdf import print_card
 
 
 class Card(object):

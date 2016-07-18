@@ -1,4 +1,4 @@
-from nastran_tools.bdf.cards.card import Card
+from nastranpy.bdf.cards.card import Card
 
 
 class CardFactory(object):

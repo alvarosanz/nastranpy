@@ -1,6 +1,6 @@
-from nastran_tools.bdf.cards.enums import Item, Set, Tag
-from nastran_tools.bdf.cards.card import Card
-from nastran_tools.bdf.cards.set_card import SetCard
+from nastranpy.bdf.cards.enums import Item, Set, Tag
+from nastranpy.bdf.cards.card import Card
+from nastranpy.bdf.cards.set_card import SetCard
 
 
 def class_factory(card_type, fields_pattern, tag=None):

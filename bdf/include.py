@@ -1,6 +1,6 @@
-from nastran_tools.bdf.read_bdf import cards_in_file
-from nastran_tools.bdf.misc import sorted_cards, get_plural
-from nastran_tools.bdf.cards.enums import Item, Set
+from nastranpy.bdf.read_bdf import cards_in_file
+from nastranpy.bdf.misc import sorted_cards, get_plural
+from nastranpy.bdf.cards.enums import Item, Set
 
 
 def iter_items_factory(card_type):

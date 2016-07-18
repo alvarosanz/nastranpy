@@ -1,15 +1,15 @@
 import os
 import csv
 from itertools import chain
-from nastran_tools.bdf.cards.enums import Item, Set, Tag, str2type, str2tag
-from nastran_tools.bdf.cards.card_interfaces import card_factory
-from nastran_tools.bdf.include import Include
-from nastran_tools.bdf.case_set import CaseSet
-from nastran_tools.bdf.misc import sorted_cards, get_plural
-from nastran_tools.bdf.cards.filters import filter_factory
-from nastran_tools.bdf.id_pattern import IdPattern
-from nastran_tools.bdf.object_handling import get_list, get_objects
-from nastran_tools.time_tools import timeit
+from nastranpy.bdf.cards.enums import Item, Set, Tag, str2type, str2tag
+from nastranpy.bdf.cards.card_interfaces import card_factory
+from nastranpy.bdf.include import Include
+from nastranpy.bdf.case_set import CaseSet
+from nastranpy.bdf.misc import sorted_cards, get_plural
+from nastranpy.bdf.cards.filters import filter_factory
+from nastranpy.bdf.id_pattern import IdPattern
+from nastranpy.bdf.object_handling import get_list, get_objects
+from nastranpy.time_tools import timeit
 
 
 class Model(object):

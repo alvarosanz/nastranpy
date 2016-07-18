@@ -1,6 +1,6 @@
 import numpy as np
-from nastran_tools.bdf.cards.card_interfaces import Item, Set
-from nastran_tools.bdf.cards.class_factory import class_factory
+from nastranpy.bdf.cards.card_interfaces import Item, Set
+from nastranpy.bdf.cards.class_factory import class_factory
 
 
 GRID = class_factory(Item.grid, ['GRID', None, [Item.coord, 'CP'], [None, 'X1'], [None, 'X2'], [None, 'X3'], [Item.coord, 'CD'], [None, 'PS'], [None, 'SEID']])

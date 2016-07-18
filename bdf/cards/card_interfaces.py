@@ -1,7 +1,7 @@
-from nastran_tools.bdf.cards.enums import Item, Set, Tag
-from nastran_tools.bdf.cards.class_factory import class_factory
-from nastran_tools.bdf.cards.card_factory import CardFactory
-from nastran_tools.bdf.cards.grid import Grid
+from nastranpy.bdf.cards.enums import Item, Set, Tag
+from nastranpy.bdf.cards.class_factory import class_factory
+from nastranpy.bdf.cards.card_factory import CardFactory
+from nastranpy.bdf.cards.grid import Grid
 
 
 card_interfaces = {

@@ -1,5 +1,5 @@
 import re
-from nastran_tools.bdf.cards.card_interfaces import card_factory
+from nastranpy.bdf.cards.card_interfaces import card_factory
 
 
 def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_comments=False):
