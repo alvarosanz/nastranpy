@@ -16,15 +16,10 @@ def class_factory(card_type, fields_pattern, tag=None):
     cls.tag = tag
 
     def init_factory(card_name, card_length):
-        fields_template = ['' for x in range(card_length)]
-        fields_template[0] = card_name
-        fields_template[1] = 0
 
-        def wrapped(self, fields=None, large_field=False, free_field=False):
-            super(cls, self).__init__(fields_template, large_field=large_field, free_field=free_field)
-
-            if fields:
-                self.fields[:len(fields)] = fields
+        def wrapped(self, fields, large_field=False, free_field=False):
+            fields = fields + ['' for i in range(card_length - len(fields))]
+            super(cls, self).__init__(fields, large_field=large_field, free_field=free_field)
 
         return wrapped
 

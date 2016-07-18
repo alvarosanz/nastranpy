@@ -8,13 +8,9 @@ GRID = class_factory(Item.grid, ['GRID', None, [Item.coord, 'CP'], [None, 'X1'],
 class Grid(GRID):
     type = Item.grid
 
-    def __init__(self, id=None, xyz0=None, fields=None, large_field=False, free_field=False):
-        super().__init__(fields=fields, large_field=large_field, free_field=free_field)
-
-        if id:
-            self.fields[1] = id
-
-        self.xyz0 = xyz0
+    def __init__(self, fields, large_field=False, free_field=False):
+        super().__init__(fields, large_field=large_field, free_field=free_field)
+        self.xyz0 = None
         self.elems = set()
 
 

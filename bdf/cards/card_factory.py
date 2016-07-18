@@ -11,7 +11,7 @@ class CardFactory(object):
     def get_card(self, fields, large_field=False, free_field=False):
 
         try:
-            return self.card_interfaces[fields[0]](fields=fields, large_field=large_field, free_field=free_field)
+            return self.card_interfaces[fields[0]](fields, large_field=large_field, free_field=free_field)
         except KeyError:
             return Card(fields, large_field=large_field, free_field=free_field)
 
