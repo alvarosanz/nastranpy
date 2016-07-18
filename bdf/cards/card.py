@@ -81,6 +81,9 @@ class Card(object):
             self.fields += ['' for x in range(index0 + 1 - len(self.fields))]
             self.fields[index] = value
 
+    def __contains__(self, value):
+        return value in self.fields
+
     def clear_tail(self):
 
         for last_index in range(len(self.fields) - 1, -1, -1):
