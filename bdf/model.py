@@ -37,7 +37,7 @@ class Model(object):
         includes = [Include(file) for file in files]
 
         for include in includes:
-            include.notity = self.update
+            include.notity = self._update
             self.includes[include.file] = include
 
         self.read(includes, link_cards)
@@ -60,31 +60,17 @@ class Model(object):
             include.read()
 
             for card in include.cards:
-
-                if card.type in self.items:
-                    card.notify = self.update
-
-                    if card.id in self.items[card.type]:
-                        previous_card = self.items[card.type][card.id]
-                        raise ValueError('There is a conflict between two cards!\nOld card:\n{}\n{}\n\nNew card:\n{}\n{}'.format(
-                                            previous_card.include.file, previous_card,
-                                            card.include.file, card))
-
-                    self.items[card.type][card.id] = card
-                elif card.type in self.sets:
-
-                    if not card.id in self.sets[card.type]:
-                        self.sets[card.type][card.id] = CaseSet(card.id, card.type)
-                        self.sets[card.type][card.id].notify = self.update
-
-                    card.set = self.sets[card.type][card.id]
-                else:
-                    self.unsupported_cards.add(card)
+                self._classify_card(card)
 
         print('\rAll files readed succesfully!')
 
         if link_cards:
-            self.link_cards(self.cards())
+            print('\rLinking cards ...', end='')
+
+            for card in self.cards():
+                self._link_card(card)
+
+            print('\rCards linked succesfully!')
 
     @timeit
     def write(self, includes=None):
@@ -104,25 +90,42 @@ class Model(object):
 
         print('\rAll files written succesfully!')
 
-    def link_cards(self, cards):
-        print('\rLinking cards ...', end='')
+    def _classify_card(self, card):
 
-        for card in cards:
+        if card.type in self.items:
+            card.notify = self._update
+
+            if card.id in self.items[card.type]:
+                previous_card = self.items[card.type][card.id]
+                raise ValueError('There is a conflict between two cards!\nOld card:\n{}\n{}\n\nNew card:\n{}\n{}'.format(
+                                    previous_card.include.file, previous_card,
+                                    card.include.file, card))
+
+            self.items[card.type][card.id] = card
+        elif card.type in self.sets:
+
+            if not card.id in self.sets[card.type]:
+                self.sets[card.type][card.id] = CaseSet(card.id, card.type)
+                self.sets[card.type][card.id].notify = self._update
+
+            card.set = self.sets[card.type][card.id]
+        else:
+            self.unsupported_cards.add(card)
+
+    def _link_card(self, card):
+
+        try:
 
             try:
+                card.items = [self.items[type][id] if id else None for id, type in card.items]
+                card.sets = [self.sets[type][id] if id else None for id, type in card.sets]
+            except KeyError:
+                raise KeyError('Cannot link the following card:\n{}'.format(card))
 
-                try:
-                    card.items = [self.items[type][id] if id else None for id, type in card.items]
-                    card.sets = [self.sets[type][id] if id else None for id, type in card.sets]
-                except KeyError:
-                    raise KeyError('Cannot link the following card:\n{}'.format(card))
+        except AttributeError:
+            pass
 
-            except AttributeError:
-                pass
-
-        print('\rCards linked succesfully!')
-
-    def update(self, caller, **kwargs):
+    def _update(self, caller, **kwargs):
 
         for key, value in kwargs.items():
 
