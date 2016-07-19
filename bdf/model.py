@@ -316,6 +316,12 @@ class Model(object):
 
     def create_card(self, fields, include, large_field=False, free_field=False):
         card = card_factory.get_card(card, large_field=large_field, free_field=free_field)
+
+        try:
+            card.update()
+        except AttributeError:
+            pass
+
         self._classify_card(card)
 
         try:
