@@ -9,33 +9,36 @@ class CoordCard(Card):
         super().__init__(fields, large_field=large_field, free_field=free_field)
         char2type = {'R': Coord.rectangular, 'C': Coord.cylindrical, 'S': Coord.spherical}
         self.coord_type = char2type[self.fields[0][-1]]
+        self.a0 = None
+        self.b0 = None
+        self.c0 = None
         self.origin = None
         self.M = None
 
     def update(self):
 
         try:
-            v0 = self.fields[2].xyz0
-            v1 = self.fields[3].xyz0
-            v2 = self.fields[4].xyz0
+            self.a0 = self.fields[2].xyz0
+            self.b0 = self.fields[3].xyz0
+            self.c0 = self.fields[4].xyz0
         except AttributeError:
-            v0 = np.array(self.fields[3:6])
-            v1 = np.array(self.fields[6:9])
-            v2 = np.array(self.fields[9:12])
+            self.a0 = np.array(self.fields[3:6])
+            self.b0 = np.array(self.fields[6:9])
+            self.c0 = np.array(self.fields[9:12])
             cp = self.fields[2]
 
             if cp:
-                v0 = cp.get_xyz0(v0)
-                v1 = cp.get_xyz0(v1)
-                v2 = cp.get_xyz0(v2)
+                self.a0 = cp.get_xyz0(self.a0)
+                self.b0 = cp.get_xyz0(self.b0)
+                self.c0 = cp.get_xyz0(self.c0)
 
-        self.origin = v0
-        e2 = np.cross(v1 - v0, v2 - v0)
+        self.origin = self.a0
+        e2 = np.cross(self.b0 - self.a0, self.c0 - self.a0)
         e2 /= np.linalg.norm(e2)
-        e1 = np.cross(e2, v1 - v0)
+        e1 = np.cross(e2, self.b0 - self.a0)
         e1 /= np.linalg.norm(e1)
         e3 = np.cross(e1, e2)
-        self.M = np.array([e1, e1, e3])
+        self.M = np.array([e1, e2, e3])
 
     def get_xyz(self, xyz0):
         xyz = np.dot(xyz0 - self.origin, self.M.T)
@@ -55,6 +58,22 @@ class CoordCard(Card):
             xyz = sph2cart(*xyz)
 
         return self.origin + np.dot(xyz, self.M)
+
+    def get_fields(self):
+
+        if self.fields[0][-2] == '2':
+            cp = self.fields[2]
+
+            if cp:
+
+                try:
+                    self.fields[3:6] = cp.get_xyz(self.a0)
+                    self.fields[6:9] = cp.get_xyz(self.b0)
+                    self.fields[9:12] = cp.get_xyz(self.c0)
+                except AttributeError:
+                    pass
+
+        return super().get_fields()
 
 
 def cart2cyl(x, y, z):

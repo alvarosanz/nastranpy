@@ -26,6 +26,10 @@ class Grid(GRID):
 
     @property
     def xyz(self):
+
+        if self.xyz0 is None:
+            return np.array(self.fields[3:6])
+
         cp = self.fields[2]
 
         if cp:
