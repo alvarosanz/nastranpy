@@ -21,7 +21,7 @@ def class_factory(card_type, fields_pattern, tag=None):
     def init_factory(card_name, card_length):
 
         def wrapped(self, fields, large_field=False, free_field=False):
-            fields = fields + ['' for i in range(card_length - len(fields))]
+            fields = fields + [None for i in range(card_length - len(fields))]
             super(cls, self).__init__(fields, large_field=large_field, free_field=free_field)
 
         return wrapped
@@ -32,9 +32,9 @@ def class_factory(card_type, fields_pattern, tag=None):
             indexes = [(index, card_type) for index, card_type, update_grid in indexes]
 
             def wrapped(self):
-                return [(self.fields[index], card_type) if
-                        self.fields[index] and isinstance(self.fields[index], (int, Card)) else
-                        (None, card_type) for index, card_type in indexes]
+                return [(self.fields[index],
+                         card_type if isinstance(self.fields[index], (int, Card)) else None)  for
+                        index, card_type in indexes]
 
         else:
             indexes = [index for index, card_type, update_grid in indexes]

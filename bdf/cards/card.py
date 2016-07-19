@@ -6,7 +6,7 @@ class Card(object):
     tag = None
 
     def __init__(self, fields, large_field=False, free_field=False):
-        self.fields = list(fields)
+        self.fields = [field if field != '' else None for field in fields]
         self.large_field = large_field
         self.free_field = free_field
         self.is_commented = False
@@ -78,7 +78,7 @@ class Card(object):
         try:
             self.fields[index0] = value
         except IndexError:
-            self.fields += ['' for x in range(index0 + 1 - len(self.fields))]
+            self.fields += [None for x in range(index0 + 1 - len(self.fields))]
             self.fields[index] = value
 
     def __contains__(self, value):
@@ -88,24 +88,21 @@ class Card(object):
 
         for last_index in range(len(self.fields) - 1, -1, -1):
 
-            if not self.fields[last_index] in ('', None):
+            if not self.fields[last_index] is None:
                 break
 
         del self.fields[last_index + 1:]
 
     def get_fields(self):
-        fields = list(self.fields)
+        fields = ['' if field is None else field for field in self.fields]
 
         for index, field in enumerate(fields):
 
-            if not field in ('', None):
+            if field != '':
                 last_index = index
 
                 if isinstance(field, Card):
                     fields[index] = field.id
-
-            if field is None:
-                fields[index] = ''
 
         return fields[:last_index + 1]
 

@@ -120,8 +120,8 @@ class Model(object):
         try:
 
             try:
-                card.items = [self.items[type][id] if id else None for id, type in card.items]
-                card.sets = [self.sets[type][id] if id else None for id, type in card.sets]
+                card.items = [self.items[type][id] if id and isinstance(id, int) else id for id, type in card.items]
+                card.sets = [self.sets[type][id] if id and isinstance(id, int) else id for id, type in card.sets]
             except KeyError:
                 raise KeyError('Cannot link the following card: {}'.format(card))
 
