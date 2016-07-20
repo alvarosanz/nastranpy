@@ -27,6 +27,10 @@ class Coord(Enum):
     cylindrical = 2
     spherical = 3
 
+class Field(Enum):
+    list = 1
+    set = 2
+
 
 def str2type(value):
     mapping = {card_type.name: card_type for card_type in list(Item) + list(Set)}

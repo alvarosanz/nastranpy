@@ -4,6 +4,7 @@ from nastranpy.bdf.write_bdf import print_card
 class Card(object):
     type = None
     tag = None
+    scheme = None
 
     def __init__(self, fields, large_field=False, free_field=False):
         self.fields = [field if field != '' else None for field in fields]
@@ -62,39 +63,34 @@ class Card(object):
 
             self.fields[1] = int(value)
 
-    def __getitem__(self, index):
-
-        try:
-            return self.fields[index]
-        except IndexError:
-            return ''
-
-    def __setitem__(self, index, value):
-        try:
-            index0 = index.start
-        except AttributeError:
-            index0 = index
-
-        try:
-            self.fields[index0] = value
-        except IndexError:
-            self.fields += [None for x in range(index0 + 1 - len(self.fields))]
-            self.fields[index] = value
-
     def __contains__(self, value):
-        return value in self.fields
+        return value in self._iter_fields()
 
-    def clear_tail(self):
+    def _iter_fields(self):
 
-        for last_index in range(len(self.fields) - 1, -1, -1):
+        if self.scheme:
 
-            if not self.fields[last_index] is None:
-                break
+            for field, field_info in zip(self.fields, scheme):
 
-        del self.fields[last_index + 1:]
+                if field_info.seq_type:
+
+                    for subfield in field:
+
+                        if field_info.subscheme:
+
+                            for subsubfield in subfield:
+                                yield subsubfield
+                        else:
+                            yield subfield
+                else:
+                    yield field
+        else:
+
+            for field in self.fields:
+                yield field
 
     def get_fields(self):
-        fields = ['' if field is None else field for field in self.fields]
+        fields = ['' if field is None else field for field in self._iter_fields()]
 
         for index, field in enumerate(fields):
 
