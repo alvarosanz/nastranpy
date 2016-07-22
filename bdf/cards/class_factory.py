@@ -2,75 +2,23 @@ from nastranpy.bdf.cards.enums import Item, Set, Tag
 from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.set_card import SetCard
 from nastranpy.bdf.cards.coord_card import CoordCard
+from nastranpy.bdf.cards.grid_card import GridCard
 
 
-def class_factory(card_type, fields_pattern, tag=None):
+def class_factory(card_name, card_type, fields_pattern, tag=None):
 
     if card_type in Set:
         cls_parents = (SetCard,)
     elif card_type is Item.coord:
         cls_parents = (CoordCard,)
+    elif card_type is Item.grid:
+        cls_parents = (GridCard,)
     else:
         cls_parents = (Card,)
 
-    card_name = fields_pattern[0]
     cls = type(card_name, cls_parents, {})
     cls.type = card_type
     cls.tag = tag
-
-    def init_factory(card_name, card_length):
-
-        def wrapped(self, fields, large_field=False, free_field=False):
-            fields = fields + [None for i in range(card_length - len(fields))]
-            super(cls, self).__init__(fields, large_field=large_field, free_field=free_field)
-
-        return wrapped
-
-    def get_items_factory(indexes, return_types=False):
-
-        if return_types:
-            indexes = [(index, card_type) for index, card_type, update_grid in indexes]
-
-            def wrapped(self):
-                return [(self.fields[index],
-                         card_type if isinstance(self.fields[index], (int, Card)) else None)  for
-                        index, card_type in indexes]
-
-        else:
-            indexes = [index for index, card_type, update_grid in indexes]
-
-            def wrapped(self):
-                return [self.fields[index] if
-                        self.fields[index] and isinstance(self.fields[index], (int, Card)) else
-                        None for index in indexes]
-
-        return wrapped
-
-    def set_items_factory(indexes):
-
-        def wrapped(self, value):
-
-            for (index, card_type, update_grid), new_item in zip(indexes, value):
-
-                if update_grid:
-                    old_grid = self.fields[index]
-
-                    if new_item is old_grid:
-                        continue
-
-                    try:
-                        old_grid.elems.remove(self)
-                    except AttributeError:
-                        pass
-
-                    try:
-                        new_item.elems.add(self)
-                    except AttributeError:
-                        pass
-
-                self.fields[index] = new_item
-
-        return wrapped
 
     def get_field_factory(index):
 
@@ -85,8 +33,6 @@ def class_factory(card_type, fields_pattern, tag=None):
             self.fields[index] = value
 
         return wrapped
-
-    cls.__init__ = init_factory(card_name, len(fields_pattern))
 
     item_indexes = list()
     set_indexes = list()

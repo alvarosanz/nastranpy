@@ -21,7 +21,7 @@ class F(object):
 
 card_interfaces = {
     # Grids
-    'GRID': Grid,#class_factory(Item.grid, ['GRID', None, [Item.coord, 'CP'], [None, 'X1'], [None, 'X2'], [None, 'X3'], [Item.coord, 'CD'], [None, 'PS'], [None, 'SEID']]),
+    'GRID': class_factory('GRID', Item.grid, [F(), F(), F('CP', Item.coord), F('X1'), F('X2'), F('X3'), F('CD', Item.coord), F('PS'), F('SEID')]),
     # Coordinate systems
     'CORD2R': class_factory('CORD2R', Item.coord, [F(), F(), F('RID', Item.coord), F('A1'), F('A2'), F('A3'), F('B1'), F('B2'), F('B3'),
                                                    F('C1'), F('C2'), F('C3')]),

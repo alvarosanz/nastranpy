@@ -7,7 +7,7 @@ class Card(object):
     scheme = None
 
     def __init__(self, fields, large_field=False, free_field=False):
-        self.fields = [field if field != '' else None for field in fields]
+        self._set_fields(fields)
         self.large_field = large_field
         self.free_field = free_field
         self.is_commented = False
@@ -88,6 +88,26 @@ class Card(object):
 
             for field in self.fields:
                 yield field
+
+    def _get_fields(self):
+
+        for field, field_info in zip(self.fields, scheme):
+
+            if field_info.seq_type:
+
+                for subfield in field:
+
+                    if field_info.subscheme:
+
+                        for subsubfield, subfield_info in (subfield, field_info.subscheme):
+                            yield subsubfield, subfield_info
+                    else:
+                        yield subfield, field_info.type
+            else:
+                yield field, field_info.type if isinstance(field, (int, Card)) else None
+
+    def _set_fields(self, fields):
+        self.fields = [field if field != '' else None for field in fields]
 
     def get_fields(self):
         fields = ['' if field is None else field for field in self._iter_fields()]

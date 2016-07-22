@@ -1,13 +1,8 @@
 import numpy as np
-from nastranpy.bdf.cards.card_interfaces import Item, Set
-from nastranpy.bdf.cards.class_factory import class_factory
 from nastranpy.bdf.cards.card import Card
 
 
-GRID = class_factory(Item.grid, ['GRID', None, [Item.coord, 'CP'], [None, 'X1'], [None, 'X2'], [None, 'X3'], [Item.coord, 'CD'], [None, 'PS'], [None, 'SEID']])
-
-class Grid(GRID):
-    type = Item.grid
+class GridCard(Card):
 
     def __init__(self, fields, large_field=False, free_field=False):
         super().__init__(fields, large_field=large_field, free_field=free_field)
