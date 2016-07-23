@@ -5,7 +5,59 @@ from nastranpy.bdf.cards.coord_card import CoordCard
 from nastranpy.bdf.cards.grid_card import GridCard
 
 
-def class_factory(card_name, card_type, fields_pattern, tag=None):
+def class_factory(card_name, card_type, card_scheme=None, card_tag=None):
+
+    def get_grids_factory(card_scheme):
+        fields_info = [(index, field_info) for index, field_info in enumerate(card_scheme) if
+                       field_info.update_grid]
+
+        def wrapped(self):
+            grids = set()
+
+            for index, field_info in fields_info:
+
+                if field_info.seq_type:
+                    grids |= set(self.fields[index])
+                else:
+                    grids.add(self.fields[index])
+
+            return grids
+
+        return wrapped
+
+    def get_field_factory(index):
+
+        def wrapped(self):
+            return self.fields[index]
+
+        return wrapped
+
+    def set_field_factory(index, field_info):
+
+        if field_info.update_grid and not field_info.seq_type:
+
+            def wrapped(self, value):
+                old_value = self.fields[index]
+
+                if not value is old_value:
+
+                    try:
+                        old_value.elems.remove(self)
+                    except AttributeError:
+                        pass
+
+                    try:
+                        value.elems.add(self)
+                    except AttributeError:
+                        pass
+
+                    self.fields[index] = value
+        else:
+
+            def wrapped(self, value):
+                self.fields[index] = value
+
+        return wrapped
 
     if card_type in Set:
         cls_parents = (SetCard,)
@@ -18,61 +70,22 @@ def class_factory(card_name, card_type, fields_pattern, tag=None):
 
     cls = type(card_name, cls_parents, {})
     cls.type = card_type
-    cls.tag = tag
+    cls.tag = card_tag
+    cls.scheme = card_scheme
 
-    def get_field_factory(index):
+    if card_scheme:
 
-        def wrapped(self):
-            return self.fields[index]
+        for index, field_info in enumerate(card_scheme):
 
-        return wrapped
+            if field_info.name:
+                setattr(cls, field_info.name, property(get_field_factory(index),
+                                                       set_field_factory(index, field_info)))
 
-    def set_field_factory(index, update_grid):
+                if field_info.alternate_name:
+                    setattr(cls, field_info.alternate_name, property(get_field_factory(index),
+                                                                     set_field_factory(index, field_info)))
 
-        def wrapped(self, value):
-            self.fields[index] = value
-
-        return wrapped
-
-    item_indexes = list()
-    set_indexes = list()
-    attributes = dict()
-
-    for index, field_pattern in enumerate(fields_pattern):
-        update_grid = False
-
-        try:
-            field_type = field_pattern[0]
-            update_grid = card_type is Item.elem and 'grids' in field_pattern
-
-            for attr_name in field_pattern[1:]:
-
-                if not attr_name in attributes:
-                    attributes[attr_name] = list()
-
-                attributes[attr_name].append((index, field_type, update_grid))
-
-        except TypeError:
-            field_type = field_pattern
-
-        if field_type in Item:
-            item_indexes.append((index, field_type, update_grid))
-        elif field_type in Set:
-            set_indexes.append((index, field_type, update_grid))
-
-    setattr(cls, 'items', property(get_items_factory(item_indexes, True),
-                                   set_items_factory(item_indexes)))
-    setattr(cls, 'sets', property(get_items_factory(set_indexes, True),
-                                  set_items_factory(set_indexes)))
-
-    for attr_name, indexes in attributes.items():
-
-        if len(indexes) > 1 or card_type is Item.elem and attr_name == 'grids':
-            setattr(cls, attr_name, property(get_items_factory(indexes),
-                                             set_items_factory(indexes)))
-        else:
-            index, field_type, update_grid = indexes[0]
-            setattr(cls, attr_name, property(get_field_factory(index),
-                                             set_field_factory(index, update_grid)))
+        if card_type is Item.elem and not 'grids' in [x.name for x in card_scheme]:
+            setattr(cls, 'grids', property(get_grids_factory(card_scheme)))
 
     return cls

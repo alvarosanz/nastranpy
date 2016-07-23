@@ -30,6 +30,7 @@ class Coord(Enum):
 class Field(Enum):
     list = 1
     set = 2
+    vector = 3
 
 
 def str2type(value):

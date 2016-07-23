@@ -76,8 +76,7 @@ class Include(object):
         cards_diff = cards
 
         for i in range(10):
-            cards_ext = {linked_card for card in cards_diff for
-                         linked_card, card_type in card.items if linked_card}
+            cards_ext = {linked_card for card in cards_diff for linked_card in card.items()}
             cards_diff = cards_ext - cards
 
             if cards_diff:

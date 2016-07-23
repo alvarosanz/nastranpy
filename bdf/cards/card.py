@@ -1,4 +1,8 @@
+import numpy as np
 from nastranpy.bdf.write_bdf import print_card
+from nastranpy.bdf.cards.enums import Item, Field
+from nastranpy.bdf.cards.grid_list import GridList
+from nastranpy.bdf.cards.grid_set import GridSet
 
 
 class Card(object):
@@ -64,13 +68,17 @@ class Card(object):
             self.fields[1] = int(value)
 
     def __contains__(self, value):
-        return value in self._iter_fields()
+        return value in self.items()
 
-    def _iter_fields(self):
+    def items(self):
+        return (field for field, field_type in self._get_fields() if
+                field and field_type in Item)
+
+    def _get_fields(self):
 
         if self.scheme:
 
-            for field, field_info in zip(self.fields, scheme):
+            for field, field_info in zip(self.fields, self.scheme):
 
                 if field_info.seq_type:
 
@@ -78,39 +86,87 @@ class Card(object):
 
                         if field_info.subscheme:
 
-                            for subsubfield in subfield:
-                                yield subsubfield
+                            for subsubfield, subfield_info in zip(subfield, field_info.subscheme):
+                                yield subsubfield, subfield_info
                         else:
-                            yield subfield
+                            yield subfield, field_info.type
                 else:
-                    yield field
+                    yield field, field_info.type
+
         else:
 
             for field in self.fields:
-                yield field
-
-    def _get_fields(self):
-
-        for field, field_info in zip(self.fields, scheme):
-
-            if field_info.seq_type:
-
-                for subfield in field:
-
-                    if field_info.subscheme:
-
-                        for subsubfield, subfield_info in (subfield, field_info.subscheme):
-                            yield subsubfield, subfield_info
-                    else:
-                        yield subfield, field_info.type
-            else:
-                yield field, field_info.type if isinstance(field, (int, Card)) else None
+                yield field, None
 
     def _set_fields(self, fields):
-        self.fields = [field if field != '' else None for field in fields]
+        fields = [field if field != '' else None for field in fields]
+
+        if self.scheme:
+            fields.reverse()
+            self.fields = list()
+            link_grids = None
+
+            for field_info in self.scheme:
+
+                if link_grids is None and field_info.update_grid:
+                    link_grids = isinstance(fields[-1], Card)
+
+                if field_info.seq_type:
+                    subfields = list()
+
+                    for i in range(1, len(fields) + 1):
+
+                        if field_info.subscheme:
+                            subfield = list()
+
+                            for x in field_info.subscheme:
+
+                                try:
+                                    subfield.append(fields.pop())
+                                except IndexError:
+                                    subfield.append(None)
+                        else:
+                            subfield = fields.pop()
+
+                        subfields.append(subfield)
+
+                        if (not fields or
+                            i == field_info.length or
+                            not field_info.length and isinstance(fields[-1], (float, str))):
+                            break
+
+                    if field_info.seq_type is Field.list:
+
+                        if field_info.update_grid and link_grids:
+                            field = GridList(self, grids=subfields)
+                        else:
+                            field = list(subfields)
+
+                    elif field_info.seq_type is Field.set:
+
+                        if field_info.update_grid and link_grids:
+                            field = GridSet(self, grids=subfields)
+                        else:
+                            field = set(subfields)
+                    elif field_info.seq_type is Field.vector:
+                        field = np.array(subfields)
+
+                else:
+
+                    try:
+                        field = fields.pop()
+
+                        if field_info.update_grid and link_grids:
+                            field.elems.add(self)
+                    except IndexError:
+                        field = None
+
+                self.fields.append(field)
+        else:
+            self.fields = fields
 
     def get_fields(self):
-        fields = ['' if field is None else field for field in self._iter_fields()]
+        fields = ['' if field is None else field for field, field_type in self._get_fields()]
 
         for index, field in enumerate(fields):
 

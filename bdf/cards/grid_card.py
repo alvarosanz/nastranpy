@@ -15,15 +15,15 @@ class GridCard(Card):
             cp = self.fields[2]
 
             if cp:
-                self.xyz0 = cp.get_xyz0(np.array(self.fields[3:6]))
+                self.xyz0 = cp.get_xyz0(self.fields[3])
             else:
-                self.xyz0 = np.array(self.fields[3:6])
+                self.xyz0 = self.fields[3]
 
     @property
     def xyz(self):
 
         if self.xyz0 is None:
-            return np.array(self.fields[3:6])
+            return self.fields[3]
 
         cp = self.fields[2]
 
@@ -34,7 +34,7 @@ class GridCard(Card):
 
     @xyz.setter
     def xyz(self, value):
-        self.fields[3:6] = value
+        self.fields[3]= value
         cp = self.fields[2]
 
         if cp:
@@ -43,5 +43,5 @@ class GridCard(Card):
             self.xyz0 = value
 
     def get_fields(self):
-        self.fields[3:6] = self.xyz
+        self.fields[3] = self.xyz
         return super().get_fields()
