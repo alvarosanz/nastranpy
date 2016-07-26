@@ -5,7 +5,7 @@ from nastranpy.bdf.cards.coord_card import CoordCard
 from nastranpy.bdf.cards.grid_card import GridCard
 
 
-def class_factory(card_name, card_type, card_scheme=None, card_tag=None):
+def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_padding=None):
 
     def get_grids_factory(card_scheme):
         fields_info = [(index, field_info) for index, field_info in enumerate(card_scheme) if
@@ -72,6 +72,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None):
     cls.type = card_type
     cls.tag = card_tag
     cls.scheme = card_scheme
+    cls.padding = card_padding
 
     if card_scheme:
 

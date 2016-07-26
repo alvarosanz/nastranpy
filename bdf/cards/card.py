@@ -9,8 +9,13 @@ class Card(object):
     type = None
     tag = None
     scheme = None
+    padding = None
 
     def __init__(self, fields, large_field=False, free_field=False):
+
+        if self.padding:
+            fields = self.padding.unpadded(fields)
+
         self._set_fields(fields)
         self.large_field = large_field
         self.free_field = free_field
@@ -168,13 +173,18 @@ class Card(object):
     def get_fields(self):
         fields = ['' if field is None else field for field, field_type in self._get_fields()]
 
+        if self.padding:
+            fields = self.padding.padded(fields)
+
         for index, field in enumerate(fields):
 
             if field != '':
                 last_index = index
 
-                if isinstance(field, Card):
+                try:
                     fields[index] = field.id
+                except AttributeError:
+                    pass
 
         return fields[:last_index + 1]
 

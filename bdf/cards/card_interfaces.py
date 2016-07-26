@@ -1,6 +1,7 @@
 from nastranpy.bdf.cards.enums import Item, Set, Tag, Field
 from nastranpy.bdf.cards.class_factory import class_factory
 from nastranpy.bdf.cards.card_factory import CardFactory
+from nastranpy.bdf.cards.padding import Padding
 
 
 class F(object):
@@ -80,11 +81,11 @@ card_interfaces = {
     'PCOMP': class_factory('PCOMP', Item.prop, [F(), F(), F('Z0'), F('NSM'), F('SB'), F('FT'), F('TREF'), F('GE'), F('LAM'),
                                                 F('plies', seq_type=Field.list, subscheme=[Item.mat, None, None, None])]),
     'PCOMPG': class_factory('PCOMPG', Item.prop, [F(), F(), F('Z0'), F('NSM'), F('SB'), F('FT'), F('TREF'), F('GE'), F('LAM'),
-                                                  F('plies', seq_type=Field.list, subscheme=[None, Item.mat, None, None, None, None, None, None])]), # To implement
+                                                  F('plies', seq_type=Field.list, subscheme=[None, Item.mat, None, None, None])], card_padding=Padding(9, {6, 7, 8})),
     'PSOLID': class_factory('PSOLID', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('CORDM', Item.coord), F('IN'), F('STRESS'), F('ISOP'), F('FCTN'), F('COROT')]),
-    'PBUSH': class_factory('PBUSH', Item.prop), # To implement
+    'PBUSH': class_factory('PBUSH', Item.prop, [F(), F(), F('data', seq_type=Field.list, subscheme=[None, None, None, None, None, None, None])], card_padding=Padding(9, {1})),
     # MPCs
-    'MPC': class_factory('MPC', Set.mpc), # To implement
+    'MPC': class_factory('MPC', Set.mpc, [F(), F(), F('equation', seq_type=Field.list, subscheme=[Item.grid, None, None])], card_padding=Padding(8, {1, 8})),
     'MPCADD': class_factory('MPCADD', Set.mpc, [F(), F(), F('sets', Set.mpc, seq_type=Field.set)]),
     # SPCs
     'SPC': class_factory('SPC', Set.spc, [F(), F(), F('G1', Item.grid), F('C1'), F('D1'), F('G2', Item.grid), F('C2'), F('D2')]),
