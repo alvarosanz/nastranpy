@@ -1,6 +1,6 @@
 import numpy as np
 from nastranpy.bdf.write_bdf import print_card
-from nastranpy.bdf.cards.enums import Item, Field
+from nastranpy.bdf.cards.enums import Item, Seq
 from nastranpy.bdf.cards.grid_list import GridList
 from nastranpy.bdf.cards.grid_set import GridSet
 
@@ -91,8 +91,14 @@ class Card(object):
 
                         if field_info.subscheme:
 
-                            for subsubfield, subfield_info in zip(subfield, field_info.subscheme):
-                                yield subsubfield, subfield_info
+                            for subsubfield, subsubfield_info in zip(subfield, field_info.subscheme):
+
+                                if subsubfield_info.seq_type:
+
+                                    for subsubsubfield in subsubfield:
+                                        yield subsubsubfield, subsubfield_info.type
+                                else:
+                                    yield subsubfield, subsubfield_info.type
                         else:
                             yield subfield, field_info.type
                 else:
@@ -105,6 +111,13 @@ class Card(object):
 
     def _set_fields(self, fields):
         fields = [field if field != '' else None for field in fields]
+
+        while True:
+
+            if fields[-1] is None:
+                fields.pop()
+            else:
+                break
 
         if self.scheme:
             fields.reverse()
@@ -124,12 +137,42 @@ class Card(object):
                         if field_info.subscheme:
                             subfield = list()
 
-                            for x in field_info.subscheme:
+                            for subsubfield_info in field_info.subscheme:
 
-                                try:
-                                    subfield.append(fields.pop())
-                                except IndexError:
-                                    subfield.append(None)
+                                if subsubfield_info.seq_type:
+                                    subsubsubfields = list()
+
+                                    for j in range(1, len(fields) + 1):
+                                        subsubsubfields.append(fields.pop())
+
+                                        if (not fields or
+                                            j == subsubfield_info.length or
+                                            not subsubfield_info.length and isinstance(fields[-1], (float, str))):
+                                            break
+
+                                    if subsubfield_info.seq_type is Seq.list:
+
+                                        if subsubfield_info.update_grid and link_grids:
+                                            subsubfield = GridList(self, grids=subsubsubfields)
+                                        else:
+                                            subsubfield = list(subsubsubfields)
+
+                                    elif subsubfield_info.seq_type is Seq.set:
+
+                                        if subsubfield_info.update_grid and link_grids:
+                                            subsubfield = GridSet(self, grids=subsubsubfields)
+                                        else:
+                                            subsubfield = set(subsubsubfields)
+                                    elif subsubfield_info.seq_type is Seq.vector:
+                                        subsubfield = np.array(subsubsubfields)
+                                else:
+
+                                    try:
+                                        subsubfield = fields.pop()
+                                    except IndexError:
+                                        subsubfield = None
+
+                                subfield.append(subsubfield)
                         else:
                             subfield = fields.pop()
 
@@ -140,20 +183,20 @@ class Card(object):
                             not field_info.length and isinstance(fields[-1], (float, str))):
                             break
 
-                    if field_info.seq_type is Field.list:
+                    if field_info.seq_type is Seq.list:
 
                         if field_info.update_grid and link_grids:
                             field = GridList(self, grids=subfields)
                         else:
                             field = list(subfields)
 
-                    elif field_info.seq_type is Field.set:
+                    elif field_info.seq_type is Seq.set:
 
                         if field_info.update_grid and link_grids:
                             field = GridSet(self, grids=subfields)
                         else:
                             field = set(subfields)
-                    elif field_info.seq_type is Field.vector:
+                    elif field_info.seq_type is Seq.vector:
                         field = np.array(subfields)
 
                 else:

@@ -9,7 +9,8 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
     def get_grids_factory(card_scheme):
         fields_info = [(index, field_info) for index, field_info in enumerate(card_scheme) if
-                       field_info.update_grid]
+                       field_info.update_grid or
+                       field_info.subscheme and any(x.update_grid for x in field_info.subscheme)]
 
         def wrapped(self):
             grids = set()
@@ -17,7 +18,19 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
             for index, field_info in fields_info:
 
                 if field_info.seq_type:
-                    grids |= set(self.fields[index])
+
+                    if field_info.subscheme:
+
+                        for subfield in self.fields[index]:
+
+                            for subsubfield, subsubfield_info in zip(subfield, field_info.subscheme):
+
+                                if subsubfield_info.seq_type:
+                                    grids |= set(subsubfield)
+                                else:
+                                    grids.add(subsubfield)
+                    else:
+                        grids |= set(self.fields[index])
                 else:
                     grids.add(self.fields[index])
 

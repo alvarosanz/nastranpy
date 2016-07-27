@@ -118,15 +118,10 @@ class Model(object):
     def _link_card(self, card):
 
         try:
-
-            try:
-                card._set_fields(((self.items[type][id] if type in self.items else self.sets[type][id]) if
-                                  type and id and isinstance(id, int) else id for id, type in card._get_fields()))
-            except KeyError:
-                raise KeyError('Cannot link the following card: {}'.format(card))
-
-        except AttributeError:
-            pass
+            card._set_fields(((self.items[type][id] if type in self.items else self.sets[type][id]) if
+                              type and id and isinstance(id, int) else id for id, type in card._get_fields()))
+        except KeyError:
+            raise KeyError('Cannot link the following card: {}'.format(card))
 
     def _arrange_grids(self):
         pending_coords = set(self.cards(Item.coord))
