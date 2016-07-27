@@ -22,12 +22,12 @@ card_interfaces = {
     # Grids
     'GRID': class_factory('GRID', Item.grid, [F(), F(), F('CP', Item.coord), F(seq_type=Seq.vector, length=3), F('CD', Item.coord), F('PS'), F('SEID')]),
     # Coordinate systems
-    'CORD2R': class_factory('CORD2R', Item.coord, [F(), F(), F('RID', Item.coord), F('A1'), F('A2'), F('A3'), F('B1'), F('B2'), F('B3'),
-                                                   F('C1'), F('C2'), F('C3')]),
-    'CORD2C': class_factory('CORD2C', Item.coord, [F(), F(), F('RID', Item.coord), F('A1'), F('A2'), F('A3'), F('B1'), F('B2'), F('B3'),
-                                                   F('C1'), F('C2'), F('C3')]),
-    'CORD2S': class_factory('CORD2S', Item.coord, [F(), F(), F('RID', Item.coord), F('A1'), F('A2'), F('A3'), F('B1'), F('B2'), F('B3'),
-                                                   F('C1'), F('C2'), F('C3')]),
+    'CORD2R': class_factory('CORD2R', Item.coord, [F(), F(), F('RID', Item.coord), F('A', seq_type=Seq.vector, length=3), F('B', seq_type=Seq.vector, length=3),
+                                                   F('C', seq_type=Seq.vector, length=3)]),
+    'CORD2C': class_factory('CORD2C', Item.coord, [F(), F(), F('RID', Item.coord), F('A', seq_type=Seq.vector, length=3), F('B', seq_type=Seq.vector, length=3),
+                                                   F('C', seq_type=Seq.vector, length=3)]),
+    'CORD2S': class_factory('CORD2S', Item.coord, [F(), F(), F('RID', Item.coord), F('A', seq_type=Seq.vector, length=3), F('B', seq_type=Seq.vector, length=3),
+                                                   F('C', seq_type=Seq.vector, length=3)]),
     'CORD1R': class_factory('CORD1R', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid)]), # To implement alternate format
     'CORD1C': class_factory('CORD1C', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid)]), # To implement alternate format
     'CORD1S': class_factory('CORD1S', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid)]), # To implement alternate format

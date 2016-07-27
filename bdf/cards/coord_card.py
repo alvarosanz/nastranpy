@@ -22,9 +22,9 @@ class CoordCard(Card):
             self.b0 = self.fields[3].xyz0
             self.c0 = self.fields[4].xyz0
         except AttributeError:
-            self.a0 = np.array(self.fields[3:6])
-            self.b0 = np.array(self.fields[6:9])
-            self.c0 = np.array(self.fields[9:12])
+            self.a0 = self.fields[3]
+            self.b0 = self.fields[4]
+            self.c0 = self.fields[5]
             cp = self.fields[2]
 
             if cp:
@@ -67,9 +67,9 @@ class CoordCard(Card):
             if cp:
 
                 try:
-                    self.fields[3:6] = cp.get_xyz(self.a0)
-                    self.fields[6:9] = cp.get_xyz(self.b0)
-                    self.fields[9:12] = cp.get_xyz(self.c0)
+                    self.fields[3] = cp.get_xyz(self.a0)
+                    self.fields[4] = cp.get_xyz(self.b0)
+                    self.fields[5] = cp.get_xyz(self.c0)
                 except AttributeError:
                     pass
 
