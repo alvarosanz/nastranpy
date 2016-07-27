@@ -48,9 +48,17 @@ class GridList(object):
             self.append(grid)
 
     def append(self, value):
-        value.elems.add(self.element)
 
         if value:
             value.elems.add(self.element)
 
         self.grids.append(value)
+
+    def clear(self):
+
+        for grid in self.grids:
+
+            if grid:
+                grid.elems.remove(self.element)
+
+        self.grids.clear()

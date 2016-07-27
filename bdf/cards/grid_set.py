@@ -7,7 +7,9 @@ class GridSet(object):
         if grids:
 
             for grid in grids:
-                self.add(grid)
+
+                if grid:
+                    self.add(grid)
 
     def __len__(self):
         return len(self.grids)
@@ -30,3 +32,10 @@ class GridSet(object):
     def remove(self, value):
         value.elems.remove(self.element)
         self.grids.remove(value)
+
+    def clear(self):
+
+        for grid in self.grids:
+            grid.elems.remove(self.element)
+
+        self.grids.clear()
