@@ -1,8 +1,8 @@
 class GridList(object):
 
     def __init__(self, element, grids=None):
-        self.element = element
-        self.grids = list()
+        self._element = element
+        self._grids = list()
 
         if grids:
 
@@ -10,37 +10,37 @@ class GridList(object):
                 self.append(grid)
 
     def __len__(self):
-        return len(self.grids)
+        return len(self._grids)
 
     def __iter__(self):
-        return iter(self.grids)
+        return iter(self._grids)
 
     def __contains__(self, value):
-        return value in self.grids
+        return value in self._grids
 
     def __getitem__(self, index):
-        return self.grids[index]
+        return self._grids[index]
 
     def __setitem__(self, index, value):
-        old_value = self.grids[index]
+        old_value = self._grids[index]
 
         if not value is old_value:
 
             if old_value:
-                old_value.elems.remove(self.element)
+                old_value.elems.remove(self._element)
 
             if value:
-                value.elems.add(self.element)
+                value.elems.add(self._element)
 
-            self.grids[index] = value
+            self._grids[index] = value
 
     def __delitem__(self, index):
-        old_value = self.grids[index]
+        old_value = self._grids[index]
 
         if old_value:
-            old_value.elems.remove(self.element)
+            old_value.elems.remove(self._element)
 
-        del self.grids[index]
+        del self._grids[index]
 
     def __iadd__(self, other):
 
@@ -50,15 +50,15 @@ class GridList(object):
     def append(self, value):
 
         if value:
-            value.elems.add(self.element)
+            value.elems.add(self._element)
 
-        self.grids.append(value)
+        self._grids.append(value)
 
     def clear(self):
 
-        for grid in self.grids:
+        for grid in self._grids:
 
             if grid:
-                grid.elems.remove(self.element)
+                grid.elems.remove(self._element)
 
-        self.grids.clear()
+        self._grids.clear()

@@ -1,8 +1,8 @@
 class GridSet(object):
 
     def __init__(self, element, grids=None):
-        self.element = element
-        self.grids = set()
+        self._element = element
+        self._grids = set()
 
         if grids:
 
@@ -12,13 +12,13 @@ class GridSet(object):
                     self.add(grid)
 
     def __len__(self):
-        return len(self.grids)
+        return len(self._grids)
 
     def __iter__(self):
-        return iter(self.grids)
+        return iter(self._grids)
 
     def __contains__(self, value):
-        return value in self.grids
+        return value in self._grids
 
     def __ior__(self, other):
 
@@ -26,16 +26,16 @@ class GridSet(object):
             self.add(grid)
 
     def add(self, value):
-        value.elems.add(self.element)
-        self.grids.add(value)
+        value.elems.add(self._element)
+        self._grids.add(value)
 
     def remove(self, value):
-        value.elems.remove(self.element)
-        self.grids.remove(value)
+        value.elems.remove(self._element)
+        self._grids.remove(value)
 
     def clear(self):
 
-        for grid in self.grids:
-            grid.elems.remove(self.element)
+        for grid in self._grids:
+            grid.elems.remove(self._element)
 
-        self.grids.clear()
+        self._grids.clear()
