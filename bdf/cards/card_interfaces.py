@@ -63,7 +63,7 @@ card_interfaces = {
     'CHEXA': class_factory('CHEXA', Item.elem, [F(), F(), F(Item.prop.name, Item.prop), F('grids', Item.grid, Seq.list, 20, update_grid=True)], card_tag=Tag.e3D),
     'RBE2': class_factory('RBE2', Item.elem, [F(), F(), F('master_grid', Item.grid, update_grid=True), F('CM'), F('slave_grids', Item.grid, Seq.set, update_grid=True), F('ALPHA')], card_tag=Tag.eRigid),
     'RBE3': class_factory('RBE3', Item.elem, [F(), F(), F(), F('master_grid', Item.grid, update_grid=True), F('REFC'),
-                                              F('slaves', seq_type=Seq.list, subscheme=[F('WT'), F('C'), F('slave_grids', Item.grid, Seq.set, update_grid=True)])], card_tag=Tag.eRigid), # To implement
+                                              F('slaves', seq_type=Seq.list, subscheme=[F('WT'), F('C'), F('grids', Item.grid, Seq.set, update_grid=True)])], card_tag=Tag.eRigid), # To implement
     'CBUSH': class_factory('CBUSH', Item.elem, [F(), F(), F(Item.prop.name, Item.prop), F('grids', Item.grid, Seq.list, 2, update_grid=True), F('X1', Item.grid, alternate_name='G0'), F('X2'), F('X3'), F('CID', Item.coord),
                                                 F('S'), F('OCID', Item.coord), F('S1'), F('S2'), F('S3')], card_tag=Tag.eSpring),
     'CONM2': class_factory('CONM2', Item.elem, [F(), F(), F('grids', Item.grid, Seq.list, 1, update_grid=True), F('CID', Item.coord), F('M'), F('X1'), F('X2'), F('X3'), F(),
@@ -80,9 +80,9 @@ card_interfaces = {
     'PSHELL': class_factory('PSHELL', Item.prop, [F(), F(), F('mat1', Item.mat), F('T'), F('mat2', Item.mat), F('BMIR'), F('mat3', Item.mat), F('TST'), F('NSM'),
                                                   F('Z1'), F('Z2'), F('mat4', Item.mat)]),
     'PCOMP': class_factory('PCOMP', Item.prop, [F(), F(), F('Z0'), F('NSM'), F('SB'), F('FT'), F('TREF'), F('GE'), F('LAM'),
-                                                F('plies', seq_type=Seq.list, subscheme=[F('MID', Item.mat), F('T'), F('THETA'), F('SOUT')])]),
+                                                F('plies', seq_type=Seq.list, subscheme=[F(Item.mat.name, Item.mat), F('T'), F('THETA'), F('SOUT')])]),
     'PCOMPG': class_factory('PCOMPG', Item.prop, [F(), F(), F('Z0'), F('NSM'), F('SB'), F('FT'), F('TREF'), F('GE'), F('LAM'),
-                                                  F('plies', seq_type=Seq.list, subscheme=[F('GPLYID'), F('MID', Item.mat), F('T'), F('THETA'), F('SOUT')])], card_padding=Padding(9, {6, 7, 8})),
+                                                  F('plies', seq_type=Seq.list, subscheme=[F('id'), F(Item.mat.name, Item.mat), F('T'), F('THETA'), F('SOUT')])], card_padding=Padding(9, {6, 7, 8})),
     'PSOLID': class_factory('PSOLID', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('CORDM', Item.coord), F('IN'), F('STRESS'), F('ISOP'), F('FCTN'), F('COROT')]),
     'PBUSH': class_factory('PBUSH', Item.prop, [F(), F(), F('data', seq_type=Seq.list, subscheme=[F(), F(), F(), F(), F(), F(), F()])], card_padding=Padding(9, {1})),
     # MPCs

@@ -26,19 +26,24 @@ class GridList(object):
 
         if not value is old_value:
 
-            if old_value:
+            try:
                 old_value.elems.remove(self._element)
+            except AttributeError:
+                pass
 
-            if value:
+            try:
                 value.elems.add(self._element)
+            except AttributeError:
+                pass
 
             self._grids[index] = value
 
     def __delitem__(self, index):
-        old_value = self._grids[index]
 
-        if old_value:
-            old_value.elems.remove(self._element)
+        try:
+            self._grids[index].elems.remove(self._element)
+        except AttributeError:
+            pass
 
         del self._grids[index]
 
@@ -49,8 +54,10 @@ class GridList(object):
 
     def append(self, value):
 
-        if value:
+        try:
             value.elems.add(self._element)
+        except AttributeError:
+            pass
 
         self._grids.append(value)
 
@@ -58,7 +65,9 @@ class GridList(object):
 
         for grid in self._grids:
 
-            if grid:
+            try:
                 grid.elems.remove(self._element)
+            except AttributeError:
+                pass
 
         self._grids.clear()

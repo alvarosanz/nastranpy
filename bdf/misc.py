@@ -5,6 +5,16 @@ def sorted_cards(cards):
                                           str(card.id).rjust(8, '0'))
 
 
+def get_singular(name):
+
+    if name[-3:] == 'ies':
+        return name[:-3] + 'y'
+    elif name[-1] == 's':
+        return name[:-1]
+    else:
+        return name
+
+
 def get_plural(name):
 
     if name[-1] == 'y':

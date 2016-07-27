@@ -26,16 +26,30 @@ class GridSet(object):
             self.add(grid)
 
     def add(self, value):
-        value.elems.add(self._element)
+
+        try:
+            value.elems.add(self._element)
+        except AttributeError:
+            pass
+
         self._grids.add(value)
 
     def remove(self, value):
-        value.elems.remove(self._element)
+
+        try:
+            value.elems.remove(self._element)
+        except AttributeError:
+            pass
+
         self._grids.remove(value)
 
     def clear(self):
 
         for grid in self._grids:
-            grid.elems.remove(self._element)
+
+            try:
+                grid.elems.remove(self._element)
+            except AttributeError:
+                pass
 
         self._grids.clear()

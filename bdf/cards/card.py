@@ -91,7 +91,7 @@ class Card(object):
 
                         if field_info.subscheme:
 
-                            for subsubfield, subsubfield_info in zip(subfield, field_info.subscheme):
+                            for subsubfield, subsubfield_info in zip(subfield, field_info.subscheme.scheme):
 
                                 if subsubfield_info.seq_type:
 
@@ -137,42 +137,27 @@ class Card(object):
                         if field_info.subscheme:
                             subfield = list()
 
-                            for subsubfield_info in field_info.subscheme:
+                            for subsubfield_info in field_info.subscheme.scheme:
 
                                 if subsubfield_info.seq_type:
-                                    subsubsubfields = list()
+                                    subfield.append(list())
 
                                     for j in range(1, len(fields) + 1):
-                                        subsubsubfields.append(fields.pop())
+                                        subfield[-1].append(fields.pop())
 
                                         if (not fields or
                                             j == subsubfield_info.length or
                                             not subsubfield_info.length and isinstance(fields[-1], (float, str))):
                                             break
 
-                                    if subsubfield_info.seq_type is Seq.list:
-
-                                        if subsubfield_info.update_grid and link_grids:
-                                            subsubfield = GridList(self, grids=subsubsubfields)
-                                        else:
-                                            subsubfield = list(subsubsubfields)
-
-                                    elif subsubfield_info.seq_type is Seq.set:
-
-                                        if subsubfield_info.update_grid and link_grids:
-                                            subsubfield = GridSet(self, grids=subsubsubfields)
-                                        else:
-                                            subsubfield = set(subsubsubfields)
-                                    elif subsubfield_info.seq_type is Seq.vector:
-                                        subsubfield = np.array(subsubsubfields)
                                 else:
 
                                     try:
-                                        subsubfield = fields.pop()
+                                        subfield.append(fields.pop())
                                     except IndexError:
-                                        subsubfield = None
+                                        subfield.append(None)
 
-                                subfield.append(subsubfield)
+                            subfield = field_info.subscheme(subfield, self)
                         else:
                             subfield = fields.pop()
 
