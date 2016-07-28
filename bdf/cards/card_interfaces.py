@@ -7,7 +7,7 @@ from nastranpy.bdf.cards.field_info import FieldInfo as F
 
 card_interfaces = {
     # Grids
-    'GRID': class_factory('GRID', Item.grid, [F(), F(), F('CP', Item.coord), F(seq_type=Seq.vector, length=3), F('CD', Item.coord), F('PS'), F('SEID')]),
+    'GRID': class_factory('GRID', Item.grid, [F(), F(), F('CP', Item.coord), F(seq_type=Seq.vector, length=3), F('CD', Item.coord, alternate_name=Item.coord.name), F('PS'), F('SEID')]),
     # Coordinate systems
     'CORD2R': class_factory('CORD2R', Item.coord, [F(), F(), F('RID', Item.coord), F('A', seq_type=Seq.vector, length=3), F('B', seq_type=Seq.vector, length=3),
                                                    F('C', seq_type=Seq.vector, length=3)]),
@@ -56,7 +56,7 @@ card_interfaces = {
     'CBUSH': class_factory('CBUSH', Item.elem, [F(), F(), F(Item.prop.name, Item.prop), F('grids', Item.grid, Seq.list, 2, update_grid=True), F('X1', Item.grid, alternate_name='G0'), F('X2'), F('X3'), F('CID', Item.coord),
                                                 F('S'), F('OCID', Item.coord), F('S1'), F('S2'), F('S3')], card_tag=Tag.eSpring),
     'CONM2': class_factory('CONM2', Item.elem, [F(), F(), F('grids', Item.grid, Seq.list, 1, update_grid=True), F('CID', Item.coord), F('M'), F('X1'), F('X2'), F('X3'), F(),
-                                                F('I11'), F('I21'), F('I22'), F('I31'), F('I32'), F('I33')], card_tag=Tag.e0D),
+                                                F('I11'), F('I21'), F('I22'), F('I31'), F('I32'), F('I33')], card_tag=Tag.eMass),
     'PLOTEL': class_factory('PLOTEL', Item.elem, [F(), F(), F('grids', Item.grid, Seq.list, 2, update_grid=True)], card_tag=Tag.ePlot),
     # Properties
     'PROD': class_factory('PROD', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('A'), F('J'), F('C'), F('NSM')]),

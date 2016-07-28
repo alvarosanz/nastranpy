@@ -14,12 +14,12 @@ class Set(Enum):
     load = 8
 
 class Tag(Enum):
-    e0D = 1
-    e1D = 2
-    e2D = 3
-    e3D = 4
-    eRigid = 5
-    eSpring = 6
+    e1D = 1
+    e2D = 2
+    e3D = 3
+    eRigid = 4
+    eSpring = 5
+    eMass = 6
     ePlot = 7
 
 class Coord(Enum):
