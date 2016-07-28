@@ -3,24 +3,43 @@ from itertools import count
 
 class Padding(object):
 
-    def __init__(self, first_field, columns):
+    def __init__(self, first_field=0, columns=None):
+
+        if columns is None:
+            columns = set()
+
         self.first_field = first_field
         self.columns = columns
+        self.first_column = min({1, 2, 3, 4, 5, 6, 7, 8} - columns)
 
     def padded(self, fields):
-        fields = iter(fields)
         padded_fields = list()
+        write_field = True
 
         for index in count(0):
+            column = (index - 1) % 8 + 1
 
-            if index >= self.first_field and ((index - 1) % 8 + 1) in self.columns:
+            if index >= self.first_field and column in self.columns:
                 padded_fields.append('')
             else:
 
-                try:
-                    padded_fields.append(next(fields))
-                except StopIteration:
-                    break
+                if write_field:
+
+                    try:
+                        field, field_info = next(fields)
+                        write_field = not field_info.optional_flag
+                    except StopIteration:
+                        break
+
+
+                if not write_field and (index < self.first_field and column == 1 or
+                                        index >= self.first_field and column == self.first_column):
+                    write_field = True
+
+                if write_field:
+                    padded_fields.append(field)
+                else:
+                    padded_fields.append('')
 
         return padded_fields
 

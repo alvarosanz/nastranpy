@@ -4,6 +4,7 @@ from nastranpy.bdf.cards.set_card import SetCard
 from nastranpy.bdf.cards.coord_card import CoordCard
 from nastranpy.bdf.cards.grid_card import GridCard
 from nastranpy.bdf.cards.subscheme import Subscheme
+from nastranpy.bdf.cards.padding import Padding
 from nastranpy.bdf.misc import get_singular
 
 
@@ -115,7 +116,13 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
     cls.type = card_type
     cls.tag = card_tag
     cls.scheme = card_scheme
+    cls.optional_scheme = {field_info.name: (index, field_info) for
+                           index, field_info in enumerate(card_scheme) if
+                           field_info.optional}
     cls.padding = card_padding
+
+    if cls.optional_scheme and not cls.padding:
+        cls.padding = Padding()
 
     if card_scheme:
 
@@ -126,8 +133,9 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                 subscheme_cls.scheme = field_info.subscheme
                 field_info.subscheme = subscheme_cls
 
-                setattr(cls, 'add_{}'.format(get_singular(field_info.name)),
-                        add_subscheme_factory(index, field_info))
+                if field_info.seq_type:
+                    setattr(cls, 'add_{}'.format(get_singular(field_info.name)),
+                            add_subscheme_factory(index, field_info))
 
                 for subindex, subfield_info in enumerate(field_info.subscheme.scheme):
 

@@ -2,20 +2,7 @@ from nastranpy.bdf.cards.enums import Item, Set, Tag, Seq
 from nastranpy.bdf.cards.class_factory import class_factory
 from nastranpy.bdf.cards.card_factory import CardFactory
 from nastranpy.bdf.cards.padding import Padding
-
-
-class F(object):
-
-    def __init__(self, name=None, type=None,
-                 seq_type=None, length=None, subscheme=None,
-                 alternate_name=None, update_grid=False):
-        self.name = name
-        self.type = type
-        self.seq_type = seq_type
-        self.length = length
-        self.subscheme = subscheme
-        self.alternate_name = alternate_name
-        self.update_grid = update_grid
+from nastranpy.bdf.cards.field_info import FieldInfo as F
 
 
 card_interfaces = {
@@ -63,7 +50,9 @@ card_interfaces = {
     'CHEXA': class_factory('CHEXA', Item.elem, [F(), F(), F(Item.prop.name, Item.prop), F('grids', Item.grid, Seq.list, 20, update_grid=True)], card_tag=Tag.e3D),
     'RBE2': class_factory('RBE2', Item.elem, [F(), F(), F('master_grid', Item.grid, update_grid=True), F('CM'), F('slave_grids', Item.grid, Seq.set, update_grid=True), F('ALPHA')], card_tag=Tag.eRigid),
     'RBE3': class_factory('RBE3', Item.elem, [F(), F(), F(), F('master_grid', Item.grid, update_grid=True), F('REFC'),
-                                              F('slaves', seq_type=Seq.list, subscheme=[F('WT'), F('C'), F('grids', Item.grid, Seq.set, update_grid=True)])], card_tag=Tag.eRigid), # To implement
+                                              F('slaves', seq_type=Seq.list, subscheme=[F('WT'), F('C'), F('grids', Item.grid, Seq.set, update_grid=True)]),
+                                              F('UM', seq_type=Seq.list, subscheme=[F('GM', Item.grid), F('CM')], optional=True),
+                                              F('ALPHA', optional=True)], card_tag=Tag.eRigid),
     'CBUSH': class_factory('CBUSH', Item.elem, [F(), F(), F(Item.prop.name, Item.prop), F('grids', Item.grid, Seq.list, 2, update_grid=True), F('X1', Item.grid, alternate_name='G0'), F('X2'), F('X3'), F('CID', Item.coord),
                                                 F('S'), F('OCID', Item.coord), F('S1'), F('S2'), F('S3')], card_tag=Tag.eSpring),
     'CONM2': class_factory('CONM2', Item.elem, [F(), F(), F('grids', Item.grid, Seq.list, 1, update_grid=True), F('CID', Item.coord), F('M'), F('X1'), F('X2'), F('X3'), F(),
@@ -84,7 +73,12 @@ card_interfaces = {
     'PCOMPG': class_factory('PCOMPG', Item.prop, [F(), F(), F('Z0'), F('NSM'), F('SB'), F('FT'), F('TREF'), F('GE'), F('LAM'),
                                                   F('plies', seq_type=Seq.list, subscheme=[F('id'), F(Item.mat.name, Item.mat), F('T'), F('THETA'), F('SOUT')])], card_padding=Padding(9, {6, 7, 8})),
     'PSOLID': class_factory('PSOLID', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('CORDM', Item.coord), F('IN'), F('STRESS'), F('ISOP'), F('FCTN'), F('COROT')]),
-    'PBUSH': class_factory('PBUSH', Item.prop, [F(), F(), F('data', seq_type=Seq.list, subscheme=[F(), F(), F(), F(), F(), F(), F()])], card_padding=Padding(9, {1})),
+    'PBUSH': class_factory('PBUSH', Item.prop, [F(), F(),
+                                                F('K', subscheme=[F('K1'), F('K2'), F('K3'), F('K4'), F('K5'), F('K6')], optional=True),
+                                                F('B', subscheme=[F('B1'), F('B2'), F('B3'), F('B4'), F('B5'), F('B6')], optional=True),
+                                                F('GE', subscheme=[F('GE1'), F('GE2'), F('GE3'), F('GE4'), F('GE5'), F('GE6')], optional=True),
+                                                F('RCV', subscheme=[F('SA'), F('ST'), F('EA'), F('ET')], optional=True),
+                                                F('M', optional=True)], card_padding=Padding(9, {1})),
     # MPCs
     'MPC': class_factory('MPC', Set.mpc, [F(), F(), F('equation', seq_type=Seq.list, subscheme=[F('G', Item.grid), F('C'), F('A')])], card_padding=Padding(8, {1, 8})),
     'MPCADD': class_factory('MPCADD', Set.mpc, [F(), F(), F('sets', Set.mpc, seq_type=Seq.set)]),

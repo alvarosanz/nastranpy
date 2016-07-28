@@ -7,6 +7,10 @@ class Subscheme(object):
     scheme = None
 
     def __init__(self, fields, card):
+
+        if not fields:
+            fields = [None for field_info in self.scheme]
+
         self.fields = list()
 
         for field, field_info in zip(fields, self.scheme):
@@ -28,6 +32,14 @@ class Subscheme(object):
             self.fields.append(field)
 
         self.card = card
+
+    def __repr__(self):
+        return '{{{}}}'.format(', '.join(('{}: {}'.format(field_info.name, repr(field)) for
+                                          field, field_info in zip(self.fields, self.scheme))))
+
+    def __str__(self):
+        return '{{{}}}'.format(', '.join(('{}: {}'.format(field_info.name, str(field)) for
+                                          field, field_info in zip(self.fields, self.scheme))))
 
     def __iter__(self):
         return iter(self.fields)
