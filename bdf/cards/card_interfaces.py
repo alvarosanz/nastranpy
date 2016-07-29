@@ -64,7 +64,12 @@ card_interfaces = {
                                               F('C1'), F('C2'), F('D1'), F('D2'), F('E1'), F('E2'), F('F1'), F('F2'),
                                               F('K1'), F('K2'), F('I12')]),
     'PBARL': class_factory('PBARL', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('GROUP'), F('TYPE')]), # To implement NSM and DIMs
-    'PBEAM': class_factory('PBEAM', Item.prop, [F(), F(), F(Item.mat.name, Item.mat)]), # To implement NSM and DIMs
+    'PBEAM': class_factory('PBEAM', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('A'), F('I1'), F('I2'), F('I12'), F('J'), F('NSM'),
+                                                F('C1'), F('C2'), F('D1'), F('D2'), F('E1'), F('E2'), F('F1'), F('F2'),
+                                                F('stations', seq_type=Seq.list, subscheme=[F('SO'), F('X_XB'), F('A'), F('I1'), F('I2'), F('I12'), F('J'), F('NSM'),
+                                                                                            F('C1'), F('C2'), F('D1'), F('D2'), F('E1'), F('E2'), F('F1'), F('F2')]),
+                                                F('K1'), F('K2'), F('S1'), F('S2'), F('NSI_A'), F('NSI_B'), F('CW_A'), F('CW_B'),
+                                                F('M1_A'), F('M2_A'), F('M1_B'), F('M2_B'), F('N1_A'), F('N2_A'), F('N1_B'), F('N2_B')]),
     'PBEAML': class_factory('PBEAML', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('GROUP'), F('TYPE')]), # To implement NSM and DIMs
     'PSHELL': class_factory('PSHELL', Item.prop, [F(), F(), F('mat1', Item.mat), F('T'), F('mat2', Item.mat), F('BMIR'), F('mat3', Item.mat), F('TST'), F('NSM'),
                                                   F('Z1'), F('Z2'), F('mat4', Item.mat)]),
