@@ -63,10 +63,10 @@ class Include(object):
         with open(self._file, 'w') as f:
 
             for card in sorted_cards(self.commentted_cards):
-                f.write(card.print_card(is_commented=True, comment_symbol='$ -> ') + '\n')
+                f.write(card.print(is_commented=True, comment_symbol='$ -> ') + '\n')
 
             for card in sorted_cards(self.cards):
-                f.write(card.print_card() + '\n')
+                f.write(card.print() + '\n')
 
     def clear_commented_cards(self):
         self.commentted_cards.clear()

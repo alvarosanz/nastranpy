@@ -7,7 +7,7 @@ from nastranpy.bdf.cards.field_info import FieldInfo as F
 
 card_interfaces = {
     # Grids
-    'GRID': class_factory('GRID', Item.grid, [F(), F(), F('CP', Item.coord), F(seq_type=Seq.vector, length=3), F('CD', Item.coord, alternate_name=Item.coord.name), F('PS'), F('SEID')]),
+    'GRID': class_factory('GRID', Item.grid, [F(), F(), F('CP', Item.coord), F('xyz', seq_type=Seq.vector, length=3), F('CD', Item.coord, alternate_name=Item.coord.name), F('PS'), F('SEID')]),
     # Coordinate systems
     'CORD2R': class_factory('CORD2R', Item.coord, [F(), F(), F('RID', Item.coord), F('A', seq_type=Seq.vector, length=3), F('B', seq_type=Seq.vector, length=3),
                                                    F('C', seq_type=Seq.vector, length=3)]),

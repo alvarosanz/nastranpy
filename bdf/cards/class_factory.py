@@ -144,15 +144,15 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                                 property(get_field_factory(subindex),
                                          set_field_factory(subindex, subfield_info, True)))
 
-            if field_info.name:
+            if field_info.name and not hasattr(cls, field_info.name):
                 setattr(cls, field_info.name,
                         property(get_field_factory(index),
                                  set_field_factory(index, field_info)))
 
-                if field_info.alternate_name:
-                    setattr(cls, field_info.alternate_name,
-                            property(get_field_factory(index),
-                                     set_field_factory(index, field_info)))
+            if field_info.alternate_name and not hasattr(cls, field_info.alternate_name):
+                setattr(cls, field_info.alternate_name,
+                        property(get_field_factory(index),
+                                 set_field_factory(index, field_info)))
 
         if card_type is Item.elem and not 'grids' in [x.name for x in card_scheme]:
             setattr(cls, 'grids', property(get_grids_factory(card_scheme)))

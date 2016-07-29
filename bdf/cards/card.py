@@ -31,8 +31,23 @@ class Card(object):
         return "'{} {}'".format(self.name, self.id)
 
     def __str__(self):
-        return print_card(self.get_fields(), large_field=False, free_field=False,
-                          comment='', is_commented=False)
+        fields = ['name: {}'.format(repr(self.name)),
+                 'id: {}'.format(self.fields[1])]
+
+        if self.type:
+            fields.append('type: {}'.format(self.type.name))
+
+        if self.tag:
+            fields.append('tag: {}'.format(self.tag.name))
+
+        if self.scheme:
+            fields += ['{}: {}'.format(field_info.name, repr(field)) for
+                       field_info, field in zip(self.scheme[2:], self.fields[2:]) if
+                       field_info.name]
+        else:
+            fields += [repr(field) for field in self.fields[2:]]
+
+        return '{{{}}}'.format(', '.join(fields))
 
     def __contains__(self, value):
         return value in self.items()
@@ -73,7 +88,7 @@ class Card(object):
                 self._include.cards.add(self)
 
     def items(self):
-        return (field for field, field_info.type in self._get_fields() if
+        return (field for field, field_info in self._get_fields() if
                 field and field_info and field_info.type in Item)
 
     def get_fields(self):
@@ -95,8 +110,7 @@ class Card(object):
 
         return fields[:last_index + 1]
 
-    def print_card(self, large_field=None, free_field=None, comment=None,
-                   is_commented=None, comment_symbol='$: '):
+    def print(self, large_field=None, free_field=None, comment=None, is_commented=None, comment_symbol='$: '):
 
         if large_field is None:
             large_field = self.large_field
