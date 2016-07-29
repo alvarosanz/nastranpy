@@ -35,3 +35,8 @@ class SetCard(Card):
 
             if self._set:
                 self._set.cards.add(self)
+
+    def _new_card(self, fields):
+        new_card = super()._new_card(fields)
+        new_card.set = self.set
+        return new_card

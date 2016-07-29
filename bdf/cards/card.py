@@ -268,3 +268,24 @@ class Card(object):
                         self.fields[index] = get_field(optional_field_info)
         else:
             self.fields = fields
+
+    def split(self):
+
+        if self.scheme and self.scheme[-1].other_card and self.fields[-1]:
+            new_card = self._new_card([self.fields[0]] + self.fields[-1])
+            new_card.split()
+            self.fields[-1] = list()
+
+    def _new_card(self, fields):
+        new_card = type(self)(fields, large_field=self.large_field, free_field=self.free_field)
+        new_card.is_commented = self.is_commented
+        new_card.comment = self.comment
+        new_card.print_comment = self.print_comment
+        new_card.include = self.include
+        new_card.notify = self.notify
+
+        if self.notify:
+            self.notify(self, new_card=new_card)
+
+        return new_card
+

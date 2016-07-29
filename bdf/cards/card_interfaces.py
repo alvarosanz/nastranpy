@@ -15,9 +15,9 @@ card_interfaces = {
                                                    F('C', seq_type=Seq.vector, length=3)]),
     'CORD2S': class_factory('CORD2S', Item.coord, [F(), F(), F('RID', Item.coord), F('A', seq_type=Seq.vector, length=3), F('B', seq_type=Seq.vector, length=3),
                                                    F('C', seq_type=Seq.vector, length=3)]),
-    'CORD1R': class_factory('CORD1R', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid)]), # To implement alternate format
-    'CORD1C': class_factory('CORD1C', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid)]), # To implement alternate format
-    'CORD1S': class_factory('CORD1S', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid)]), # To implement alternate format
+    'CORD1R': class_factory('CORD1R', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid), F(seq_type=Seq.list, length=4, other_card=True)]),
+    'CORD1C': class_factory('CORD1C', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid), F(seq_type=Seq.list, length=4, other_card=True)]),
+    'CORD1S': class_factory('CORD1S', Item.coord, [F(), F(), F('G1A', Item.grid), F('G2A', Item.grid), F('G3A', Item.grid), F(seq_type=Seq.list, length=4, other_card=True)]),
     # Materials
     'MAT1': class_factory('MAT1', Item.mat, [F(), F(), F('E'), F('G'), F('NU'), F('RHO'), F('A'), F('TREF'), F('GE'),
                                              F('ST'), F('SC'), F('SS'), F('MCSID', Item.coord)]),

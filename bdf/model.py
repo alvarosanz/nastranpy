@@ -59,7 +59,7 @@ class Model(object):
             print('\rReading file ({} of {}): {}'.format(str(counter), len(includes), include.file), end='')
             include.read()
 
-            for card in include.cards:
+            for card in list(include.cards):
                 self._classify_card(card)
 
         print('\rAll files readed succesfully!')
@@ -115,6 +115,8 @@ class Model(object):
         else:
             self.unsupported_cards.add(card)
 
+        card.split()
+
     def _link_card(self, card):
 
         try:
@@ -167,6 +169,17 @@ class Model(object):
             elif key == 'new_include_name':
                 self._update_mapping(self.includes, caller, caller.file, value,
                                      'Include name already used!')
+            elif key == 'new_card':
+
+                if not value.type in self.items:
+                    raise TypeError('New card instance must be of an item type!')
+
+                mapping = self.items[value.type]
+
+                if value.id in mapping:
+                    raise ValueError('{} ID already used!'.format(value.type.name.upper()))
+
+                mapping[value.id] = value
 
     @staticmethod
     def _update_mapping(mapping, caller, old_key, new_key, error_message=''):
