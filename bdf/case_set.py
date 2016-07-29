@@ -10,10 +10,10 @@ class CaseSet(object):
         self.cards = set()
 
     def __repr__(self):
-        return "'{} set {}: {}'".format(self.type.name.upper(), self.id, super().__repr__())
+        return "'{} set {}'".format(self.type.name.upper(), self.id)
 
     def __str__(self):
-        return '{} set (ID: {})'.format(self.type.name.upper(), self.id)
+        return '{} set {}'.format(self.type.name.upper(), self.id)
 
     @property
     def id(self):

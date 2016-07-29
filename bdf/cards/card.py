@@ -28,7 +28,7 @@ class Card(object):
         self.notify = None
 
     def __repr__(self):
-        return "'{} {}: {}'".format(self.name, self.id, super().__repr__())
+        return "'{} {}'".format(self.name, self.id)
 
     def __str__(self):
         return print_card(self.get_fields(), large_field=False, free_field=False,

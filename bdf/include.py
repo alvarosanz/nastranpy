@@ -24,10 +24,10 @@ class Include(object):
         self.commentted_cards = set()
 
     def __repr__(self):
-        return "'{}: {}'".format(self.file, super().__repr__())
+        return repr(self.file)
 
     def __str__(self):
-        return self.file
+        return str(self.file)
 
     @property
     def file(self):
