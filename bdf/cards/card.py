@@ -18,7 +18,15 @@ class Card(object):
         if self.padding:
             fields = self.padding.unpadded(fields)
 
-        self._set_fields(fields)
+        self.fields = [field if field != '' else None for field in fields]
+
+        while True:
+
+            if self.fields[-1] is None:
+                self.fields.pop()
+            else:
+                break
+
         self.large_field = large_field
         self.free_field = free_field
         self.is_commented = False
@@ -131,6 +139,113 @@ class Card(object):
         return print_card(self.get_fields(), large_field=large_field, free_field=free_field,
                           comment=comment, is_commented=is_commented, comment_symbol=comment_symbol)
 
+    def process_fields(self, items=None):
+
+        def get_subscheme(subscheme, items):
+            field = list()
+
+            for field_info in subscheme.scheme:
+
+                if field_info.seq_type:
+                    field.append(list())
+
+                    for i in range(1, len(fields) + 1):
+                        f = fields.pop()
+                        field[-1].append(items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f)
+
+                        if (not fields or
+                            i == field_info.length or
+                            not field_info.length and isinstance(fields[-1], (float, str))):
+                            break
+                else:
+
+                    try:
+                        f = fields.pop()
+                        field.append(items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f)
+                    except IndexError:
+                        field.append(None)
+
+            return subscheme(field, self)
+
+        def get_field(field_info, items):
+
+            if field_info.seq_type:
+                subfields = list()
+
+                for i in range(1, len(fields) + 1):
+
+                    if field_info.subscheme:
+                        subfields.append(get_subscheme(field_info.subscheme, items))
+                    else:
+                        f = fields.pop()
+                        subfields.append(items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f)
+
+                    if (not fields or
+                        i == field_info.length or
+                        not field_info.length and isinstance(fields[-1], (float, str))):
+                        break
+
+                if field_info.seq_type is Seq.list:
+
+                    if field_info.update_grid:
+                        field = GridList(self, grids=subfields)
+                    else:
+                        field = list(subfields)
+
+                elif field_info.seq_type is Seq.set:
+
+                    if field_info.update_grid:
+                        field = GridSet(self, grids=subfields)
+                    else:
+                        field = set(subfields)
+
+                elif field_info.seq_type is Seq.vector:
+                    field = np.array(subfields)
+
+            elif field_info.subscheme:
+                field = get_subscheme(field_info.subscheme, items)
+            else:
+
+                try:
+                    f = fields.pop()
+                    field = items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
+
+                    if field_info.update_grid:
+
+                        try:
+                            field.elems.add(self)
+                        except AttributeError:
+                            pass
+
+                except IndexError:
+                    field = None
+
+            return field
+
+        if self.scheme:
+            fields = list(reversed(self.fields))
+            self.fields = [None if field_info.optional else get_field(field_info, items) for
+                           field_info in self.scheme]
+
+            if self.optional_scheme:
+
+                while fields:
+                    field = fields.pop()
+
+                    if field in self.optional_scheme:
+                        index, optional_field_info = self.optional_scheme[field]
+                        self.fields[index] = get_field(optional_field_info, items)
+
+    def split(self):
+
+        if self.scheme and self.scheme[-1].other_card:
+            index = len(self.scheme) - 1
+
+            if len(self.fields) > index and self.fields[index]:
+                new_card = self._new_card([self.fields[0]] + self.fields[index:])
+                new_card.split()
+                del self.fields[index:]
+
     def _get_fields(self):
 
         if self.scheme:
@@ -179,117 +294,6 @@ class Card(object):
             for field in self.fields:
                 yield field, None
 
-    def _set_fields(self, fields):
-
-        def get_subscheme(subscheme):
-            field = list()
-
-            for field_info in subscheme.scheme:
-
-                if field_info.seq_type:
-                    field.append(list())
-
-                    for i in range(1, len(fields) + 1):
-                        field[-1].append(fields.pop())
-
-                        if (not fields or
-                            i == field_info.length or
-                            not field_info.length and isinstance(fields[-1], (float, str))):
-                            break
-                else:
-
-                    try:
-                        field.append(fields.pop())
-                    except IndexError:
-                        field.append(None)
-
-            return subscheme(field, self)
-
-        def get_field(field_info):
-
-            if field_info.seq_type:
-                subfields = list()
-
-                for i in range(1, len(fields) + 1):
-
-                    if field_info.subscheme:
-                        subfields.append(get_subscheme(field_info.subscheme))
-                    else:
-                        subfields.append(fields.pop())
-
-                    if (not fields or
-                        i == field_info.length or
-                        not field_info.length and isinstance(fields[-1], (float, str))):
-                        break
-
-                if field_info.seq_type is Seq.list:
-
-                    if field_info.update_grid:
-                        field = GridList(self, grids=subfields)
-                    else:
-                        field = list(subfields)
-
-                elif field_info.seq_type is Seq.set:
-
-                    if field_info.update_grid:
-                        field = GridSet(self, grids=subfields)
-                    else:
-                        field = set(subfields)
-                elif field_info.seq_type is Seq.vector:
-                    field = np.array(subfields)
-
-            elif field_info.subscheme:
-                field = get_subscheme(field_info.subscheme)
-            else:
-
-                try:
-                    field = fields.pop()
-
-                    if field_info.update_grid:
-
-                        try:
-                            field.elems.add(self)
-                        except AttributeError:
-                            pass
-
-                except IndexError:
-                    field = None
-
-            return field
-
-
-        fields = [field if field != '' else None for field in fields]
-
-        while True:
-
-            if fields[-1] is None:
-                fields.pop()
-            else:
-                break
-
-        if self.scheme:
-            fields.reverse()
-            self.fields = [None if field_info.optional else get_field(field_info) for
-                           field_info in self.scheme]
-
-            if self.optional_scheme:
-
-                while fields:
-                    field = fields.pop()
-
-                    if field in self.optional_scheme:
-                        index, optional_field_info = self.optional_scheme[field]
-                        self.fields[index] = get_field(optional_field_info)
-        else:
-            self.fields = fields
-
-    def split(self):
-
-        if self.scheme and self.scheme[-1].other_card and self.fields[-1]:
-            new_card = self._new_card([self.fields[0]] + self.fields[-1])
-            new_card.split()
-            self.fields[-1] = list()
-
     def _new_card(self, fields):
         new_card = type(self)(fields, large_field=self.large_field, free_field=self.free_field)
         new_card.is_commented = self.is_commented
@@ -302,4 +306,3 @@ class Card(object):
             self.notify(self, new_card=new_card)
 
         return new_card
-

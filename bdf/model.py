@@ -65,15 +65,19 @@ class Model(object):
         print('\rAll files readed succesfully!')
 
         if link_cards:
-            print('\rLinking cards ...', end='')
+            all_items = {card_type: self.items[card_type] if card_type in self.items else
+                         self.sets[card_type] for
+                         card_type in list(self.items) + list(self.sets)}
+        else:
+            all_items = None
 
-            for card in self.cards():
-                self._link_card(card)
+        print('\rProcessing cards ...', end='')
 
-            print('\rCards linked succesfully!')
-            print('\rArranging grids...', end='')
-            self._arrange_grids()
-            print('\rGrids arranged succesfully!')
+        for card in self.cards():
+            card.process_fields(all_items)
+
+        self._arrange_grids()
+        print('\rCards processed succesfully!')
 
     @timeit
     def write(self, includes=None):
@@ -101,8 +105,8 @@ class Model(object):
             if card.id in self.items[card.type]:
                 previous_card = self.items[card.type][card.id]
                 raise ValueError('There is a conflict between two cards!\nOld card:\n{}\n{}\n\nNew card:\n{}\n{}'.format(
-                                    previous_card.include.file, previous_card,
-                                    card.include.file, card))
+                                    previous_card.include.file, previous_card.fields[:2],
+                                    card.include.file, card.fields[:2]))
 
             self.items[card.type][card.id] = card
         elif card.type in self.sets:
@@ -116,16 +120,6 @@ class Model(object):
             self.unsupported_cards.add(card)
 
         card.split()
-
-    def _link_card(self, card):
-
-        try:
-            card._set_fields(((self.items[field_info.type][field] if field_info.type in self.items else
-                               self.sets[field_info.type][field]) if
-                              field_info and field_info.type and field and isinstance(field, int) else field for
-                              field, field_info in card._get_fields()))
-        except KeyError:
-            raise KeyError('Cannot link the following card: {}'.format(card))
 
     def _arrange_grids(self):
         pending_coords = set(self.cards(Item.coord))
