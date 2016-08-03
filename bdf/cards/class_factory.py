@@ -50,7 +50,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
     def set_field_factory(index, field_info, is_subfield=False):
 
-        if field_info.update_grid and not field_info.seq_type:
+        if field_info.observed and not field_info.seq_type:
 
             def wrapped(self, value):
                 old_value = self.fields[index]
@@ -63,12 +63,18 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                         card = self
 
                     try:
-                        old_value.elems.remove(card)
+                        old_value.unsubscribe(card)
+
+                        if field_info.update_grid:
+                            old_value.elems.remove(card)
                     except AttributeError:
                         pass
 
                     try:
-                        value.elems.add(card)
+                        value.subscribe(card)
+
+                        if field_info.update_grid:
+                            value.elems.add(card)
                     except AttributeError:
                         pass
 
@@ -142,7 +148,8 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                     if subfield_info.name:
                         setattr(field_info.subscheme, subfield_info.name,
                                 property(get_field_factory(subindex),
-                                         set_field_factory(subindex, subfield_info, True)))
+                                         set_field_factory(subindex, subfield_info,
+                                                           is_subfield=True)))
 
             if field_info.name and not hasattr(cls, field_info.name):
                 setattr(cls, field_info.name,

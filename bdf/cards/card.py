@@ -2,8 +2,8 @@ import numpy as np
 from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.write_bdf import print_card
 from nastranpy.bdf.cards.enums import Item, Seq
-from nastranpy.bdf.cards.grid_list import GridList
-from nastranpy.bdf.cards.grid_set import GridSet
+from nastranpy.bdf.cards.card_list import CardList
+from nastranpy.bdf.cards.card_set import CardSet
 from nastranpy.bdf.cards.field_info import FieldInfo
 
 
@@ -93,6 +93,9 @@ class Card(Observable):
 
             if self._include:
                 self._include.cards.add(self)
+
+    def update(self, caller, **kwargs):
+        pass
 
     def items(self):
         return (field for field, field_info in self._get_fields() if
@@ -186,15 +189,15 @@ class Card(Observable):
 
                 if field_info.seq_type is Seq.list:
 
-                    if field_info.update_grid:
-                        field = GridList(self, grids=subfields)
+                    if field_info.observed:
+                        field = CardList(self, cards=subfields, update_grid=field_info.update_grid)
                     else:
                         field = list(subfields)
 
                 elif field_info.seq_type is Seq.set:
 
-                    if field_info.update_grid:
-                        field = GridSet(self, grids=subfields)
+                    if field_info.observed:
+                        field = CardSet(self, cards=subfields, update_grid=field_info.update_grid)
                     else:
                         field = set(subfields)
 
@@ -209,10 +212,13 @@ class Card(Observable):
                     f = fields.pop()
                     field = items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
 
-                    if field_info.update_grid:
+                    if field_info.observed:
 
                         try:
-                            field.elems.add(self)
+                            field.subscribe(self)
+
+                            if field_info.update_grid:
+                                field.elems.add(self)
                         except AttributeError:
                             pass
 

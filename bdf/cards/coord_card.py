@@ -3,6 +3,27 @@ from nastranpy.bdf.cards.enums import Coord
 from nastranpy.bdf.cards.card import Card
 
 
+def update_fields(func):
+
+    def wrapped(self):
+
+        if self.fields[0][-2] == '2':
+            cp = self.fields[2]
+
+            if cp:
+
+                try:
+                    self.fields[3] = cp.get_xyz(self.a0)
+                    self.fields[4] = cp.get_xyz(self.b0)
+                    self.fields[5] = cp.get_xyz(self.c0)
+                except AttributeError:
+                    pass
+
+        return func(self)
+
+    return wrapped
+
+
 class CoordCard(Card):
 
     def __init__(self, fields, large_field=False, free_field=False):
@@ -15,34 +36,42 @@ class CoordCard(Card):
         self.origin = None
         self.M = None
 
+    @update_fields
+    def __str__(self):
+        return super().__str__()
+
+    def settle(self):
+
+        try:
+            self.a0 = self.fields[2].xyz0
+            self.b0 = self.fields[3].xyz0
+            self.c0 = self.fields[4].xyz0
+
+        except AttributeError:
+            self.a0 = self.fields[3]
+            self.b0 = self.fields[4]
+            self.c0 = self.fields[5]
+            cp = self.fields[2]
+
+            if cp:
+                self.a0 = cp.get_xyz0(self.a0)
+                self.b0 = cp.get_xyz0(self.b0)
+                self.c0 = cp.get_xyz0(self.c0)
+
+        self.origin = self.a0
+        e2 = np.cross(self.b0 - self.a0, self.c0 - self.a0)
+        e2 /= np.linalg.norm(e2)
+        e1 = np.cross(e2, self.b0 - self.a0)
+        e1 /= np.linalg.norm(e1)
+        e3 = np.cross(e1, e2)
+        self.M = np.array([e1, e2, e3])
+
     def update(self, caller, **kwargs):
 
         for key, value in kwargs.items():
 
             if key == 'grid_changed':
-
-                try:
-                    self.a0 = self.fields[2].xyz0
-                    self.b0 = self.fields[3].xyz0
-                    self.c0 = self.fields[4].xyz0
-                except AttributeError:
-                    self.a0 = self.fields[3]
-                    self.b0 = self.fields[4]
-                    self.c0 = self.fields[5]
-                    cp = self.fields[2]
-
-                    if cp:
-                        self.a0 = cp.get_xyz0(self.a0)
-                        self.b0 = cp.get_xyz0(self.b0)
-                        self.c0 = cp.get_xyz0(self.c0)
-
-                self.origin = self.a0
-                e2 = np.cross(self.b0 - self.a0, self.c0 - self.a0)
-                e2 /= np.linalg.norm(e2)
-                e1 = np.cross(e2, self.b0 - self.a0)
-                e1 /= np.linalg.norm(e1)
-                e3 = np.cross(e1, e2)
-                self.M = np.array([e1, e2, e3])
+                self.settle()
 
     def get_xyz(self, xyz0):
         xyz = np.dot(xyz0 - self.origin, self.M.T)
@@ -63,20 +92,8 @@ class CoordCard(Card):
 
         return self.origin + np.dot(xyz, self.M)
 
+    @update_fields
     def get_fields(self):
-
-        if self.fields[0][-2] == '2':
-            cp = self.fields[2]
-
-            if cp:
-
-                try:
-                    self.fields[3] = cp.get_xyz(self.a0)
-                    self.fields[4] = cp.get_xyz(self.b0)
-                    self.fields[5] = cp.get_xyz(self.c0)
-                except AttributeError:
-                    pass
-
         return super().get_fields()
 
 

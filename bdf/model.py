@@ -76,7 +76,9 @@ class Model(object):
         for card in self.cards():
             card.process_fields(all_items)
 
-        self._arrange_grids()
+        if link_cards:
+            self._arrange_grids()
+
         print('\rCards processed succesfully!')
 
     @timeit
@@ -122,31 +124,22 @@ class Model(object):
         card.split()
 
     def _arrange_grids(self):
-        pending_coords = set(self.cards(Item.coord))
-        pending_grids = set(self.cards(Item.grid))
+        resolved_cards = set()
+        unresolved_cards = set(self.cards_by_type([Item.grid, Item.coord]))
 
-        for i in range(5):
+        while unresolved_cards:
+            cards2resolve = set()
 
-            for j in range(5):
+            for card in unresolved_cards:
 
-                for coord in pending_coords.copy():
+                if all((linked_card in resolved_cards for linked_card in card.items())):
+                    cards2resolve.add(card)
 
-                    try:
-                        coord.update(None, grid_changed=None)
-                        pending_coords.remove(coord)
-                    except TypeError:
-                        pending_coords.add(coord)
+            for card in cards2resolve:
+                card.settle()
 
-            for grid in pending_grids.copy():
-
-                try:
-                    grid.set_position()
-                    pending_grids.remove(grid)
-                except TypeError:
-                    pending_grids.add(grid)
-
-        if pending_coords or pending_grids:
-            raise ValueError('Cannot arrange some coord/grids!')
+            unresolved_cards -= cards2resolve
+            resolved_cards |= cards2resolve
 
     def update(self, caller, **kwargs):
 
@@ -292,9 +285,9 @@ class Model(object):
 
             for item_type in Item:
                 item_type_name = get_plural(item_type.name).title()
-                row += ['{}: number'.format(item_type_name),
-                        '{}: min'.format(item_type_name),
-                        '{}: max'.format(item_type_name)]
+                row += [item_type_name,
+                        '{}: id min'.format(item_type_name),
+                        '{}: id max'.format(item_type_name)]
 
             csv_writer.writerow(row)
 

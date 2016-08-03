@@ -1,6 +1,6 @@
 from nastranpy.bdf.cards.enums import Seq
-from nastranpy.bdf.cards.grid_list import GridList
-from nastranpy.bdf.cards.grid_set import GridSet
+from nastranpy.bdf.cards.card_list import CardList
+from nastranpy.bdf.cards.card_set import CardSet
 
 
 class Subscheme(object):
@@ -15,19 +15,32 @@ class Subscheme(object):
 
         for field, field_info in zip(fields, self.scheme):
 
-            if field_info.seq_type is Seq.list:
+            if field_info.seq_type:
 
-                if field_info.update_grid:
-                    field = GridList(card, grids=field)
-                else:
-                    field = list(field)
+                if field_info.seq_type is Seq.list:
 
-            elif field_info.seq_type is Seq.set:
+                    if field_info.observed:
+                        field = CardList(card, cards=field, update_grid=field_info.update_grid)
+                    else:
+                        field = list(field)
 
-                if field_info.update_grid:
-                    field = GridSet(card, grids=field)
-                else:
-                    field = set(field)
+                elif field_info.seq_type is Seq.set:
+
+                    if field_info.observed:
+                        field = CardSet(card, cards=field, update_grid=field_info.update_grid)
+                    else:
+                        field = set(field)
+            else:
+
+                if field_info.observed:
+
+                    try:
+                        field.subscribe(card)
+
+                        if field_info.update_grid:
+                            field.elems.add(card)
+                    except AttributeError:
+                        pass
 
             self.fields.append(field)
 

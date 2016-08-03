@@ -2,35 +2,60 @@ import numpy as np
 from nastranpy.bdf.cards.card import Card
 
 
+def update_fields(func):
+
+    def wrapped(self):
+        self.fields[3] = self.xyz
+        return func(self)
+
+    return wrapped
+
+
 class GridCard(Card):
 
     def __init__(self, fields, large_field=False, free_field=False):
         super().__init__(fields, large_field=large_field, free_field=free_field)
-        self.xyz0 = None
+        self._xyz0 = None
         self.elems = set()
 
-    def set_position(self):
+    @update_fields
+    def __str__(self):
+        return super().__str__()
 
-        if self.xyz0 is None:
+    def settle(self):
+
+        if self._xyz0 is None:
             cp = self.fields[2]
 
             if cp:
-                self.xyz0 = cp.get_xyz0(self.fields[3])
+                self._xyz0 = cp.get_xyz0(self.fields[3])
             else:
-                self.xyz0 = self.fields[3]
+                self._xyz0 = self.fields[3]
+
+    @property
+    def xyz0(self):
+        return self._xyz0
+
+    @xyz0.setter
+    def xyz0(self, value):
+
+        if not np.allclose(self._xyz0, value):
+            self._xyz0 = value
+            self.changed = True
+            self.notify(grid_changed=self)
 
     @property
     def xyz(self):
 
-        if self.xyz0 is None:
+        if self._xyz0 is None:
             return self.fields[3]
 
         cp = self.fields[2]
 
         if cp:
-            return cp.get_xyz(self.xyz0)
+            return cp.get_xyz(self._xyz0)
         else:
-            return self.xyz0
+            return self._xyz0
 
     @xyz.setter
     def xyz(self, value):
@@ -42,6 +67,6 @@ class GridCard(Card):
         else:
             self.xyz0 = value
 
+    @update_fields
     def get_fields(self):
-        self.fields[3] = self.xyz
         return super().get_fields()
