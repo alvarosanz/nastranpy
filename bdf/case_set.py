@@ -1,10 +1,13 @@
-class CaseSet(object):
+from nastranpy.bdf.observable import Observable
+
+
+class CaseSet(Observable):
 
     def __init__(self, id, type):
+        super().__init__()
         self._id = id
         self._type = type
         self.clear()
-        self.notify = None
 
     def clear(self):
         self.cards = set()
@@ -23,10 +26,8 @@ class CaseSet(object):
     def id(self, value):
 
         if self._id != value:
-
-            if self.notify:
-                self.notify(self, new_id=value)
-
+            self.changed = True
+            self.notify(new_id=value)
             self._id = value
 
             for card in self.cards:

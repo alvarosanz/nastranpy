@@ -9,7 +9,7 @@ class GridCard(Card):
         self.xyz0 = None
         self.elems = set()
 
-    def update(self):
+    def set_position(self):
 
         if self.xyz0 is None:
             cp = self.fields[2]

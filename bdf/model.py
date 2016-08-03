@@ -37,7 +37,7 @@ class Model(object):
         includes = [Include(file) for file in files]
 
         for include in includes:
-            include.notity = self._update
+            include.subscribe(self)
             self.includes[include.file] = include
 
         self.read(includes, link_cards)
@@ -100,7 +100,7 @@ class Model(object):
     def _classify_card(self, card):
 
         if card.type in self.items:
-            card.notify = self._update
+            card.subscribe(self)
 
             if card.id in self.items[card.type]:
                 previous_card = self.items[card.type][card.id]
@@ -113,7 +113,7 @@ class Model(object):
 
             if not card.id in self.sets[card.type]:
                 self.sets[card.type][card.id] = CaseSet(card.id, card.type)
-                self.sets[card.type][card.id].notify = self._update
+                self.sets[card.type][card.id].subscribe(self)
 
             card.set = self.sets[card.type][card.id]
         else:
@@ -132,7 +132,7 @@ class Model(object):
                 for coord in pending_coords.copy():
 
                     try:
-                        coord.update()
+                        coord.update(None, grid_changed=None)
                         pending_coords.remove(coord)
                     except TypeError:
                         pending_coords.add(coord)
@@ -140,7 +140,7 @@ class Model(object):
             for grid in pending_grids.copy():
 
                 try:
-                    grid.update()
+                    grid.set_position()
                     pending_grids.remove(grid)
                 except TypeError:
                     pending_grids.add(grid)
@@ -148,7 +148,7 @@ class Model(object):
         if pending_coords or pending_grids:
             raise ValueError('Cannot arrange some coord/grids!')
 
-    def _update(self, caller, **kwargs):
+    def update(self, caller, **kwargs):
 
         for key, value in kwargs.items():
 

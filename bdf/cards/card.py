@@ -1,4 +1,5 @@
 import numpy as np
+from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.write_bdf import print_card
 from nastranpy.bdf.cards.enums import Item, Seq
 from nastranpy.bdf.cards.grid_list import GridList
@@ -6,7 +7,7 @@ from nastranpy.bdf.cards.grid_set import GridSet
 from nastranpy.bdf.cards.field_info import FieldInfo
 
 
-class Card(object):
+class Card(Observable):
     type = None
     tag = None
     scheme = None
@@ -14,6 +15,7 @@ class Card(object):
     padding = None
 
     def __init__(self, fields, large_field=False, free_field=False):
+        super().__init__()
 
         if self.padding:
             fields = self.padding.unpadded(fields)
@@ -33,7 +35,6 @@ class Card(object):
         self.comment = ''
         self.print_comment = True
         self._include = None
-        self.notify = None
 
     def __repr__(self):
         return "'{} {}'".format(self.name, self.id)
@@ -72,10 +73,8 @@ class Card(object):
     def id(self, value):
 
         if self.fields[1] != value:
-
-            if self.notify:
-                self.notify(self, new_id=value)
-
+            self.changed = True
+            self.notify(new_id=value)
             self.fields[1] = int(value)
 
     @property
@@ -300,9 +299,7 @@ class Card(object):
         new_card.comment = self.comment
         new_card.print_comment = self.print_comment
         new_card.include = self.include
-        new_card.notify = self.notify
-
-        if self.notify:
-            self.notify(self, new_card=new_card)
-
+        new_card.observers = self.observers.copy()
+        new_card.changed = True
+        new_card.notify(new_card=new_card)
         return new_card

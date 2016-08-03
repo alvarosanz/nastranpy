@@ -1,3 +1,4 @@
+from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.read_bdf import cards_in_file
 from nastranpy.bdf.misc import sorted_cards, get_plural
 from nastranpy.bdf.cards.enums import Item, Set
@@ -11,13 +12,13 @@ def iter_items_factory(card_type):
     return wrapped
 
 
-class Include(object):
+class Include(Observable):
 
     def __init__(self, file=None):
+        super().__init__()
         self._file = file
         self.id_pattern = None
         self.clear()
-        self.notify = None
 
     def clear(self):
         self.cards = set()
@@ -37,10 +38,8 @@ class Include(object):
     def file(self, value):
 
         if self._file != value:
-
-            if self.notify:
-                self.notify(self, new_include_name=value)
-
+            self.changed = True
+            self.notify(new_include_name=value)
             self._file = value
 
     def get_info(self, card_type):

@@ -15,30 +15,34 @@ class CoordCard(Card):
         self.origin = None
         self.M = None
 
-    def update(self):
+    def update(self, caller, **kwargs):
 
-        try:
-            self.a0 = self.fields[2].xyz0
-            self.b0 = self.fields[3].xyz0
-            self.c0 = self.fields[4].xyz0
-        except AttributeError:
-            self.a0 = self.fields[3]
-            self.b0 = self.fields[4]
-            self.c0 = self.fields[5]
-            cp = self.fields[2]
+        for key, value in kwargs.items():
 
-            if cp:
-                self.a0 = cp.get_xyz0(self.a0)
-                self.b0 = cp.get_xyz0(self.b0)
-                self.c0 = cp.get_xyz0(self.c0)
+            if key == 'grid_changed':
 
-        self.origin = self.a0
-        e2 = np.cross(self.b0 - self.a0, self.c0 - self.a0)
-        e2 /= np.linalg.norm(e2)
-        e1 = np.cross(e2, self.b0 - self.a0)
-        e1 /= np.linalg.norm(e1)
-        e3 = np.cross(e1, e2)
-        self.M = np.array([e1, e2, e3])
+                try:
+                    self.a0 = self.fields[2].xyz0
+                    self.b0 = self.fields[3].xyz0
+                    self.c0 = self.fields[4].xyz0
+                except AttributeError:
+                    self.a0 = self.fields[3]
+                    self.b0 = self.fields[4]
+                    self.c0 = self.fields[5]
+                    cp = self.fields[2]
+
+                    if cp:
+                        self.a0 = cp.get_xyz0(self.a0)
+                        self.b0 = cp.get_xyz0(self.b0)
+                        self.c0 = cp.get_xyz0(self.c0)
+
+                self.origin = self.a0
+                e2 = np.cross(self.b0 - self.a0, self.c0 - self.a0)
+                e2 /= np.linalg.norm(e2)
+                e1 = np.cross(e2, self.b0 - self.a0)
+                e1 /= np.linalg.norm(e1)
+                e3 = np.cross(e1, e2)
+                self.M = np.array([e1, e2, e3])
 
     def get_xyz(self, xyz0):
         xyz = np.dot(xyz0 - self.origin, self.M.T)
