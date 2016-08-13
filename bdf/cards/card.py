@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.write_bdf import print_card
 from nastranpy.bdf.cards.enums import Item, Seq
@@ -13,6 +14,7 @@ class Card(Observable):
     scheme = None
     optional_scheme = None
     padding = None
+    log = logging.getLogger('nastranpy')
 
     def __init__(self, fields, large_field=False, free_field=False):
         super().__init__()
@@ -152,6 +154,15 @@ class Card(Observable):
 
     def process_fields(self, items=None):
 
+        def pop_field(fields, field_info, items):
+            f = fields.pop()
+
+            try:
+                return items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
+            except KeyError:
+                self.log.error('{} refers to a non-available card (type: {}, ID: {})'.format(repr(self), field_info.type.name, f))
+                return f
+
         def get_subscheme(subscheme, items):
             field = list()
 
@@ -161,8 +172,7 @@ class Card(Observable):
                     field.append(list())
 
                     for i in range(1, len(fields) + 1):
-                        f = fields.pop()
-                        field[-1].append(items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f)
+                        field[-1].append(pop_field(fields, field_info, items))
 
                         if (not fields or
                             i == field_info.length or
@@ -171,8 +181,7 @@ class Card(Observable):
                 else:
 
                     try:
-                        f = fields.pop()
-                        field.append(items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f)
+                        field.append(pop_field(fields, field_info, items))
                     except IndexError:
                         field.append(None)
 
@@ -188,8 +197,7 @@ class Card(Observable):
                     if field_info.subscheme:
                         subfields.append(get_subscheme(field_info.subscheme, items))
                     else:
-                        f = fields.pop()
-                        subfields.append(items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f)
+                        subfields.append(pop_field(fields, field_info, items))
 
                     if (not fields or
                         i == field_info.length or
@@ -218,8 +226,7 @@ class Card(Observable):
             else:
 
                 try:
-                    f = fields.pop()
-                    field = items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
+                    field = pop_field(fields, field_info, items)
 
                     if field_info.observed:
 

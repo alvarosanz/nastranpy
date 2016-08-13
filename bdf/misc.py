@@ -28,3 +28,14 @@ def get_plural(name):
 def indent(lines, amount=4, ch=' '):
     padding = amount * ch
     return padding + ('\n' + padding).join(lines.split('\n'))
+
+
+class CallCounted(object):
+
+    def __init__(self, method):
+        self.method = method
+        self.counter = 0
+
+    def __call__(self, *args, **kwargs):
+        self.counter += 1
+        return self.method(*args, **kwargs)

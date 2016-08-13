@@ -5,7 +5,7 @@ from nastranpy.bdf.cards.enums import Item, Set, Tag, str2type, str2tag
 from nastranpy.bdf.cards.card_interfaces import card_factory
 from nastranpy.bdf.include import Include
 from nastranpy.bdf.case_set import CaseSet
-from nastranpy.bdf.misc import sorted_cards, get_plural, indent
+from nastranpy.bdf.misc import sorted_cards, get_plural, indent, CallCounted
 from nastranpy.bdf.cards.filters import filter_factory
 from nastranpy.bdf.id_pattern import IdPattern
 from nastranpy.bdf.object_handling import get_list, get_objects
@@ -13,17 +13,21 @@ from nastranpy.time_tools import timeit
 
 
 class Model(object):
+    log = logging.getLogger('nastranpy')
+    log.warning = CallCounted(log.warning)
+    log.error = CallCounted(log.error)
 
     def __init__(self):
         self.path = None
         self.includes = dict()
         self.clear()
-        self.log = logging.getLogger(__name__)
 
     def clear(self):
         self.items = {item_type: dict() for item_type in Item}
         self.sets = {set_type: dict() for set_type in Set}
         self.unsupported_cards = set()
+        self.warnings = 0
+        self.errors = 0
 
         for include in self.includes.values():
             include.clear()
@@ -45,6 +49,8 @@ class Model(object):
 
     @timeit
     def read(self, includes=None, link_cards=True):
+        self.log.warning.counter = 0
+        self.log.error.counter = 0
 
         if not includes:
             includes = self.includes.values()
@@ -80,7 +86,15 @@ class Model(object):
         if link_cards:
             self._arrange_grids()
 
-        self.log.info('Cards processed succesfully!')
+        if self.log.error.counter:
+            self.log.info('Cards processed with errors! (see the logfile for further details)')
+        elif self.log.warning.counter:
+            self.log.info('Cards processed with warnings! (see the logfile for further details)')
+        else:
+            self.log.info('Cards processed succesfully!')
+
+        self.warnings += self.log.warning.counter
+        self.errors += self.log.error.counter
         self.log.info('\n' + indent(self.get_info()))
 
     @timeit
@@ -126,11 +140,11 @@ class Model(object):
 
         card.split()
 
-    def _arrange_grids(self):
+    def _arrange_grids(self, maxiter=10):
         resolved_cards = set()
         unresolved_cards = set(self.cards_by_type([Item.grid, Item.coord]))
 
-        while unresolved_cards:
+        for i in range(maxiter):
             cards2resolve = set()
 
             for card in unresolved_cards:
@@ -143,6 +157,9 @@ class Model(object):
 
             unresolved_cards -= cards2resolve
             resolved_cards |= cards2resolve
+
+            if not unresolved_cards:
+                break
 
     def update(self, caller, **kwargs):
 
@@ -276,6 +293,10 @@ class Model(object):
 
         info.append('\nIncludes: {}'.format(len(self.includes)))
         info.append('\nModel path: {}'.format(self.path))
+
+        if self.warnings or self.errors:
+            info.append('\nWarnings: {}'.format(self.warnings))
+            info.append('Errors: {}'.format(self.errors))
 
         return '\n'.join(info)
 
