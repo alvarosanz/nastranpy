@@ -1,11 +1,11 @@
 import os
 import csv
-from itertools import chain
+import logging
 from nastranpy.bdf.cards.enums import Item, Set, Tag, str2type, str2tag
 from nastranpy.bdf.cards.card_interfaces import card_factory
 from nastranpy.bdf.include import Include
 from nastranpy.bdf.case_set import CaseSet
-from nastranpy.bdf.misc import sorted_cards, get_plural
+from nastranpy.bdf.misc import sorted_cards, get_plural, indent
 from nastranpy.bdf.cards.filters import filter_factory
 from nastranpy.bdf.id_pattern import IdPattern
 from nastranpy.bdf.object_handling import get_list, get_objects
@@ -18,6 +18,7 @@ class Model(object):
         self.path = None
         self.includes = dict()
         self.clear()
+        self.log = logging.getLogger(__name__)
 
     def clear(self):
         self.items = {item_type: dict() for item_type in Item}
@@ -51,18 +52,18 @@ class Model(object):
 
         includes = get_objects(includes, self.includes)
         os.chdir(self.path)
-        print('Model path: {}'.format(self.path))
+        self.log.info('Model path: {}'.format(self.path))
         counter = 0
 
         for include in includes:
             counter += 1
-            print('\rReading file ({} of {}): {}'.format(str(counter), len(includes), include.file), end='')
+            self.log.info('Reading file ({} of {}): {}'.format(str(counter), len(includes), include.file))
             include.read()
 
             for card in list(include.cards):
                 self._classify_card(card)
 
-        print('\rAll files readed succesfully!')
+        self.log.info('All files readed succesfully!')
 
         if link_cards:
             all_items = {card_type: self.items[card_type] if card_type in self.items else
@@ -71,7 +72,7 @@ class Model(object):
         else:
             all_items = None
 
-        print('\rProcessing cards ...', end='')
+        self.log.info('Processing cards ...')
 
         for card in self.cards():
             card.process_fields(all_items)
@@ -79,7 +80,9 @@ class Model(object):
         if link_cards:
             self._arrange_grids()
 
-        print('\rCards processed succesfully!')
+        self.log.info('Cards processed succesfully!')
+        model_info = '################################## MODEL INFO ##################################\n\n{}'.format(indent(self.get_info()))
+        self.log.info('\n' + indent(model_info))
 
     @timeit
     def write(self, includes=None):
@@ -89,15 +92,15 @@ class Model(object):
 
         includes = get_objects(includes, self.includes)
         os.chdir(self.path)
-        print('Model path: {}'.format(self.path))
+        self.log.info('Model path: {}'.format(self.path))
         counter = 0
 
         for include in includes:
             counter += 1
-            print('\rWritting file ({} of {}): {}'.format(str(counter), len(includes), include.file), end='')
+            self.log.info('Writting file ({} of {}): {}'.format(str(counter), len(includes), include.file))
             include.write()
 
-        print('\rAll files written succesfully!')
+        self.log.info('All files written succesfully!')
 
     def _classify_card(self, card):
 
@@ -106,9 +109,10 @@ class Model(object):
 
             if card.id in self.items[card.type]:
                 previous_card = self.items[card.type][card.id]
-                raise ValueError('There is a conflict between two cards!\nOld card:\n{}\n{}\n\nNew card:\n{}\n{}'.format(
-                                    previous_card.include.file, previous_card.fields[:2],
-                                    card.include.file, card.fields[:2]))
+                self.log.warning('Already existing card! (the old one will be overwritten)\n{}'.format(
+                                    indent('Old card ({}):\n{}\nNew card ({}):\n{}\n'.format(
+                                                    previous_card.include.file, indent(str(previous_card.fields[:2])),
+                                                    card.include.file, indent(str(card.fields[:2]))))))
 
             self.items[card.type][card.id] = card
         elif card.type in self.sets:
@@ -257,21 +261,24 @@ class Model(object):
         return {card.name for card in self.unsupported_cards}
 
     def get_info(self):
+        info = list()
 
         for item_type in Item:
-            print('{}: {}'.format(get_plural(item_type.name).title(), len(self.items[item_type])))
+            info.append('{}: {}'.format(get_plural(item_type.name).title(), len(self.items[item_type])))
 
-        print('')
+        info.append('')
 
         for set_type in Set:
-            print('{}: {}'.format(set_type.name.upper() + ' sets', len(self.sets[set_type])))
+            info.append('{}: {}'.format(set_type.name.upper() + ' sets', len(self.sets[set_type])))
 
         if self.unsupported_cards:
-            print('\nUnsupported cards: {}\n'.format(len(self.unsupported_cards)))
-            print('\t{}'.format(self.get_unsupported()))
+            info.append('\nUnsupported cards: {}\n'.format(len(self.unsupported_cards)))
+            info.append('\t{}'.format(self.get_unsupported()))
 
-        print('\nIncludes: {}'.format(len(self.includes)))
-        print('\nModel path: {}'.format(self.path))
+        info.append('\nIncludes: {}'.format(len(self.includes)))
+        info.append('\nModel path: {}'.format(self.path))
+
+        return '\n'.join(info)
 
     def print_summary(self, file=None):
 

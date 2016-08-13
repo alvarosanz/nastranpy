@@ -23,3 +23,8 @@ def get_plural(name):
         return name + 'es'
     else:
         return name + 's'
+
+
+def indent(lines, amount=4, ch=' '):
+    padding = amount * ch
+    return padding + ('\n' + padding).join(lines.split('\n'))
