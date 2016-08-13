@@ -81,8 +81,7 @@ class Model(object):
             self._arrange_grids()
 
         self.log.info('Cards processed succesfully!')
-        model_info = '################################## MODEL INFO ##################################\n\n{}'.format(indent(self.get_info()))
-        self.log.info('\n' + indent(model_info))
+        self.log.info('\n' + indent(self.get_info()))
 
     @timeit
     def write(self, includes=None):
@@ -109,10 +108,10 @@ class Model(object):
 
             if card.id in self.items[card.type]:
                 previous_card = self.items[card.type][card.id]
-                self.log.warning('Already existing card! (the old one will be overwritten)\n{}'.format(
+                self.log.warning('Already existing card (the old one will be overwritten!)\n{}'.format(
                                     indent('Old card ({}):\n{}\nNew card ({}):\n{}\n'.format(
-                                                    previous_card.include.file, indent(str(previous_card.fields[:2])),
-                                                    card.include.file, indent(str(card.fields[:2]))))))
+                                                    previous_card.include.file, indent(previous_card.head()),
+                                                    card.include.file, indent(card.head())))))
 
             self.items[card.type][card.id] = card
         elif card.type in self.sets:

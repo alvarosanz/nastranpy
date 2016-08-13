@@ -27,7 +27,9 @@ class Padding(object):
 
                     try:
                         field, field_info = next(fields)
-                        write_field = not field_info.optional_flag
+
+                        if field_info:
+                            write_field = not field_info.optional_flag
                     except StopIteration:
                         break
 

@@ -35,6 +35,7 @@ class Card(Observable):
         self.comment = ''
         self.print_comment = True
         self._include = None
+        self._is_processed = False
 
     def __repr__(self):
         return "'{} {}'".format(self.name, self.id)
@@ -141,6 +142,14 @@ class Card(Observable):
         return print_card(self.get_fields(), large_field=large_field, free_field=free_field,
                           comment=comment, is_commented=is_commented, comment_symbol=comment_symbol)
 
+    def head(self, lines=5):
+        card = print_card(self.get_fields()).split('\n')
+
+        if len(card) > lines:
+            return '\n'.join(card[:lines] + ['... and other {} line/s'.format(len(card) - lines)])
+        else:
+            return '\n'.join(card[:lines])
+
     def process_fields(self, items=None):
 
         def get_subscheme(subscheme, items):
@@ -241,6 +250,8 @@ class Card(Observable):
                         index, optional_field_info = self.optional_scheme[field]
                         self.fields[index] = get_field(optional_field_info, items)
 
+        self._is_processed = True
+
     def split(self):
 
         if self.scheme and self.scheme[-1].other_card:
@@ -253,7 +264,7 @@ class Card(Observable):
 
     def _get_fields(self):
 
-        if self.scheme:
+        if self.scheme and self._is_processed:
 
             for field, field_info in zip(self.fields, self.scheme):
 
