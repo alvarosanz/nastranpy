@@ -176,7 +176,7 @@ class Card(Observable):
 
                         if (not fields or
                             i == field_info.length or
-                            not field_info.length and isinstance(fields[-1], (float, str))):
+                            field_info.length is None and isinstance(fields[-1], (float, str))):
                             break
                 else:
 
@@ -201,7 +201,7 @@ class Card(Observable):
 
                     if (not fields or
                         i == field_info.length or
-                        not field_info.length and isinstance(fields[-1], (float, str))):
+                        field_info.length is None and isinstance(fields[-1], (float, str))):
                         break
 
                 if field_info.seq_type is Seq.list:
