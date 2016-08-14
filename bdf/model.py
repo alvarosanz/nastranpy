@@ -123,9 +123,9 @@ class Model(object):
             if card.id in self.items[card.type]:
                 previous_card = self.items[card.type][card.id]
                 self.log.warning('Already existing card (the old one will be overwritten!)\n{}'.format(
-                                    indent('Old card ({}):\n{}\nNew card ({}):\n{}\n'.format(
-                                                    previous_card.include.file, indent(previous_card.head()),
-                                                    card.include.file, indent(card.head())))))
+                                    indent("\n<== Old card in '{}':\n{}\n\n==> New card in '{}':\n{}\n".format(
+                                                    previous_card.include.file, indent(previous_card.head(), 8),
+                                                    card.include.file, indent(card.head(), 8)))))
 
             self.items[card.type][card.id] = card
         elif card.type in self.sets:
