@@ -149,7 +149,7 @@ class Model(object):
 
             for card in unresolved_cards:
 
-                if all((linked_card in resolved_cards for linked_card in card.items())):
+                if all((linked_card in resolved_cards for linked_card in card.cards())):
                     cards2resolve.add(card)
 
             for card in cards2resolve:
@@ -273,6 +273,12 @@ class Model(object):
         includes = get_objects(includes, self.includes)
         return (card for include in includes for card in include.cards)
 
+    def elems_by_prop(self, PID):
+        return (card for card in self.props[PID].dependent_cards(Item.elem))
+
+    def props_by_mat(self, MID):
+        return (card for card in self.mats[MID].dependent_cards(Item.prop))
+
     def get_unsupported(self):
         return {card.name for card in self.unsupported_cards}
 
@@ -355,20 +361,24 @@ class Model(object):
 
     def delete_card(self, card):
 
-        if any(card in other_card for other_card in self.cards()):
-            raise ValueError('This card is referred by other card/s!')
-
-        if card.type in self.items:
-            del self.items[card.type][card.id]
-        elif card.type in self.sets:
-            self.sets[card.type][card.id].cards.remove(card)
-
-            if not self.sets[card.type][card.id].cards:
-                del self.sets[card.type][card.id]
+        if list(card.dependent_cards()):
+            raise ValueError('{} is referred by other card/s!'.format(repr(card)))
         else:
-            self.unsupported_cards.remove(card)
 
-        card.include = None
+            for linked_card in card.cards():
+                linked_card.unsubscribe(card)
+
+            if card.type in self.items:
+                del self.items[card.type][card.id]
+            elif card.type in self.sets:
+                self.sets[card.type][card.id].cards.remove(card)
+
+                if not self.sets[card.type][card.id].cards:
+                    del self.sets[card.type][card.id]
+            else:
+                self.unsupported_cards.remove(card)
+
+            card.include = None
 
     def renumber(self, card_type, cards=None, start=None, end=None, step=None,
                  id_pattern=None, correlation=None):

@@ -75,7 +75,7 @@ class Include(Observable):
         cards_diff = cards
 
         for i in range(10):
-            cards_ext = {linked_card for card in cards_diff for linked_card in card.items()}
+            cards_ext = {linked_card for card in cards_diff for linked_card in card.cards()}
             cards_diff = cards_ext - cards
 
             if cards_diff:

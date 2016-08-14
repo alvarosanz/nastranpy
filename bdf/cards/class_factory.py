@@ -50,7 +50,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
     def set_field_factory(index, field_info, is_subfield=False):
 
-        if field_info.observed and not field_info.seq_type:
+        if field_info.type and not field_info.seq_type:
 
             def wrapped(self, value):
                 old_value = self.fields[index]

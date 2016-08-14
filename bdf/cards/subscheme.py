@@ -19,20 +19,20 @@ class Subscheme(object):
 
                 if field_info.seq_type is Seq.list:
 
-                    if field_info.observed:
+                    if field_info.type:
                         field = CardList(card, cards=field, update_grid=field_info.update_grid)
                     else:
                         field = list(field)
 
                 elif field_info.seq_type is Seq.set:
 
-                    if field_info.observed:
+                    if field_info.type:
                         field = CardSet(card, cards=field, update_grid=field_info.update_grid)
                     else:
                         field = set(field)
             else:
 
-                if field_info.observed:
+                if field_info.type:
 
                     try:
                         field.subscribe(card)

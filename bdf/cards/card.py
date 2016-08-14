@@ -62,7 +62,7 @@ class Card(Observable):
         return '{{{}}}'.format(', '.join(fields))
 
     def __contains__(self, value):
-        return value in self.items()
+        return value in self.cards()
 
     @property
     def name(self):
@@ -100,9 +100,13 @@ class Card(Observable):
     def update(self, caller, **kwargs):
         pass
 
-    def items(self):
+    def cards(self, type=None):
         return (field for field, field_info in self._get_fields() if
-                field and field_info and field_info.type in Item)
+                isinstance(field, Card) and (type is None or field.type is type))
+
+    def dependent_cards(self, type=None):
+        return (card for card in self.observers if
+                isinstance(card, Card) and (type is None or card.type is type))
 
     def get_fields(self):
 
@@ -206,14 +210,14 @@ class Card(Observable):
 
                 if field_info.seq_type is Seq.list:
 
-                    if field_info.observed:
+                    if field_info.type:
                         field = CardList(self, cards=subfields, update_grid=field_info.update_grid)
                     else:
                         field = list(subfields)
 
                 elif field_info.seq_type is Seq.set:
 
-                    if field_info.observed:
+                    if field_info.type:
                         field = CardSet(self, cards=subfields, update_grid=field_info.update_grid)
                     else:
                         field = set(subfields)
@@ -228,7 +232,7 @@ class Card(Observable):
                 try:
                     field = pop_field(fields, field_info, items)
 
-                    if field_info.observed:
+                    if field_info.type:
 
                         try:
                             field.subscribe(self)

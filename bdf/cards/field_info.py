@@ -4,8 +4,7 @@ class FieldInfo(object):
                  seq_type=None, length=None, subscheme=None,
                  alternate_name=None, update_grid=False,
                  optional=False, optional_flag=False,
-                 other_card=False,
-                 observed=False):
+                 other_card=False):
         self.name = name
         self.type = type
         self.seq_type = seq_type
@@ -16,4 +15,3 @@ class FieldInfo(object):
         self.optional = optional
         self.optional_flag = optional_flag
         self.other_card = other_card
-        self.observed = observed

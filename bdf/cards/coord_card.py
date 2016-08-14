@@ -67,6 +67,7 @@ class CoordCard(Card):
         self.M = np.array([e1, e2, e3])
 
     def update(self, caller, **kwargs):
+        super().update(caller, **kwargs)
 
         for key, value in kwargs.items():
 
