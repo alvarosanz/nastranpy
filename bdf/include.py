@@ -66,6 +66,11 @@ class Include(Observable):
     def clear_commented_cards(self):
         self.commentted_cards.clear()
 
+    def is_self_contained(self):
+        return all((linked_card in self.cards or
+                    linked_card in self.commentted_cards) for
+                    card in self.cards for linked_card in card.cards())
+
     def make_self_contained(self, move_cards=False):
         cards = self.cards.copy()
         cards_diff = cards
