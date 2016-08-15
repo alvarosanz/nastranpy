@@ -28,7 +28,11 @@ class GridCard(Card):
             cp = self.fields[2]
 
             if cp:
-                self._xyz0 = cp.get_xyz0(self.fields[3])
+
+                try:
+                    self._xyz0 = cp.get_xyz0(self.fields[3])
+                except AttributeError:
+                    self.log.error('Cannot settle {}'.format(repr(self)))
             else:
                 self._xyz0 = self.fields[3]
 

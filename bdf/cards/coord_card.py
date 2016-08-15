@@ -43,20 +43,23 @@ class CoordCard(Card):
     def settle(self):
 
         try:
-            self.a0 = self.fields[2].xyz0
-            self.b0 = self.fields[3].xyz0
-            self.c0 = self.fields[4].xyz0
 
+            if self.fields[0][-2] == '1':
+                self.a0 = self.fields[2].xyz0
+                self.b0 = self.fields[3].xyz0
+                self.c0 = self.fields[4].xyz0
+            else:
+                self.a0 = self.fields[3]
+                self.b0 = self.fields[4]
+                self.c0 = self.fields[5]
+                cp = self.fields[2]
+
+                if cp:
+                    self.a0 = cp.get_xyz0(self.a0)
+                    self.b0 = cp.get_xyz0(self.b0)
+                    self.c0 = cp.get_xyz0(self.c0)
         except AttributeError:
-            self.a0 = self.fields[3]
-            self.b0 = self.fields[4]
-            self.c0 = self.fields[5]
-            cp = self.fields[2]
-
-            if cp:
-                self.a0 = cp.get_xyz0(self.a0)
-                self.b0 = cp.get_xyz0(self.b0)
-                self.c0 = cp.get_xyz0(self.c0)
+            self.log.error('Cannot settle {}'.format(repr(self)))
 
         self.origin = self.a0
         e2 = np.cross(self.b0 - self.a0, self.c0 - self.a0)

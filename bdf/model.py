@@ -86,16 +86,16 @@ class Model(object):
         if link_cards:
             self._arrange_grids()
 
-        if self.log.error.counter:
-            self.log.info('Cards processed with errors! (see the logfile for further details)')
-        elif self.log.warning.counter:
-            self.log.info('Cards processed with warnings! (see the logfile for further details)')
-        else:
-            self.log.info('Cards processed succesfully!')
-
         self.warnings += self.log.warning.counter
         self.errors += self.log.error.counter
-        self.log.info('\n' + indent(self.info(print_to_screen=False)))
+        self.log.info('\n' + indent(self.info(print_to_screen=False)) + '\n')
+
+        if self.log.error.counter:
+            self.log.info("Cards processed with errors! (see 'model.log' for more details)")
+        elif self.log.warning.counter:
+            self.log.info("Cards processed with warnings! (see 'model.log' for more details)")
+        else:
+            self.log.info('Cards processed succesfully!')
 
     @timeit
     def write(self, includes=None):
@@ -140,11 +140,11 @@ class Model(object):
 
         card.split()
 
-    def _arrange_grids(self, maxiter=10):
+    def _arrange_grids(self):
         resolved_cards = set()
         unresolved_cards = set(self.cards_by_type([Item.grid, Item.coord]))
 
-        for i in range(maxiter):
+        while unresolved_cards:
             cards2resolve = set()
 
             for card in unresolved_cards:
@@ -155,11 +155,11 @@ class Model(object):
             for card in cards2resolve:
                 card.settle()
 
+            if not cards2resolve:
+                break
+
             unresolved_cards -= cards2resolve
             resolved_cards |= cards2resolve
-
-            if not unresolved_cards:
-                break
 
     def update(self, caller, **kwargs):
 
