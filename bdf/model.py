@@ -5,7 +5,7 @@ from nastranpy.bdf.cards.enums import Item, Set, Tag, str2type, str2tag
 from nastranpy.bdf.cards.card_interfaces import card_factory
 from nastranpy.bdf.include import Include
 from nastranpy.bdf.case_set import CaseSet
-from nastranpy.bdf.misc import sorted_cards, get_plural, indent, CallCounted
+from nastranpy.bdf.misc import sorted_cards, get_plural, indent, get_id_info, CallCounted
 from nastranpy.bdf.cards.filters import filter_factory
 from nastranpy.bdf.id_pattern import IdPattern
 from nastranpy.bdf.object_handling import get_list, get_objects
@@ -95,7 +95,7 @@ class Model(object):
 
         self.warnings += self.log.warning.counter
         self.errors += self.log.error.counter
-        self.log.info('\n' + indent(self.get_info(print_to_screen=False)))
+        self.log.info('\n' + indent(self.info(print_to_screen=False)))
 
     @timeit
     def write(self, includes=None):
@@ -282,7 +282,7 @@ class Model(object):
     def get_unsupported(self):
         return {card.name for card in self.unsupported_cards}
 
-    def get_info(self, print_to_screen=True):
+    def info(self, print_to_screen=True):
         info = list()
 
         for item_type in Item:
@@ -308,8 +308,12 @@ class Model(object):
 
         if print_to_screen:
             print(info)
+        else:
+            return info
 
-        return info
+    def get_id_info(self, card_type, detailed=False):
+        ids = {card.id for card in self.cards(card_type)}
+        return get_id_info(ids, detailed=detailed)
 
     def print_summary(self, file=None):
 
@@ -333,7 +337,7 @@ class Model(object):
                 row = [include.file]
 
                 for item_type in Item:
-                    row += include.get_info(item_type)
+                    row += include.get_id_info(item_type)
 
                 csv_writer.writerow(row)
 

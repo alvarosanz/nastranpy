@@ -30,6 +30,34 @@ def indent(lines, amount=4, ch=' '):
     return padding + ('\n' + padding).join(lines.split('\n'))
 
 
+def get_id_info(ids, detailed=False):
+
+    if ids:
+        info = [len(ids), min(ids), max(ids)]
+    else:
+        info = [0, '', '']
+
+    if detailed:
+        free_slots = list()
+        id_max = 99999999
+        free_id0 = 1
+
+        for used_id in sorted(ids):
+            free_id1 = used_id - 1
+
+            if free_id1 >= free_id0:
+                free_slots.append((free_id0, free_id1))
+
+            free_id0 = used_id + 1
+
+        if free_id0 <= id_max:
+            free_slots.append((free_id0, id_max))
+
+        info.append(free_slots)
+
+    return info
+
+
 class CallCounted(object):
 
     def __init__(self, method):

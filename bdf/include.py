@@ -1,6 +1,6 @@
 from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.read_bdf import cards_in_file
-from nastranpy.bdf.misc import sorted_cards, get_plural
+from nastranpy.bdf.misc import sorted_cards, get_plural, get_id_info
 from nastranpy.bdf.cards.enums import Item, Set
 
 
@@ -42,13 +42,9 @@ class Include(Observable):
             self.notify(new_include_name=value)
             self._file = value
 
-    def get_info(self, card_type):
+    def get_id_info(self, card_type, detailed=False):
         ids = {card.id for card in self.cards if card.type is card_type}
-
-        if ids:
-            return len(ids), min(ids), max(ids)
-        else:
-            return 0, '', ''
+        return get_id_info(ids, detailed=detailed)
 
     def read(self):
 
