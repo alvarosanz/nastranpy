@@ -95,7 +95,7 @@ class Model(object):
 
         self.warnings += self.log.warning.counter
         self.errors += self.log.error.counter
-        self.log.info('\n' + indent(self.get_info()))
+        self.log.info('\n' + indent(self.get_info(print_to_screen=False)))
 
     @timeit
     def write(self, includes=None):
@@ -282,7 +282,7 @@ class Model(object):
     def get_unsupported(self):
         return {card.name for card in self.unsupported_cards}
 
-    def get_info(self):
+    def get_info(self, print_to_screen=True):
         info = list()
 
         for item_type in Item:
@@ -304,7 +304,12 @@ class Model(object):
             info.append('\nWarnings: {}'.format(self.warnings))
             info.append('Errors: {}'.format(self.errors))
 
-        return '\n'.join(info)
+        info = '\n'.join(info)
+
+        if print_to_screen:
+            print(info)
+
+        return info
 
     def print_summary(self, file=None):
 
