@@ -77,8 +77,12 @@ class CoordCard(Card):
             if key == 'grid_changed':
                 self.settle()
 
-    def get_xyz(self, xyz0):
-        xyz = np.dot(xyz0 - self.origin, self.M.T)
+    def get_xyz(self, xyz0, is_vector=False):
+
+        if not is_vector:
+            xyz0 = xyz0 - self.origin
+
+        xyz = np.dot(xyz0, self.M.T)
 
         if self.coord_type is Coord.cylindrical:
             return np.array(cart2cyl(*xyz))
@@ -87,14 +91,17 @@ class CoordCard(Card):
 
         return xyz
 
-    def get_xyz0(self, xyz):
+    def get_xyz0(self, xyz, is_vector=False):
 
         if self.coord_type is Coord.cylindrical:
             xyz = cyl2cart(*xyz)
         elif self.coord_type is Coord.spherical:
             xyz = sph2cart(*xyz)
 
-        return self.origin + np.dot(xyz, self.M)
+        if is_vector:
+            return np.dot(xyz, self.M)
+        else:
+            return self.origin + np.dot(xyz, self.M)
 
     @update_fields
     def get_fields(self):
