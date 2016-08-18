@@ -28,14 +28,32 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
                             for subsubfield, subsubfield_info in zip(subfield, field_info.subscheme.scheme):
 
-                                if subsubfield_info.seq_type:
-                                    grids |= set(subsubfield)
-                                else:
-                                    grids.add(subsubfield)
+                                if subsubfield_info.update_grid:
+
+                                    if subsubfield_info.seq_type:
+                                        grids |= set(subsubfield)
+                                    else:
+                                        grids.add(subsubfield)
                     else:
-                        grids |= set(self.fields[index])
+
+                        if field_info.update_grid:
+                            grids |= set(self.fields[index])
                 else:
-                    grids.add(self.fields[index])
+
+                    if field_info.subscheme:
+
+                        for subfield, subfield_info in zip(field, field_info.subscheme.scheme):
+
+                            if subfield_info.update_grid:
+
+                                if subfield_info.seq_type:
+                                    grids |= set(subfield)
+                                else:
+                                    grids.add(subfield)
+                    else:
+
+                        if field_info.update_grid:
+                            grids.add(self.fields[index])
 
             return grids
 
