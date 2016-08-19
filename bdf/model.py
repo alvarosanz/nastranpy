@@ -6,7 +6,6 @@ from nastranpy.bdf.cards.card_interfaces import card_factory
 from nastranpy.bdf.include import Include
 from nastranpy.bdf.case_set import CaseSet
 from nastranpy.bdf.misc import sorted_cards, get_plural, indent, get_id_info, CallCounted
-from nastranpy.bdf.cards.filters import filter_factory
 from nastranpy.bdf.id_pattern import IdPattern
 from nastranpy.bdf.object_handling import get_list, get_objects
 from nastranpy.time_tools import timeit
@@ -459,26 +458,3 @@ class Model(object):
 
                 for grid in card.grids:
                     grid.include = include
-
-    def extend(self, elements, steps=1, filters=None, extend_all=False, max_steps=10000):
-
-        if extend_all:
-            steps = max_steps
-
-        elms = set(get_list(elements))
-        elms_diff = elms
-
-        if filters:
-            filter_element = filter_factory(filters)
-
-        for i in range(steps):
-            elms_ext = {elm_ext for elm in elms_diff for grid in elm.grids for
-                        elm_ext in grid.elems if not filters or filter_element(elm_ext)}
-            elms_diff = elms_ext - elms
-
-            if elms_diff:
-                elms |= elms_diff
-            else:
-                break
-
-        return elms

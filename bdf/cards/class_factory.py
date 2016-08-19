@@ -2,6 +2,7 @@ from nastranpy.bdf.cards.enums import Item, Set, Tag, Seq
 from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.set_card import SetCard
 from nastranpy.bdf.cards.coord_card import CoordCard
+from nastranpy.bdf.cards.elem_card import ElemCard
 from nastranpy.bdf.cards.grid_card import GridCard
 from nastranpy.bdf.cards.subscheme import Subscheme
 from nastranpy.bdf.cards.padding import Padding
@@ -131,6 +132,8 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
         cls_parents = (SetCard,)
     elif card_type is Item.coord:
         cls_parents = (CoordCard,)
+    elif card_type is Item.elem:
+        cls_parents = (ElemCard,)
     elif card_type is Item.grid:
         cls_parents = (GridCard,)
     else:
