@@ -467,11 +467,13 @@ class Model(object):
 
         elms = set(get_list(elements))
         elms_diff = elms
-        filter_element = filter_factory(filters)
+
+        if filters:
+            filter_element = filter_factory(filters)
 
         for i in range(steps):
             elms_ext = {elm_ext for elm in elms_diff for grid in elm.grids for
-                        elm_ext in grid.elems if filter_element(elm_ext)}
+                        elm_ext in grid.elems if not filters or filter_element(elm_ext)}
             elms_diff = elms_ext - elms
 
             if elms_diff:
