@@ -163,6 +163,9 @@ class Model(object):
             unresolved_cards -= cards2resolve
             resolved_cards |= cards2resolve
 
+        for elem in self.elems.values():
+            elem.settle()
+
     def update(self, caller, **kwargs):
 
         for key, value in kwargs.items():

@@ -55,7 +55,7 @@ card_interfaces = {
                                               F('ALPHA', optional=True)], card_tag=Tag.eRigid),
     'CBUSH': class_factory('CBUSH', Item.elem, [F(), F(), F(Item.prop.name, Item.prop), F('grids', Item.grid, seq_type=Seq.list, length=2, update_grid=True), F('X1', Item.grid, alternate_name='G0'), F('X2'), F('X3'), F('CID', Item.coord),
                                                 F('S'), F('OCID', Item.coord), F('S1'), F('S2'), F('S3')], card_tag=Tag.eSpring),
-    'CONM2': class_factory('CONM2', Item.elem, [F(), F(), F('grids', Item.grid, seq_type=Seq.list, length=1, update_grid=True), F('CID', Item.coord), F('M'), F('X1'), F('X2'), F('X3'), F(),
+    'CONM2': class_factory('CONM2', Item.elem, [F(), F(), F('grids', Item.grid, seq_type=Seq.list, length=1, update_grid=True), F('CID', Item.coord, alternate_name=Item.coord.name), F('M'), F('X1'), F('X2'), F('X3'), F(),
                                                 F('I11'), F('I21'), F('I22'), F('I31'), F('I32'), F('I33')], card_tag=Tag.eMass),
     'PLOTEL': class_factory('PLOTEL', Item.elem, [F(), F(), F('grids', Item.grid, seq_type=Seq.list, length=2, update_grid=True)], card_tag=Tag.ePlot),
     # Properties

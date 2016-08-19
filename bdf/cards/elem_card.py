@@ -1,10 +1,23 @@
 from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.filters import filter_factory
 
+
 class ElemCard(Card):
 
     def __init__(self, fields, large_field=False, free_field=False):
         super().__init__(fields, large_field=large_field, free_field=free_field)
+        self.coord = None
+
+    def settle(self):
+        pass
+
+    def update(self, caller, **kwargs):
+        super().update(caller, **kwargs)
+
+        for key, value in kwargs.items():
+
+            if key == 'grid_changed':
+                self.settle()
 
     def extend(self, steps=None, max_steps=10000, **kwargs):
 

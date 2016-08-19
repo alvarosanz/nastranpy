@@ -6,6 +6,7 @@ from nastranpy.bdf.cards.elem_card import ElemCard
 from nastranpy.bdf.cards.grid_card import GridCard
 from nastranpy.bdf.cards.subscheme import Subscheme
 from nastranpy.bdf.cards.padding import Padding
+from nastranpy.bdf.cards.additional_card_methods import additional_card_methods
 from nastranpy.bdf.misc import get_singular
 
 
@@ -184,5 +185,10 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
         if card_type is Item.elem and not 'grids' in [x.name for x in card_scheme]:
             setattr(cls, 'grids', property(get_grids_factory(card_scheme)))
+
+    if card_name in additional_card_methods:
+
+        for key, value in additional_card_methods[card_name].items():
+            setattr(cls, key, value)
 
     return cls
