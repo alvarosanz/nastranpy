@@ -5,9 +5,8 @@ from nastranpy.bdf.cards.enums import Item, Set, Tag, str2type, str2tag
 from nastranpy.bdf.cards.card_interfaces import card_factory
 from nastranpy.bdf.include import Include
 from nastranpy.bdf.case_set import CaseSet
-from nastranpy.bdf.misc import sorted_cards, get_plural, indent, get_id_info, CallCounted
+from nastranpy.bdf.misc import sorted_cards, get_plural, indent, get_id_info, humansize, CallCounted
 from nastranpy.bdf.id_pattern import IdPattern
-from nastranpy.bdf.object_handling import get_list, get_objects
 from nastranpy.time_tools import timeit
 
 
@@ -37,32 +36,21 @@ class Model(object):
         for set_type in self.sets:
             setattr(self, get_plural(set_type.name), self.sets[set_type])
 
-    def add_files(self, files, link_cards=True):
-        includes = [Include(file) for file in files]
-
-        for include in includes:
-            include.subscribe(self)
-            self.includes[include.file] = include
-
-        self.read(includes, link_cards)
-
     @timeit
-    def read(self, includes=None, link_cards=True):
+    def read(self, includes, link_cards=True):
         self.log.warning.counter = 0
         self.log.error.counter = 0
 
-        if not includes:
-            includes = self.includes.values()
-            self.clear()
-
-        includes = get_objects(includes, self.includes)
         os.chdir(self.path)
         self.log.info('Model path: {}'.format(self.path))
+        includes = [Include(include) for include in includes]
         counter = 0
 
         for include in includes:
             counter += 1
-            self.log.info('Reading file ({} of {}): {}'.format(str(counter), len(includes), include.file))
+            include.subscribe(self)
+            self.includes[include.file] = include
+            self.log.info('Reading file {} of {}: {} ({})'.format(str(counter), len(includes), include.file, humansize(os.path.getsize(include.file))))
             include.read()
 
             for card in list(include.cards):
@@ -105,14 +93,14 @@ class Model(object):
         if not includes:
             includes = self.includes.values()
 
-        includes = get_objects(includes, self.includes)
+        includes = [self.includes[include_name] for include_name in includes]
         os.chdir(self.path)
         self.log.info('Model path: {}'.format(self.path))
         counter = 0
 
         for include in includes:
             counter += 1
-            self.log.info('Writting file ({} of {}): {}'.format(str(counter), len(includes), include.file))
+            self.log.info('Writting file {} of {}: {}'.format(str(counter), len(includes), include.file))
             include.write()
 
         self.log.info('All files written succesfully!')
@@ -241,20 +229,20 @@ class Model(object):
         return (card for card in self.cards(card_type) if card.id in id_pattern)
 
     def cards_by_type(self, card_types, includes=None):
-        card_types = [str2type(card_type) for card_type in get_list(card_types)]
+        card_types = [str2type(card_type) for card_type in card_types]
 
         if includes:
-            includes = get_objects(includes, self.includes)
+            includes = [self.includes[include_name] for include_name in includes]
             return (card for include in includes for card in include.cards if
                     card.type in card_types)
         else:
             return (card for card_type in card_types for card in self.cards(card_type))
 
     def cards_by_tag(self, card_tags, includes=None):
-        card_tags = [str2tag(card_tag) for card_tag in get_list(card_tags)]
+        card_tags = [str2tag(card_tag) for card_tag in card_tags]
 
         if includes:
-            includes = get_objects(includes, self.includes)
+            includes = [self.includes[include_name] for include_name in includes]
             return (card for include in includes for card in include.cards if
                     card.tag in card_tags)
         else:
@@ -263,10 +251,9 @@ class Model(object):
                     card.tag in card_tags)
 
     def cards_by_name(self, card_names, includes=None):
-        card_names = get_list(card_names)
 
         if includes:
-            includes = get_objects(includes, self.includes)
+            includes = [self.includes[include_name] for include_name in includes]
             return (card for include in includes for card in include.cards if
                     card.name in card_names)
         else:
@@ -275,7 +262,7 @@ class Model(object):
                     card.name in card_names)
 
     def cards_by_include(self, includes):
-        includes = get_objects(includes, self.includes)
+        includes = [self.includes[include_name] for include_name in includes]
         return (card for include in includes for card in include.cards)
 
     def elems_by_prop(self, PID):
@@ -450,12 +437,7 @@ class Model(object):
             mapping[temp_id].id = new_id
 
     def move(self, cards, include, move_element_grids=False):
-        cards = list(get_list(cards))
-
-        try:
-            include = self.includes[include]
-        except KeyError:
-            pass
+        include = self.includes[include]
 
         for card in cards:
             card.include = include
