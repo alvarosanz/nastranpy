@@ -1,5 +1,5 @@
-import numpy as np
 from nastranpy.bdf.cards.enums import Coord
+from nastranpy.bdf.cards.coord_system import CoordSystem
 from nastranpy.bdf.cards.card import Card
 
 
@@ -61,13 +61,7 @@ class CoordCard(Card):
         except AttributeError:
             self.log.error('Cannot settle {}'.format(repr(self)))
 
-        self.origin = self.a0
-        e2 = np.cross(self.b0 - self.a0, self.c0 - self.a0)
-        e2 /= np.linalg.norm(e2)
-        e1 = np.cross(e2, self.b0 - self.a0)
-        e1 /= np.linalg.norm(e1)
-        e3 = np.cross(e1, e2)
-        self.M = np.array([e1, e2, e3])
+        self.compute_matrix(self.a0, self.b0, self.c0)
 
     def update(self, caller, **kwargs):
         super().update(caller, **kwargs)
@@ -77,57 +71,10 @@ class CoordCard(Card):
             if key == 'grid_changed':
                 self.settle()
 
-    def get_xyz(self, xyz0, is_vector=False):
-
-        if not is_vector:
-            xyz0 = xyz0 - self.origin
-
-        xyz = np.dot(xyz0, self.M.T)
-
-        if self.coord_type is Coord.cylindrical:
-            return np.array(cart2cyl(*xyz))
-        elif self.coord_type is Coord.spherical:
-            return np.array(cart2sph(*xyz))
-
-        return xyz
-
-    def get_xyz0(self, xyz, is_vector=False):
-
-        if self.coord_type is Coord.cylindrical:
-            xyz = cyl2cart(*xyz)
-        elif self.coord_type is Coord.spherical:
-            xyz = sph2cart(*xyz)
-
-        if is_vector:
-            return np.dot(xyz, self.M)
-        else:
-            return self.origin + np.dot(xyz, self.M)
-
     @update_fields
     def get_fields(self):
         return super().get_fields()
 
-
-def cart2cyl(x, y, z):
-    theta = np.arctan2(y, x)
-    rho = np.hypot(x, y)
-    return rho, theta, z
-
-def cyl2cart(rho, theta, z):
-    x = rho * np.cos(theta)
-    y = rho * np.sin(theta)
-    return x, y, z
-
-def cart2sph(x, y, z):
-    hxy = np.hypot(x, y)
-    r = np.hypot(hxy, z)
-    el = np.arctan2(z, hxy)
-    az = np.arctan2(y, x)
-    return r, az, el
-
-def sph2cart(r, az, el):
-    rcos_theta = r * np.cos(el)
-    x = rcos_theta * np.cos(az)
-    y = rcos_theta * np.sin(az)
-    z = r * np.sin(el)
-    return x, y, z
+CoordCard.compute_matrix = CoordSystem.compute_matrix
+CoordCard.get_xyz = CoordSystem.get_xyz
+CoordCard.get_xyz0 = CoordSystem.get_xyz0
