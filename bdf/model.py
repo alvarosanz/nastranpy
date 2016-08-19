@@ -89,6 +89,9 @@ class Model(object):
         self.errors += self.log.error.counter
         self.log.info('\n' + indent(self.info(print_to_screen=False)) + '\n')
 
+        if self.unsupported_cards:
+            self.log.warning('The following cards are not supported:\n{}'.format(indent(', '.join({card.name for card in self.unsupported_cards}))))
+
         if self.log.error.counter:
             self.log.info("Cards processed with errors! (see 'model.log' for more details)")
         elif self.log.warning.counter:
