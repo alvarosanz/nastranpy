@@ -4,17 +4,30 @@ from nastranpy.bdf.cards.enums import Coord
 
 class CoordSystem(object):
 
-    def __init__(self, a0, b0, c0, coord_type=Coord.rectangular):
+    def __init__(self, a0, b0, c0, coord_type=Coord.rectangular, method=1):
         self.coord_type = coord_type
-        self.compute_matrix(a0, b0, c0)
 
-    def compute_matrix(self, a0, b0, c0):
+        if method == 1:
+            self.compute_matrix1(a0, b0, c0)
+        elif method == 2:
+            self.compute_matrix2(a0, b0, c0)
+
+    def compute_matrix1(self, a0, b0, c0):
         self.origin = a0
         e2 = np.cross(b0 - a0, c0 - a0)
         e2 /= np.linalg.norm(e2)
         e1 = np.cross(e2, b0 - a0)
         e1 /= np.linalg.norm(e1)
         e3 = np.cross(e1, e2)
+        self.M = np.array([e1, e2, e3])
+
+    def compute_matrix2(self, a0, b0, c0):
+        self.origin = a0
+        e1 = b0 - a0
+        e1 /= np.linalg.norm(e1)
+        e3 = np.cross(e1, c0 - a0)
+        e3 /= np.linalg.norm(e3)
+        e2 = np.cross(e3, e1)
         self.M = np.array([e1, e2, e3])
 
     def get_xyz(self, xyz0, is_vector=False):

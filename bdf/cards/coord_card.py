@@ -75,6 +75,6 @@ class CoordCard(Card):
     def get_fields(self):
         return super().get_fields()
 
-CoordCard.compute_matrix = CoordSystem.compute_matrix
+CoordCard.compute_matrix = CoordSystem.compute_matrix1
 CoordCard.get_xyz = CoordSystem.get_xyz
 CoordCard.get_xyz0 = CoordSystem.get_xyz0

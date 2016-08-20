@@ -6,10 +6,18 @@ class ElemCard(Card):
 
     def __init__(self, fields, large_field=False, free_field=False):
         super().__init__(fields, large_field=large_field, free_field=free_field)
-        self.coord = None
+        self._coord = None
 
     def settle(self):
         pass
+
+    @property
+    def coord(self):
+
+        if not self._coord:
+            self.settle()
+
+        return self._coord
 
     def _update(self, caller, **kwargs):
         super()._update(caller, **kwargs)
@@ -17,7 +25,9 @@ class ElemCard(Card):
         for key, value in kwargs.items():
 
             if key == 'grid_changed':
-                self.settle()
+
+                if self._coord:
+                    self.settle()
 
     def extend(self, steps=None, max_steps=10000, **kwargs):
 
