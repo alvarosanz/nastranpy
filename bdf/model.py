@@ -21,6 +21,7 @@ class Model(object):
         self.clear()
 
     def clear(self):
+        """Clear the model."""
         self.items = {item_type: dict() for item_type in Item}
         self.sets = {set_type: dict() for set_type in Set}
         self.unsupported_cards = set()
@@ -36,8 +37,17 @@ class Model(object):
         for set_type in self.sets:
             setattr(self, get_plural(set_type.name), self.sets[set_type])
 
-    @timeit
     def read(self, includes, link_cards=True):
+        """
+        Read include files.
+
+        Parameters
+        ----------
+        includes : list of strings
+            List of include filenames.
+        link_cards : bool, optional
+            Whether or not link cards among each other, dafaults to True
+        """
         self.log.warning.counter = 0
         self.log.error.counter = 0
 
@@ -87,8 +97,15 @@ class Model(object):
         else:
             self.log.info('Cards processed succesfully!')
 
-    @timeit
     def write(self, includes=None):
+        """
+        Write include files.
+
+        Parameters
+        ----------
+        includes : list of strings, optional
+            List of include filenames. If not supplied all model include files will be written.
+        """
 
         if not includes:
             includes = self.includes.values()
@@ -154,7 +171,7 @@ class Model(object):
         for elem in self.elems.values():
             elem.settle()
 
-    def update(self, caller, **kwargs):
+    def _update(self, caller, **kwargs):
 
         for key, value in kwargs.items():
 
@@ -193,6 +210,27 @@ class Model(object):
         mapping[new_key] = mapping.pop(old_key)
 
     def cards(self, card_type=None):
+        """
+        Return an iterator of cards.
+
+        Parameters
+        ----------
+        card_type : str, optional
+            Type of card. If not supplied all model cards are returned.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> all_cards = model.cards()
+        >>> all_grids = model.cards('grid')
+        """
+
+        if card_type:
+            card_type = str2type(card_type)
 
         for item_type in self.items:
 
@@ -216,6 +254,25 @@ class Model(object):
                 yield card
 
     def cards_by_id(self, card_type, card_ids):
+        """
+        Return an iterator of cards by specifying the ids.
+
+        Parameters
+        ----------
+        card_type : str
+            Type of card.
+        card_ids : list of ints
+            List of card ids.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> grids = model.cards_by_id('grid', [34, 543453, 234233])
+        """
         card_type = str2type(card_type)
 
         if card_type in self.items:
@@ -224,11 +281,50 @@ class Model(object):
             return (card for card_id in card_ids for card in self.sets[card_type][card_id].cards)
 
     def cards_by_id_pattern(self, card_type, id_pattern):
+        """
+        Return an iterator of cards by specifying an id pattern.
+
+        Parameters
+        ----------
+        card_type : str
+            Type of card.
+        id_pattern : list of strings
+            Pattern of the id digits.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> grids = model.cards_by_id_pattern('grid', ['9', '34', '*', '*', '*', '*', '1-8'])
+        """
         card_type = str2type(card_type)
         id_pattern = IdPattern(id_pattern)
         return (card for card in self.cards(card_type) if card.id in id_pattern)
 
     def cards_by_type(self, card_types, includes=None):
+        """
+        Return an iterator of cards by specifying the type.
+
+        Parameters
+        ----------
+        card_types : list of strings
+            Types of cards.
+        includes : list of strings, optional
+            List of include filenames. If not supplied all model cards of the specified types are returned.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> grids = model.cards_by_type(['grid', 'elem'])
+        >>> grids = model.cards_by_type(['grid', 'elem'], '3C0734_Sp1_Hng_outbd_v04.bdf')
+        """
         card_types = [str2type(card_type) for card_type in card_types]
 
         if includes:
@@ -239,6 +335,26 @@ class Model(object):
             return (card for card_type in card_types for card in self.cards(card_type))
 
     def cards_by_tag(self, card_tags, includes=None):
+        """
+        Return an iterator of cards by specifying the tag.
+
+        Parameters
+        ----------
+        card_tags : list of strings
+            Card tags.
+        includes : list of strings, optional
+            List of include filenames. If not supplied all model cards of the specified tags are returned.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> elems = model.cards_by_tag(['e1D', 'e2D'])
+        >>> elems = model.cards_by_tag(['e1D', 'e2D'], '3C0734_Sp1_Hng_outbd_v04.bdf')
+        """
         card_tags = [str2tag(card_tag) for card_tag in card_tags]
 
         if includes:
@@ -251,6 +367,26 @@ class Model(object):
                     card.tag in card_tags)
 
     def cards_by_name(self, card_names, includes=None):
+        """
+        Return an iterator of cards by specifying the name.
+
+        Parameters
+        ----------
+        card_names : list of strings
+            Card names.
+        includes : list of strings, optional
+            List of include filenames. If not supplied all model cards of the specified names are returned.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> elems = model.cards_by_names(['CQUAD4', 'CTRIA3'])
+        >>> elems = model.cards_by_names(['CQUAD4', 'CTRIA3'], ['3C0734_Sp1_Hng_outbd_v04.bdf'])
+        """
 
         if includes:
             includes = [self.includes[include_name] for include_name in includes]
@@ -262,19 +398,80 @@ class Model(object):
                     card.name in card_names)
 
     def cards_by_include(self, includes):
+        """
+        Return an iterator of cards by specifying the name.
+
+        Parameters
+        ----------
+        includes : list of strings, optional
+            List of include filenames.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> elems = model.cards_by_include(['3C0734_Sp1_Hng_outbd_v04.bdf', 'SMM3v2_S541700_Wing-Box_V16.2_08.bdf'])
+        """
         includes = [self.includes[include_name] for include_name in includes]
         return (card for include in includes for card in include.cards)
 
     def elems_by_prop(self, PID):
+        """
+        Return an iterator of element cards by specifying the property ID.
+
+        Parameters
+        ----------
+        PID : int
+            Property id.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> elems = model.elems_by_prop(3400023)
+        """
         return (card for card in self.props[PID].dependent_cards(Item.elem))
 
     def props_by_mat(self, MID):
+        """
+        Return an iterator of property cards by specifying the material ID.
+
+        Parameters
+        ----------
+        MID : int
+            Material id.
+
+        Returns
+        -------
+        cards : iterator of Card objects
+            Iterator of Card objects.
+
+        Examples
+        --------
+        >>> props = model.props_by_mat(9400023)
+        """
         return (card for card in self.mats[MID].dependent_cards(Item.prop))
 
-    def get_unsupported(self):
-        return {card.name for card in self.unsupported_cards}
-
     def info(self, print_to_screen=True):
+        """
+        Returns a brief model summary.
+
+        Parameters
+        ----------
+        print_to_screen : bool, optional
+            Whether or not print the info to screen. Defaults to True.
+
+        Returns
+        -------
+        info : str
+            Brief model summary.
+        """
         info = list()
 
         for item_type in Item:
@@ -287,7 +484,7 @@ class Model(object):
 
         if self.unsupported_cards:
             info.append('\nUnsupported cards: {}\n'.format(len(self.unsupported_cards)))
-            info.append('\t{}'.format(self.get_unsupported()))
+            info.append('\t{}'.format({card.name for card in self.unsupported_cards}))
 
         info.append('\nIncludes: {}'.format(len(self.includes)))
         info.append('\nModel path: {}'.format(self.path))
@@ -300,14 +497,41 @@ class Model(object):
 
         if print_to_screen:
             print(info)
-        else:
-            return info
+
+        return info
 
     def get_id_info(self, card_type, detailed=False):
+        """
+        Return information about the used ids of the specified type.
+
+        Parameters
+        ----------
+        card_type : str
+            Type of card.
+        detailed : bool, optional
+            Whether or not return the available ids of the specified type. Defaults to True.
+
+        Returns
+        -------
+        id_info : list
+            Information about the used ids of the specified type.
+                detailed = True:
+                    [n_cards, id_min, id_max, free_slots]
+                detailed = False:
+                    [n_cards, id_min, id_max]
+        """
         ids = {card.id for card in self.cards(card_type)}
         return get_id_info(ids, detailed=detailed)
 
     def print_summary(self, file=None):
+        """
+        Print to a .csv file detailed information about the used ids (one row per include).
+
+        Parameters
+        ----------
+        file : str, optional
+            Output filename. If not supplied the output filename will be 'model_summary.csv'.
+        """
 
         if not file:
             os.chdir(self.path)
@@ -334,6 +558,17 @@ class Model(object):
                 csv_writer.writerow(row)
 
     def print_cards(self, cards, file=None):
+        """
+        Print to a .csv file all the fields of the specified cards (one row per card).
+
+        Parameters
+        ----------
+        cards : list of Card objects
+            List of cards.
+        file : str, optional
+            Output filename. If not supplied the output filename will be 'cards.csv'.
+        """
+
 
         if not file:
             os.chdir(self.path)
@@ -346,21 +581,39 @@ class Model(object):
                 csv_writer.writerow(card.get_fields())
 
     def create_card(self, fields, include, large_field=False, free_field=False):
+        """
+        Create a new card in the database.
+
+        Parameters
+        ----------
+        fields : list
+            List of fields.
+        include : str
+            Include filename.
+        large_field : bool, optional
+            Use large-field format. Defaults to False.
+        free_field : bool, optional
+            Use free-field format. Defaults to False.
+        """
         card = card_factory.get_card(card, large_field=large_field, free_field=free_field)
 
         try:
-            card.update()
+            card.settle()
         except AttributeError:
             pass
 
         self._classify_card(card)
-
-        try:
-            card.include = self.includes[include]
-        except KeyError:
-            card.include = include
+        card.include = self.includes[include]
 
     def delete_card(self, card):
+        """
+        Delete card from the database.
+
+        Parameters
+        ----------
+        card : Card
+            Card to be deleted.
+        """
 
         if list(card.dependent_cards()):
             raise ValueError('{} is referred by other card/s!'.format(repr(card)))
@@ -381,8 +634,35 @@ class Model(object):
 
             card.include = None
 
-    def renumber(self, card_type, cards=None, start=None, end=None, step=None,
+    def renumber(self, card_type, cards=None, start=None, step=None,
                  id_pattern=None, correlation=None):
+        """
+        Renumber cards of the specified type.
+
+        Parameters
+        ----------
+        card_type : str
+            Type of card.
+        cards : list of Card objects, optional
+            List of cards to be ranamed. If not cards are supplied then a correlation must be supplied.
+        start : int, optional
+            First id.
+            Only applicable if no correlation is supplied.
+        step : int, optional
+            Id step. If not supplied then step = 1.
+            Only applicable if no correlation is supplied.
+        id_pattern : list of strings, optional
+            Pattern of the id digits. The cards will be renumbered using the id pattern supplied.
+            Only applicable if no correlation is supplied.
+        correlation : dict, optional
+            Correlation of ids (old_id: new_id).
+
+        Examples
+        --------
+        >>> model.renumber('grids', grids, start=5000, step=5)
+        >>> model.renumber('grids', grids, id_pattern=['9', '34', '*', '*', '*', '*', '1-8'])
+        >>> model.renumber('grids', correlation={5001:9005001, 5002:9005002, 5003:9005003, 5004:9005004})
+        """
         card_type = str2type(card_type)
 
         if card_type in self.items:
@@ -415,13 +695,10 @@ class Model(object):
                 id_seq = iter(IdPattern(id_pattern))
             else:
 
-                if not end:
-                    end = 99999999
-
                 if not step:
-                    id_seq = range(start, end)
+                    id_seq = range(start, 99999999)
                 else:
-                    id_seq = range(start, end, step)
+                    id_seq = range(start, 99999999, step)
 
             temp_id = 0
             temp_correlation = dict()
@@ -437,6 +714,18 @@ class Model(object):
             mapping[temp_id].id = new_id
 
     def move(self, cards, include, move_element_grids=False):
+        """
+        Move cards to the specified include.
+
+        Parameters
+        ----------
+        cards : list of Card objects
+            List of cards to be moved.
+        include : str
+            Filename of the target include.
+        move_elemen_grids : bool, optional
+            Whether or not move associated element grids. Defaults to False.
+        """
         include = self.includes[include]
 
         for card in cards:

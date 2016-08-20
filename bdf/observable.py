@@ -18,6 +18,6 @@ class Observable(object):
         if self.changed:
 
             for observer in self.observers:
-                observer.update(self, *args, **kwargs)
+                observer._update(self, *args, **kwargs)
 
             self.changed = False

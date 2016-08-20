@@ -97,7 +97,7 @@ class Card(Observable):
             if self._include:
                 self._include.cards.add(self)
 
-    def update(self, caller, **kwargs):
+    def _update(self, caller, **kwargs):
         pass
 
     def cards(self, type=None):

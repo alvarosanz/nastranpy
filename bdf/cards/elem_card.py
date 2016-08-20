@@ -11,8 +11,8 @@ class ElemCard(Card):
     def settle(self):
         pass
 
-    def update(self, caller, **kwargs):
-        super().update(caller, **kwargs)
+    def _update(self, caller, **kwargs):
+        super()._update(caller, **kwargs)
 
         for key, value in kwargs.items():
 

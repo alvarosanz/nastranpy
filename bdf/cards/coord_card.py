@@ -63,8 +63,8 @@ class CoordCard(Card):
 
         self.compute_matrix(self.a0, self.b0, self.c0)
 
-    def update(self, caller, **kwargs):
-        super().update(caller, **kwargs)
+    def _update(self, caller, **kwargs):
+        super()._update(caller, **kwargs)
 
         for key, value in kwargs.items():
 
