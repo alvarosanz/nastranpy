@@ -77,7 +77,7 @@ class Card(Observable):
 
         if self.fields[1] != value:
             self.changed = True
-            self.notify(new_id=value)
+            self._notify(new_id=value)
             self.fields[1] = int(value)
 
     @property
@@ -156,7 +156,7 @@ class Card(Observable):
         else:
             return '\n'.join(card[:lines])
 
-    def process_fields(self, items=None):
+    def _process_fields(self, items=None):
 
         def pop_field(fields, field_info, items):
             f = fields.pop()
@@ -235,7 +235,7 @@ class Card(Observable):
                     if field_info.type:
 
                         try:
-                            field.subscribe(self)
+                            field._subscribe(self)
 
                             if field_info.update_grid:
                                 field.elems.add(self)
@@ -263,14 +263,14 @@ class Card(Observable):
 
         self._is_processed = True
 
-    def split(self):
+    def _split(self):
 
         if self.scheme and self.scheme[-1].other_card:
             index = len(self.scheme) - 1
 
             if len(self.fields) > index and self.fields[index]:
                 new_card = self._new_card([self.fields[0]] + self.fields[index:])
-                new_card.split()
+                new_card._split()
                 del self.fields[index:]
 
     def _get_fields(self):
@@ -329,5 +329,5 @@ class Card(Observable):
         new_card.include = self.include
         new_card.observers = self.observers.copy()
         new_card.changed = True
-        new_card.notify(new_card=new_card)
+        new_card._notify(new_card=new_card)
         return new_card

@@ -4,16 +4,16 @@ class Observable(object):
         self.observers = set()
         self.changed = False
 
-    def subscribe(self, value):
+    def _subscribe(self, value):
         self.observers.add(value)
 
-    def unsubscribe(self, value):
+    def _unsubscribe(self, value):
         self.observers.remove(value)
 
-    def unsubscribe_all(self):
+    def _unsubscribe_all(self):
         self.observers.clear()
 
-    def notify(self, *args, **kwargs):
+    def _notify(self, *args, **kwargs):
 
         if self.changed:
 

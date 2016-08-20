@@ -34,7 +34,7 @@ class CardList(object):
         if not value is old_value:
 
             try:
-                old_value.unsubscribe(self._observer)
+                old_value._unsubscribe(self._observer)
 
                 if self._update_grid:
                     old_value.elems.remove(self._observer)
@@ -42,7 +42,7 @@ class CardList(object):
                 pass
 
             try:
-                value.subscribe(self._observer)
+                value._subscribe(self._observer)
 
                 if self._update_grid:
                     value.elems.add(self._observer)
@@ -54,7 +54,7 @@ class CardList(object):
     def __delitem__(self, index):
 
         try:
-            self._cards[index].unsubscribe(self._observer)
+            self._cards[index]._unsubscribe(self._observer)
 
             if self._update_grid:
                 self._cards[index].elems.remove(self._observer)
@@ -71,7 +71,7 @@ class CardList(object):
     def append(self, value):
 
         try:
-            value.subscribe(self._observer)
+            value._subscribe(self._observer)
 
             if self._update_grid:
                 value.elems.add(self._observer)
@@ -85,7 +85,7 @@ class CardList(object):
         for card in self._cards:
 
             try:
-                card.unsubscribe(self._observer)
+                card._unsubscribe(self._observer)
 
                 if self._update_grid:
                     card.elems.remove(self._observer)

@@ -1,8 +1,42 @@
 import re
 from nastranpy.bdf.cards.card_interfaces import card_factory
+from nastranpy.bdf.cards.card import Card
 
 
-def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_comments=False):
+def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignore_comments=False,
+                  generic_cards=True):
+    """
+    Get cards in file.
+
+    Parameters
+    ----------
+    file : file object
+        File object.
+    card_names : list of str, optional
+        Card names to read. Other cards will be ignored (the default is None, which
+        implies all cards will be readed).
+    only_ids : bool, optional
+        Use this if only it is necessary to know the id of each card.
+    raw_output : bool, optional
+        Whether or not process card fields.
+    ignore_comments : bool, optional
+        Whether or not to ignore the comments in the file.
+    generic_cards : bool, optional
+
+    Yields
+    -------
+    Card or list of int, float or str
+            `only_ids` is True:
+                [card_name (str), card_id (int)]
+            `raw_output` is False:
+                Card
+            `raw_output` is True:
+                [field1 (str), field2 (str), field3 (str), ...]
+
+    Examples
+    --------
+    >>> grids = [grid for grid in cards_in_file(f, ['GRID'])]
+    """
     card = list()
     comment = ''
 
@@ -19,7 +53,12 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
                 card = process_fields(card, not raw_output)
 
                 if not raw_output:
-                    card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
+
+                    if generic_cards:
+                        card = Card(card, large_field=is_large_field, free_field=is_free_field)
+                    else:
+                        card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
+
                     card.comment = card_comment
 
                 yield card
@@ -52,7 +91,7 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
 
             card_name = card_name.upper()
 
-            if not card_types or card_name in card_types:
+            if not card_names or card_name in card_names:
 
                 if only_ids:
                     yield [card_name, int(card_id)]
@@ -99,7 +138,12 @@ def cards_in_file(file, card_types=[], raw_output=False, only_ids=False, ignore_
         card = process_fields(card, not raw_output)
 
         if not raw_output:
-            card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
+
+            if generic_cards:
+                card = Card(card, large_field=is_large_field, free_field=is_free_field)
+            else:
+                card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
+
             card.comment = card_comment
 
         yield card

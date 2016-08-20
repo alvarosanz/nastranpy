@@ -27,7 +27,7 @@ class CaseSet(Observable):
 
         if self._id != value:
             self.changed = True
-            self.notify(new_id=value)
+            self._notify(new_id=value)
             self._id = value
 
             for card in self.cards:

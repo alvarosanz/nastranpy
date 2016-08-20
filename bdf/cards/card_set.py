@@ -35,7 +35,7 @@ class CardSet(object):
     def add(self, value):
 
         try:
-            value.subscribe(self._observer)
+            value._subscribe(self._observer)
 
             if self._update_grid:
                 value.elems.add(self._observer)
@@ -47,7 +47,7 @@ class CardSet(object):
     def remove(self, value):
 
         try:
-            value.unsubscribe(self._observer)
+            value._unsubscribe(self._observer)
 
             if self._update_grid:
                 value.elems.remove(self._observer)
@@ -61,7 +61,7 @@ class CardSet(object):
         for card in self._cards:
 
             try:
-                card.unsubscribe(self._observer)
+                card._unsubscribe(self._observer)
 
                 if self._update_grid:
                     card.elems.remove(self._observer)

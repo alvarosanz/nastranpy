@@ -35,7 +35,7 @@ class Subscheme(object):
                 if field_info.type:
 
                     try:
-                        field.subscribe(card)
+                        field._subscribe(card)
 
                         if field_info.update_grid:
                             field.elems.add(card)

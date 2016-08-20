@@ -46,7 +46,7 @@ class GridCard(Card):
         if not np.allclose(self._xyz0, value):
             self._xyz0 = value
             self.changed = True
-            self.notify(grid_changed=self)
+            self._notify(grid_changed=self)
 
     @property
     def xyz(self):

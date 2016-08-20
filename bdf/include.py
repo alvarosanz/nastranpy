@@ -39,7 +39,7 @@ class Include(Observable):
 
         if self._file != value:
             self.changed = True
-            self.notify(new_include_name=value)
+            self._notify(new_include_name=value)
             self._file = value
 
     def get_id_info(self, card_type, detailed=False):
@@ -50,7 +50,7 @@ class Include(Observable):
 
         with open(self._file) as f:
 
-            for card in cards_in_file(f):
+            for card in cards_in_file(f, generic_cards=False):
                 card.include = self
 
     def write(self):

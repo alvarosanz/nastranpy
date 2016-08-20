@@ -83,7 +83,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                         card = self
 
                     try:
-                        old_value.unsubscribe(card)
+                        old_value._unsubscribe(card)
 
                         if field_info.update_grid:
                             old_value.elems.remove(card)
@@ -91,7 +91,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                         pass
 
                     try:
-                        value.subscribe(card)
+                        value._subscribe(card)
 
                         if field_info.update_grid:
                             value.elems.add(card)

@@ -58,7 +58,7 @@ class Model(object):
 
         for include in includes:
             counter += 1
-            include.subscribe(self)
+            include._subscribe(self)
             self.includes[include.file] = include
             self.log.info('Reading file {} of {}: {} ({})'.format(str(counter), len(includes), include.file, humansize(os.path.getsize(include.file))))
             include.read()
@@ -78,7 +78,7 @@ class Model(object):
         self.log.info('Processing cards ...')
 
         for card in self.cards():
-            card.process_fields(all_items)
+            card._process_fields(all_items)
 
         if link_cards:
             self._arrange_grids()
@@ -126,7 +126,7 @@ class Model(object):
     def _classify_card(self, card):
 
         if card.type in self.items:
-            card.subscribe(self)
+            card._subscribe(self)
 
             if card.id in self.items[card.type]:
                 previous_card = self.items[card.type][card.id]
@@ -140,13 +140,13 @@ class Model(object):
 
             if not card.id in self.sets[card.type]:
                 self.sets[card.type][card.id] = CaseSet(card.id, card.type)
-                self.sets[card.type][card.id].subscribe(self)
+                self.sets[card.type][card.id]._subscribe(self)
 
             card.set = self.sets[card.type][card.id]
         else:
             self.unsupported_cards.add(card)
 
-        card.split()
+        card._split()
 
     def _arrange_grids(self):
         resolved_cards = set()
@@ -686,7 +686,7 @@ class Model(object):
         else:
 
             for linked_card in card.cards():
-                linked_card.unsubscribe(card)
+                linked_card._unsubscribe(card)
 
             if card.type in self.items:
                 del self.items[card.type][card.id]
