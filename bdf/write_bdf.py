@@ -1,6 +1,30 @@
 def print_card(fields, large_field=False, free_field=False,
                comment='', is_commented=False, comment_symbol='$: ',
                use_continuation_marks=True):
+    """
+    Get the properly formatted card string.
+
+    Parameters
+    ----------
+    fields : list of int, float or str
+        List of fields.
+    large_field : bool, optional
+        Use large-field format.
+    free_field : bool, optional
+        Use free-field format.
+
+    Returns
+    -------
+    str
+        Properly formatted card string.
+
+    Examples
+    --------
+    >>> print_card(['CORD2R', 53417000, '', 39822.0, -3018.15, -1977.79, 39807.2,
+                    -2991.13, -1882.65, 39723.1, -3021.86, -1992.12])
+    'CORD2R  53417000         39822.0-3018.15-1977.79 39807.2-2991.13-1882.65+
+     +        39723.1-3021.86-1992.12'
+    """
 
     if is_commented and comment:
         comment = '\n'.join((comment_symbol + line for line in comment.splitlines())) + '\n'

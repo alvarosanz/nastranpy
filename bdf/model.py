@@ -43,10 +43,10 @@ class Model(object):
 
         Parameters
         ----------
-        includes : list of strings
+        includes : list of str
             List of include filenames.
         link_cards : bool, optional
-            Whether or not link cards among each other, dafaults to True
+            Whether or not link cards among each other.
         """
         self.log.warning.counter = 0
         self.log.error.counter = 0
@@ -103,8 +103,9 @@ class Model(object):
 
         Parameters
         ----------
-        includes : list of strings, optional
-            List of include filenames. If not supplied all model include files will be written.
+        includes : list of str, optional
+            List of include filenames(the default is None, which implies all
+            model includes will be written).
         """
 
         if not includes:
@@ -211,22 +212,23 @@ class Model(object):
 
     def cards(self, card_type=None):
         """
-        Return an iterator of cards.
+        Get cards of the specified type.
 
         Parameters
         ----------
-        card_type : str, optional
-            Type of card. If not supplied all model cards are returned.
+        card_type : {None, 'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}, optional
+            Card type (the default is None, which implies all model cards are returned).
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> all_cards = model.cards()
-        >>> all_grids = model.cards('grid')
+        >>> all_cards = [card for card in model.cards()]
+
+        >>> all_grids = [grid.id for grid in model.cards('grid')]
         """
 
         if card_type:
@@ -255,23 +257,23 @@ class Model(object):
 
     def cards_by_id(self, card_type, card_ids):
         """
-        Return an iterator of cards by specifying the ids.
+        Get cards by specifying the ids.
 
         Parameters
         ----------
-        card_type : str
-            Type of card.
-        card_ids : list of ints
+        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
+            Card type.
+        card_ids : list of int
             List of card ids.
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> grids = model.cards_by_id('grid', [34, 543453, 234233])
+        >>> grid_CP_ids = [grid.CP.id for grid in model.cards_by_id('grid', [34, 543453, 234233])]
         """
         card_type = str2type(card_type)
 
@@ -282,23 +284,23 @@ class Model(object):
 
     def cards_by_id_pattern(self, card_type, id_pattern):
         """
-        Return an iterator of cards by specifying an id pattern.
+        Get cards by specifying an id pattern.
 
         Parameters
         ----------
-        card_type : str
-            Type of card.
-        id_pattern : list of strings
+        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
+            Card type.
+        id_pattern : list of str
             Pattern of the id digits.
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> grids = model.cards_by_id_pattern('grid', ['9', '34', '*', '*', '*', '*', '1-8'])
+        >>> grid_coords = [grid.xyz0 for grid in model.cards_by_id_pattern('grid', ['9', '34', '*', '*', '*', '*', '1-8'])]
         """
         card_type = str2type(card_type)
         id_pattern = IdPattern(id_pattern)
@@ -310,20 +312,20 @@ class Model(object):
 
         Parameters
         ----------
-        card_types : list of strings
-            Types of cards.
-        includes : list of strings, optional
-            List of include filenames. If not supplied all model cards of the specified types are returned.
+        card_types : list of str
+            Card types ('coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc' or 'load').
+        includes : list of str, optional
+            Include filenames (the default is None, which implies all model cards of
+            the specified types are returned).
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> grids = model.cards_by_type(['grid', 'elem'])
-        >>> grids = model.cards_by_type(['grid', 'elem'], '3C0734_Sp1_Hng_outbd_v04.bdf')
+        >>> card_ids = [card.id for card in model.cards_by_type(['grid', 'elem'])]
         """
         card_types = [str2type(card_type) for card_type in card_types]
 
@@ -336,24 +338,24 @@ class Model(object):
 
     def cards_by_tag(self, card_tags, includes=None):
         """
-        Return an iterator of cards by specifying the tag.
+        Get cards by specifying the tag.
 
         Parameters
         ----------
-        card_tags : list of strings
-            Card tags.
-        includes : list of strings, optional
-            List of include filenames. If not supplied all model cards of the specified tags are returned.
+        card_tags : list of str
+            Card tags ('e1D', 'e2D', 'e3D', 'eRigid', 'eSpring', 'eMass' or 'ePlot').
+        includes : list of str, optional
+            Include filenames (the default is None, which implies all model cards of
+            the specified tags are returned).
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> elems = model.cards_by_tag(['e1D', 'e2D'])
-        >>> elems = model.cards_by_tag(['e1D', 'e2D'], '3C0734_Sp1_Hng_outbd_v04.bdf')
+        >>> elem_grids = [elem.grids for elem in model.cards_by_tag(['e1D', 'e2D'])]
         """
         card_tags = [str2tag(card_tag) for card_tag in card_tags]
 
@@ -368,24 +370,24 @@ class Model(object):
 
     def cards_by_name(self, card_names, includes=None):
         """
-        Return an iterator of cards by specifying the name.
+        Get cards by specifying the name.
 
         Parameters
         ----------
-        card_names : list of strings
+        card_names : list of str
             Card names.
-        includes : list of strings, optional
-            List of include filenames. If not supplied all model cards of the specified names are returned.
+        includes : list of str, optional
+            Include filenames (the default is None, which implies all model cards of
+            the specified names are returned).
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> elems = model.cards_by_names(['CQUAD4', 'CTRIA3'])
-        >>> elems = model.cards_by_names(['CQUAD4', 'CTRIA3'], ['3C0734_Sp1_Hng_outbd_v04.bdf'])
+        >>> elem_grids = [elem.grids for elem in model.cards_by_names(['CQUAD4', 'CTRIA3'])]
         """
 
         if includes:
@@ -399,77 +401,78 @@ class Model(object):
 
     def cards_by_include(self, includes):
         """
-        Return an iterator of cards by specifying the name.
+        Get cards by specifying the include.
 
         Parameters
         ----------
-        includes : list of strings, optional
-            List of include filenames.
+        includes : list of str
+            Include filenames.
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> elems = model.cards_by_include(['3C0734_Sp1_Hng_outbd_v04.bdf', 'SMM3v2_S541700_Wing-Box_V16.2_08.bdf'])
+        >>> cards = [card for card in model.cards_by_include(['3C0734_Sp1_Hng_outbd_v04.bdf',
+                                                               'SMM3v2_S541700_Wing-Box_V16.2_08.bdf'])]
         """
         includes = [self.includes[include_name] for include_name in includes]
         return (card for include in includes for card in include.cards)
 
     def elems_by_prop(self, PID):
         """
-        Return an iterator of element cards by specifying the property ID.
+        Get element cards by specifying the property ID.
 
         Parameters
         ----------
         PID : int
             Property id.
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> elems = model.elems_by_prop(3400023)
+        >>> elems = [elem for elem in model.elems_by_prop(3400023)]
         """
         return (card for card in self.props[PID].dependent_cards(Item.elem))
 
     def props_by_mat(self, MID):
         """
-        Return an iterator of property cards by specifying the material ID.
+        Get property cards by specifying the material ID.
 
         Parameters
         ----------
         MID : int
             Material id.
 
-        Returns
+        Yields
         -------
-        cards : iterator of Card objects
-            Iterator of Card objects.
+        Card
+            Card object.
 
         Examples
         --------
-        >>> props = model.props_by_mat(9400023)
+        >>> props = [prop for prop in model.props_by_mat(9400023)]
         """
         return (card for card in self.mats[MID].dependent_cards(Item.prop))
 
     def info(self, print_to_screen=True):
         """
-        Returns a brief model summary.
+        Get a brief model summary.
 
         Parameters
         ----------
         print_to_screen : bool, optional
-            Whether or not print the info to screen. Defaults to True.
+            Whether or not print the info to screen.
 
         Returns
         -------
-        info : str
+        str
             Brief model summary.
         """
         info = list()
@@ -502,51 +505,62 @@ class Model(object):
 
     def get_id_info(self, card_type, detailed=False):
         """
-        Return information about the used ids of the specified type.
+        Get information about the used ids of the specified type.
 
         Parameters
         ----------
-        card_type : str
-            Type of card.
+        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
+            Card type.
         detailed : bool, optional
-            Whether or not return the available ids of the specified type. Defaults to True.
+            Whether or not return the available ids of the specified type.
 
         Returns
         -------
-        id_info : list
+        list of int
             Information about the used ids of the specified type.
-                detailed = True:
+                `detailed` is True:
                     [n_cards, id_min, id_max, free_slots]
-                detailed = False:
+                `detailed` is False:
                     [n_cards, id_min, id_max]
+
+        Examples
+        --------
+        >>> model.get_id_info('mpc')
+        [5, 10, 1002]
+
+        >>> model.get_id_info('mpc', detailed=True)
+        [5, 10, 1002, [(1, 9), (11, 19), (21, 999), (1003, 99999999)]]
         """
         ids = {card.id for card in self.cards(card_type)}
         return get_id_info(ids, detailed=detailed)
 
     def get_id_slot(self, card_type, min_size, id_pattern=None):
         """
-        Return a suitable minimum slot of available ids for a given card type.
+        Get a slot for available ids for a given card type.
 
         Parameters
         ----------
-        card_type : str
-            Type of card.
+        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
+            Card type.
         min_size : int
             Minimum size for the id slot.
-        id_pattern : list of strings, optional
+        id_pattern : list of str, optional
             Pattern of the id digits.
 
         Returns
         -------
-        id_slot : tuple
+        tuple of int or None
             Minimum and maximum available id for that given slot:
                 (free_id_min, free_id_max)
-            Returns None if no slot is fount
+            Returns None if no slot is found.
 
         Examples
         --------
-        >>> id_slot = model.get_id_slot('grid', 8000)
-        >>> id_slot = model.get_id_slot('grid', 8000, ['9', '34', '*', '*', '*', '*', '*'])
+        >>> model.get_id_slot('grid', 1000)
+        (200999, 202000)
+
+        >>> model.get_id_slot('grid', 1000, ['4', '7', '*', '*', '*', '*', '*'])
+        (4703436, 4738579)
         """
 
         if id_pattern:
@@ -581,7 +595,8 @@ class Model(object):
         Parameters
         ----------
         file : str, optional
-            Output filename. If not supplied the output filename will be 'model_summary.csv'.
+            Output filename (default is None, which implies that the output filename
+            will be 'model_summary.csv').
         """
 
         if not file:
@@ -614,12 +629,12 @@ class Model(object):
 
         Parameters
         ----------
-        cards : list of Card objects
+        cards : list of Card
             List of cards.
         file : str, optional
-            Output filename. If not supplied the output filename will be 'cards.csv'.
+            Output filename (default is None, which implies that the output filename
+            will be 'cards.csv').
         """
-
 
         if not file:
             os.chdir(self.path)
@@ -637,14 +652,14 @@ class Model(object):
 
         Parameters
         ----------
-        fields : list
+        fields : list of int, float or str
             List of fields.
         include : str
             Include filename.
         large_field : bool, optional
-            Use large-field format. Defaults to False.
+            Use large-field format.
         free_field : bool, optional
-            Use free-field format. Defaults to False.
+            Use free-field format.
         """
         card = card_factory.get_card(card, large_field=large_field, free_field=free_field)
 
@@ -692,9 +707,9 @@ class Model(object):
 
         Parameters
         ----------
-        card_type : str
-            Type of card.
-        cards : list of Card objects, optional
+        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
+            Card type.
+        cards : list of Card, optional
             List of cards to be ranamed. If not cards are supplied then a correlation must be supplied.
         start : int, optional
             First id.
@@ -702,16 +717,18 @@ class Model(object):
         step : int, optional
             Id step. If not supplied then step = 1.
             Only applicable if no correlation is supplied.
-        id_pattern : list of strings, optional
+        id_pattern : list of str, optional
             Pattern of the id digits. The cards will be renumbered using the id pattern supplied.
             Only applicable if no correlation is supplied.
-        correlation : dict, optional
+        correlation : dict of int, optional
             Correlation of ids (old_id: new_id).
 
         Examples
         --------
         >>> model.renumber('grids', grids, start=5000, step=5)
+
         >>> model.renumber('grids', grids, id_pattern=['9', '34', '*', '*', '*', '*', '1-8'])
+
         >>> model.renumber('grids', correlation={5001:9005001, 5002:9005002, 5003:9005003, 5004:9005004})
         """
         card_type = str2type(card_type)
@@ -770,12 +787,12 @@ class Model(object):
 
         Parameters
         ----------
-        cards : list of Card objects
+        cards : list of Card
             List of cards to be moved.
         include : str
             Filename of the target include.
         move_elemen_grids : bool, optional
-            Whether or not move associated element grids. Defaults to False.
+            Whether or not move associated element grids.
         """
         include = self.includes[include]
 
