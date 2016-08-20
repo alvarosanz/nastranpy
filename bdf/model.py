@@ -523,6 +523,57 @@ class Model(object):
         ids = {card.id for card in self.cards(card_type)}
         return get_id_info(ids, detailed=detailed)
 
+    def get_id_slot(self, card_type, min_size, id_pattern=None):
+        """
+        Return a suitable minimum slot of available ids for a given card type.
+
+        Parameters
+        ----------
+        card_type : str
+            Type of card.
+        min_size : int
+            Minimum size for the id slot.
+        id_pattern : list of strings, optional
+            Pattern of the id digits.
+
+        Returns
+        -------
+        id_slot : tuple
+            Minimum and maximum available id for that given slot:
+                (free_id_min, free_id_max)
+            Returns None if no slot is fount
+
+        Examples
+        --------
+        >>> id_slot = model.get_id_slot('grid', 8000)
+        >>> id_slot = model.get_id_slot('grid', 8000, ['9', '34', '*', '*', '*', '*', '*'])
+        """
+
+        if id_pattern:
+            id_pattern = IdPattern(id_pattern)
+
+        free_slots = dict()
+
+        for free_slot in self.get_id_info(card_type, detailed=True)[3]:
+            slot_size = free_slot[1] - free_slot[0] + 1
+
+            if slot_size in free_slots:
+                free_slots[slot_size].append(free_slot)
+            else:
+                free_slots[slot_size] = [free_slot]
+
+        for slot_size in sorted(free_slots):
+
+            for free_slot in free_slots[slot_size]:
+
+                if (slot_size >= min_size and
+                    (not id_pattern or
+                     id_pattern and all((id in id_pattern for id in
+                                         range(free_slot[0], free_slot[1] + 1))))):
+                    return free_slot
+
+        return None
+
     def print_summary(self, file=None):
         """
         Print to a .csv file detailed information about the used ids (one row per include).
