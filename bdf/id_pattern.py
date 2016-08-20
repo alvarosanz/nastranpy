@@ -40,4 +40,4 @@ class IdPattern(object):
         return True
 
     def __iter__(self):
-        return (id for id in range(self.id_min, self.idmax + 1) if id in self)
+        return (id for id in range(self.id_min, self.id_max + 1) if id in self)
