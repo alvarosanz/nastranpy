@@ -223,7 +223,18 @@ class Card(Observable):
                         field = set(subfields)
 
                 elif field_info.seq_type is Seq.vector:
-                    field = np.array(subfields)
+
+                    if not subfields or all(subfield is None for subfield in subfields):
+                        field = None
+                    else:
+
+                        if field_info.type is Item.grid and isinstance(subfields[0], Card):
+                            vector = [subfields[0], None, None]
+                        else:
+                            vector = [0.0, 0.0, 0.0]
+                            vector[:len(subfields)] = [x if x else 0.0 for x in subfields]
+
+                        field = np.array(vector)
 
             elif field_info.subscheme:
                 field = get_subscheme(field_info.subscheme, items)
@@ -287,6 +298,9 @@ class Card(Observable):
                         yield field_info.name, FieldInfo(field_info.name, optional_flag=True)
 
                 if field_info.seq_type:
+
+                    if field_info.seq_type is Seq.vector and field is None:
+                        field = [None, None, None]
 
                     for subfield in field:
 

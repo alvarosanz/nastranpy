@@ -1,3 +1,4 @@
+import numpy as np
 from nastranpy.bdf.cards.enums import Item, Set, Tag, Seq
 from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.set_card import SetCard
@@ -61,44 +62,118 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
         return wrapped
 
-    def get_field_factory(index):
+    def get_field_factory(index, field_info, alternate_name=False):
 
-        def wrapped(self):
-            return self.fields[index]
+        if field_info.seq_type is Seq.vector:
+
+            if field_info.type is Item.grid:
+
+                def wrapped(self):
+                    vector = self.fields[index]
+
+                    if alternate_name:
+
+                        if not vector is None and isinstance(vector[0], (int, Card)):
+                            vector = vector[0]
+                        else:
+                            vector = None
+                    else:
+
+                        if vector is None:
+                            vector = np.array([0.0, 0.0, 0.0])
+                        elif isinstance(vector[0], Card):
+                            vector = None
+
+                    return vector
+            else:
+
+                def wrapped(self):
+                    vector = self.fields[index]
+
+                    if vector is None:
+                        vector = np.array([0.0, 0.0, 0.0])
+
+                    return vector
+        else:
+
+            def wrapped(self):
+                return self.fields[index]
 
         return wrapped
 
-    def set_field_factory(index, field_info, is_subfield=False):
+    def set_field_factory(index, field_info, is_subfield=False, alternate_name=False):
 
-        if field_info.type and not field_info.seq_type:
+        if field_info.type:
 
-            def wrapped(self, value):
-                old_value = self.fields[index]
+            if field_info.seq_type:
 
-                if not value is old_value:
+                if field_info.seq_type is Seq.vector:
 
-                    if is_subfield:
-                        card = self.card
-                    else:
-                        card = self
+                    def wrapped(self, value):
+                        old_value = self.fields[index]
 
-                    try:
-                        old_value._unsubscribe(card)
+                        if is_subfield:
+                            card = self.card
+                        else:
+                            card = self
 
-                        if field_info.update_grid:
-                            old_value.elems.remove(card)
-                    except AttributeError:
-                        pass
+                        try:
+                            old_value[0]._unsubscribe(card)
 
-                    try:
-                        value._subscribe(card)
+                            if field_info.update_grid:
+                                old_value[0].elems.remove(card)
+                        except (TypeError, AttributeError):
+                            pass
 
-                        if field_info.update_grid:
-                            value.elems.add(card)
-                    except AttributeError:
-                        pass
+                        if value is None:
+                            self.fields[index] = None
+                        else:
+                            vector = value
 
-                    self.fields[index] = value
+                            try:
+                                value._subscribe(card)
+                                vector = [value, None, None]
+
+                                if field_info.update_grid:
+                                    value.elems.add(card)
+                            except AttributeError:
+                                pass
+
+                            self.fields[index] = np.array(vector)
+                else:
+
+                    def wrapped(self, value):
+                        raise AttributeError("can't set attribute")
+
+            else:
+
+                def wrapped(self, value):
+                    old_value = self.fields[index]
+
+                    if not value is old_value:
+
+                        if is_subfield:
+                            card = self.card
+                        else:
+                            card = self
+
+                        try:
+                            old_value._unsubscribe(card)
+
+                            if field_info.update_grid:
+                                old_value.elems.remove(card)
+                        except AttributeError:
+                            pass
+
+                        try:
+                            value._subscribe(card)
+
+                            if field_info.update_grid:
+                                value.elems.add(card)
+                        except AttributeError:
+                            pass
+
+                        self.fields[index] = value
         else:
 
             def wrapped(self, value):
@@ -169,19 +244,19 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
                     if subfield_info.name:
                         setattr(field_info.subscheme, subfield_info.name,
-                                property(get_field_factory(subindex),
+                                property(get_field_factory(subindex, subfield_info),
                                          set_field_factory(subindex, subfield_info,
                                                            is_subfield=True)))
 
             if field_info.name and not hasattr(cls, field_info.name):
                 setattr(cls, field_info.name,
-                        property(get_field_factory(index),
+                        property(get_field_factory(index, field_info),
                                  set_field_factory(index, field_info)))
 
             if field_info.alternate_name and not hasattr(cls, field_info.alternate_name):
                 setattr(cls, field_info.alternate_name,
-                        property(get_field_factory(index),
-                                 set_field_factory(index, field_info)))
+                        property(get_field_factory(index, field_info, alternate_name=True),
+                                 set_field_factory(index, field_info, alternate_name=True)))
 
         if card_type is Item.elem and not 'grids' in [x.name for x in card_scheme]:
             setattr(cls, 'grids', property(get_grids_factory(card_scheme)))

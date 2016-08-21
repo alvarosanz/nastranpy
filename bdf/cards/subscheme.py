@@ -30,6 +30,20 @@ class Subscheme(object):
                         field = CardSet(card, cards=field, update_grid=field_info.update_grid)
                     else:
                         field = set(field)
+
+                elif field_info.seq_type is Seq.vector:
+
+                    if not field or all(subfield is None for subfield in field):
+                        field = None
+                    else:
+
+                        if field_info.type is Item.grid and isinstance(field[0], Card):
+                            vector = [field[0], None, None]
+                        else:
+                            vector = [0.0, 0.0, 0.0]
+                            vector[:len(field)] = [x if x else 0.0 for x in field]
+
+                        field = np.array(vector)
             else:
 
                 if field_info.type:
