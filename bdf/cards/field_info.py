@@ -1,3 +1,6 @@
+from nastranpy.bdf.cards.enums import Item, Set, Tag, Seq
+
+
 class FieldInfo(object):
 
     def __init__(self, name=None, type=None,
@@ -8,7 +11,12 @@ class FieldInfo(object):
         self.name = name
         self.type = type
         self.seq_type = seq_type
-        self.length = length
+
+        if self.seq_type is Seq.vector:
+            self.length = 3
+        else:
+            self.length = length
+
         self.subscheme = subscheme
         self.alternate_name = alternate_name
         self.update_grid = update_grid
