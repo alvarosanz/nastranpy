@@ -71,7 +71,7 @@ card_interfaces = {
                                                 F('K1'), F('K2'), F('S1'), F('S2'), F('NSI_A'), F('NSI_B'), F('CW_A'), F('CW_B'),
                                                 F('M1_A'), F('M2_A'), F('M1_B'), F('M2_B'), F('N1_A'), F('N2_A'), F('N1_B'), F('N2_B')]),
     'PBEAML': class_factory('PBEAML', Item.prop, [F(), F(), F(Item.mat.name, Item.mat), F('GROUP'), F('TYPE'), F('unsupported', seq_type=Seq.list, length=-1)]),
-    'PSHELL': class_factory('PSHELL', Item.prop, [F(), F(), F('mat1', Item.mat), F('T'), F('mat2', Item.mat), F('BMIR'), F('mat3', Item.mat), F('TST'), F('NSM'),
+    'PSHELL': class_factory('PSHELL', Item.prop, [F(), F(), F('mat1', Item.mat), F('T', alternate_name='thickness'), F('mat2', Item.mat), F('BMIR'), F('mat3', Item.mat), F('TST'), F('NSM'),
                                                   F('Z1'), F('Z2'), F('mat4', Item.mat)]),
     'PCOMP': class_factory('PCOMP', Item.prop, [F(), F(), F('Z0'), F('NSM'), F('SB'), F('FT'), F('TREF'), F('GE'), F('LAM'),
                                                 F('plies', seq_type=Seq.list, subscheme=[F(Item.mat.name, Item.mat), F('T'), F('THETA'), F('SOUT')])]),
