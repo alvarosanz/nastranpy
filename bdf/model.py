@@ -15,10 +15,40 @@ class Model(object):
     log.warning = CallCounted(log.warning)
     log.error = CallCounted(log.error)
 
-    def __init__(self):
-        self.path = None
+    def __init__(self, path=None, files=None, link_cards=True):
+        """
+        Initialize a Model instance.
+
+        Parameters
+        ----------
+        path : str
+            Path of the model.
+        files : list of str
+            List of include filenames.
+        link_cards : bool, optional
+            Whether or not link cards among each other.
+
+        Example
+        -------
+        >>> files = ['BulkData/0000additional_cards_from_launcher.bdf',
+                     'BulkData/3C0733_Sp1_act_v05.bdf',
+                     'BulkData/3C0734_Sp1_Hng_outbd_v04.bdf',
+                     'BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf',
+                     'Loads/3C0748_air_pressure_loads.bdf']
+
+        >>> model = Model(path='/Users/Alvaro/nastran_model', files=files)
+        """
+        self.path = path
+        self._link_cards = link_cards
         self.includes = dict()
         self.clear()
+
+        if files:
+            self.read(files)
+
+    @property
+    def link_cards(self):
+        return self._link_cards
 
     def clear(self):
         """Clear the model."""
@@ -37,23 +67,21 @@ class Model(object):
         for set_type in self.sets:
             setattr(self, get_plural(set_type.name), self.sets[set_type])
 
-    def read(self, includes, link_cards=True):
+    def read(self, files):
         """
         Read include files.
 
         Parameters
         ----------
-        includes : list of str
+        files : list of str
             List of include filenames.
-        link_cards : bool, optional
-            Whether or not link cards among each other.
         """
         self.log.warning.counter = 0
         self.log.error.counter = 0
 
         os.chdir(self.path)
         self.log.info('Model path: {}'.format(self.path))
-        includes = [Include(include) for include in includes]
+        includes = [Include(file) for file in files]
         counter = 0
 
         for include in includes:
@@ -68,7 +96,7 @@ class Model(object):
 
         self.log.info('All files readed succesfully!')
 
-        if link_cards:
+        if self._link_cards:
             all_items = {card_type: self.items[card_type] if card_type in self.items else
                          self.sets[card_type] for
                          card_type in list(self.items) + list(self.sets)}
@@ -80,7 +108,7 @@ class Model(object):
         for card in self.cards():
             card._process_fields(all_items)
 
-        if link_cards:
+        if self._link_cards:
             self._arrange_grids()
 
         self.warnings += self.log.warning.counter
