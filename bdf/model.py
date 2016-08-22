@@ -4,9 +4,8 @@ import logging
 from nastranpy.bdf.cards.card_interfaces import card_factory, item_types, set_types, sorted_cards
 from nastranpy.bdf.include import Include
 from nastranpy.bdf.case_set import CaseSet
-from nastranpy.bdf.misc import get_plural, indent, get_id_info, humansize, CallCounted
+from nastranpy.bdf.misc import timeit, get_plural, indent, get_id_info, humansize, CallCounted
 from nastranpy.bdf.id_pattern import IdPattern
-from nastranpy.time_tools import timeit
 
 
 class Model(object):
@@ -14,7 +13,7 @@ class Model(object):
     log.warning = CallCounted(log.warning)
     log.error = CallCounted(log.error)
 
-    def __init__(self, path=None, files=None, link_cards=True):
+    def __init__(self, path=None, link_cards=True):
         """
         Initialize a Model instance.
 
@@ -22,29 +21,13 @@ class Model(object):
         ----------
         path : str, optional
             Path of the model.
-        files : list of str, optional
-            List of include filenames (the default is None, which implies that no
-            files will be imported).
         link_cards : bool, optional
             Whether or not link cards among each other.
-
-        Example
-        -------
-        >>> files = ['BulkData/0000additional_cards_from_launcher.bdf',
-                     'BulkData/3C0733_Sp1_act_v05.bdf',
-                     'BulkData/3C0734_Sp1_Hng_outbd_v04.bdf',
-                     'BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf',
-                     'Loads/3C0748_air_pressure_loads.bdf']
-
-        >>> model = Model(path='/Users/Alvaro/nastran_model', files=files)
         """
         self.path = path
         self._link_cards = link_cards
         self.includes = dict()
         self.clear()
-
-        if files:
-            self.read(files)
 
     @property
     def link_cards(self):
