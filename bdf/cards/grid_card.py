@@ -5,7 +5,10 @@ from nastranpy.bdf.cards.card import Card
 def update_fields(func):
 
     def wrapped(self):
-        self.fields[3] = self.xyz
+
+        if self._is_processed:
+            self.fields[3] = self.xyz
+
         return func(self)
 
     return wrapped
@@ -63,7 +66,7 @@ class GridCard(Card):
 
     @xyz.setter
     def xyz(self, value):
-        self.fields[3]= value
+        self.fields[3] = value
         cp = self.fields[2]
 
         if cp:

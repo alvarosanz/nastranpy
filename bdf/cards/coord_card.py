@@ -7,7 +7,7 @@ def update_fields(func):
 
     def wrapped(self):
 
-        if self.fields[0][-2] == '2':
+        if self._is_processed and self.fields[0][-2] == '2':
             cp = self.fields[2]
 
             if cp:
@@ -42,6 +42,29 @@ class CoordCard(Card):
     @update_fields
     def __str__(self):
         return super().__str__()
+
+    def settle(self):
+
+        try:
+
+            if self.fields[0][-2] == '1':
+                self._A = self.fields[2].xyz0
+                self._B = self.fields[3].xyz0
+                self._C = self.fields[4].xyz0
+            else:
+                self._A = self.fields[3]
+                self._B = self.fields[4]
+                self._C = self.fields[5]
+                cp = self.fields[2]
+
+                if cp:
+                    self._A = cp.get_xyz0(self._A)
+                    self._B = cp.get_xyz0(self._B)
+                    self._C = cp.get_xyz0(self._C)
+        except AttributeError:
+            self.log.error('Cannot settle {}'.format(repr(self)))
+
+        self.compute_matrix(self._A, self._B, self._C)
 
     @property
     def origin(self):
@@ -112,29 +135,6 @@ class CoordCard(Card):
         B_new *= 10000.0
         C_new *= 10000.0
         self.set_ABC(self.A, self.get_xyz0(B_new), self.get_xyz0(C_new))
-
-    def settle(self):
-
-        try:
-
-            if self.fields[0][-2] == '1':
-                self._A = self.fields[2].xyz0
-                self._B = self.fields[3].xyz0
-                self._C = self.fields[4].xyz0
-            else:
-                self._A = self.fields[3]
-                self._B = self.fields[4]
-                self._C = self.fields[5]
-                cp = self.fields[2]
-
-                if cp:
-                    self._A = cp.get_xyz0(self._A)
-                    self._B = cp.get_xyz0(self._B)
-                    self._C = cp.get_xyz0(self._C)
-        except AttributeError:
-            self.log.error('Cannot settle {}'.format(repr(self)))
-
-        self.compute_matrix(self._A, self._B, self._C)
 
     def _update(self, caller, **kwargs):
         super()._update(caller, **kwargs)
