@@ -807,7 +807,7 @@ class Model(object):
         """
         include = self.includes[include]
 
-        for card in cards:
+        for card in set(cards):
             card.include = include
 
             if move_element_grids and card.type == 'elem':
