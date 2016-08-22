@@ -1,21 +1,20 @@
-from nastranpy.bdf.cards.enums import str2type, str2tag
 from nastranpy.bdf.id_pattern import IdPattern
 
 
 def filter_factory(filters):
 
     try:
-        tags = {str2tag(tag) for tag in filters['tags']}
+        tags = set(filters['tags'])
     except KeyError:
         tags = None
 
     try:
-        types = {str2type(type) for type in filters['types']}
+        types = set(filters['types'])
     except KeyError:
         types = None
 
     try:
-        names = {name for name in filters['names']}
+        names = set(filters['names'])
     except KeyError:
         names = None
 

@@ -1,10 +1,3 @@
-def sorted_cards(cards):
-    return sorted(cards, key=lambda card: ('99' if card.type is None else
-                                           str(card.type.value).ljust(2, '0')) +
-                                          card.name.ljust(8, '0') +
-                                          str(card.id).rjust(8, '0'))
-
-
 def get_singular(name):
 
     if name[-3:] == 'ies':

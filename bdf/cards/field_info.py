@@ -1,4 +1,4 @@
-from nastranpy.bdf.cards.enums import Item, Set, Tag, Seq
+from nastranpy.bdf.cards.enums import Seq
 
 
 class FieldInfo(object):

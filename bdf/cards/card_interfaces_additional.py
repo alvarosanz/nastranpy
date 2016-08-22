@@ -1,5 +1,4 @@
 import numpy as np
-from nastranpy.bdf.cards.enums import Item, Seq, Tag
 from nastranpy.bdf.cards.coord_system import CoordSystem
 
 

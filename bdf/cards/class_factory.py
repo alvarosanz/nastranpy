@@ -1,5 +1,5 @@
 import numpy as np
-from nastranpy.bdf.cards.enums import Item, Set, Tag, Seq
+from nastranpy.bdf.cards.enums import Seq
 from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.set_card import SetCard
 from nastranpy.bdf.cards.coord_card import CoordCard
@@ -66,7 +66,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
         if field_info.seq_type is Seq.vector:
 
-            if field_info.type is Item.grid:
+            if field_info.type == 'grid':
 
                 def wrapped(self):
                     vector = self.fields[index]
@@ -204,13 +204,13 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
         return wrapped
 
-    if card_type in Set:
+    if card_type in ('mpc', 'spc', 'load'):
         cls_parents = (SetCard,)
-    elif card_type is Item.coord:
+    elif card_type == 'coord':
         cls_parents = (CoordCard,)
-    elif card_type is Item.elem:
+    elif card_type == 'elem':
         cls_parents = (ElemCard,)
-    elif card_type is Item.grid:
+    elif card_type == 'grid':
         cls_parents = (GridCard,)
     else:
         cls_parents = (Card,)
@@ -258,7 +258,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                         property(get_field_factory(index, field_info, alternate_name=True),
                                  set_field_factory(index, field_info, alternate_name=True)))
 
-        if card_type is Item.elem and not 'grids' in [x.name for x in card_scheme]:
+        if card_type == 'elem' and not 'grids' in [x.name for x in card_scheme]:
             setattr(cls, 'grids', property(get_grids_factory(card_scheme)))
 
     if card_name in card_interfaces_additional:

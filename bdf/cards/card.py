@@ -2,7 +2,7 @@ import numpy as np
 import logging
 from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.write_bdf import print_card
-from nastranpy.bdf.cards.enums import Item, Seq
+from nastranpy.bdf.cards.enums import Seq
 from nastranpy.bdf.cards.card_list import CardList
 from nastranpy.bdf.cards.card_set import CardSet
 from nastranpy.bdf.cards.field_info import FieldInfo
@@ -47,10 +47,10 @@ class Card(Observable):
                  'id: {}'.format(self.fields[1])]
 
         if self.type:
-            fields.append('type: {}'.format(self.type.name))
+            fields.append('type: {}'.format(self.type))
 
         if self.tag:
-            fields.append('tag: {}'.format(self.tag.name))
+            fields.append('tag: {}'.format(self.tag))
 
         if self.scheme:
             fields += ['{}: {}'.format(field_info.name, repr(field)) for
@@ -102,11 +102,11 @@ class Card(Observable):
 
     def cards(self, type=None):
         return (field for field, field_info in self._get_fields() if
-                isinstance(field, Card) and (type is None or field.type is type))
+                isinstance(field, Card) and (type is None or field.type == type))
 
     def dependent_cards(self, type=None):
         return (card for card in self.observers if
-                isinstance(card, Card) and (type is None or card.type is type))
+                isinstance(card, Card) and (type is None or card.type == type))
 
     def get_fields(self):
 
@@ -228,7 +228,7 @@ class Card(Observable):
                         field = None
                     else:
 
-                        if field_info.type is Item.grid and isinstance(subfields[0], Card):
+                        if field_info.type == 'grid' and isinstance(subfields[0], Card):
                             vector = [subfields[0], None, None]
                         else:
                             vector = [0.0, 0.0, 0.0]

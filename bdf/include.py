@@ -1,13 +1,13 @@
 from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.read_bdf import cards_in_file
-from nastranpy.bdf.misc import sorted_cards, get_plural, get_id_info
-from nastranpy.bdf.cards.enums import Item, Set
+from nastranpy.bdf.cards.card_interfaces import item_types, set_types, sorted_cards
+from nastranpy.bdf.misc import get_plural, get_id_info
 
 
 def iter_items_factory(card_type):
 
     def wrapped(self):
-        return (card for card in self.cards if card.type is card_type)
+        return (card for card in self.cards if card.type == card_type)
 
     return wrapped
 
@@ -43,7 +43,7 @@ class Include(Observable):
             self._file = value
 
     def get_id_info(self, card_type, detailed=False):
-        ids = {card.id for card in self.cards if card.type is card_type}
+        ids = {card.id for card in self.cards if card.type == card_type}
         return get_id_info(ids, detailed=detailed)
 
     def read(self, card_names=None):
@@ -93,5 +93,5 @@ class Include(Observable):
                 card.include = self
 
 
-for card_type in list(Item) + list(Set):
-    setattr(Include, get_plural(card_type.name), iter_items_factory(card_type))
+for card_type in list(item_types) + list(set_types):
+    setattr(Include, get_plural(card_type), iter_items_factory(card_type))

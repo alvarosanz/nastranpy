@@ -1,5 +1,4 @@
 import numpy as np
-from nastranpy.bdf.cards.enums import Coord
 from nastranpy.bdf.cards.coord_system import CoordSystem
 from nastranpy.bdf.cards.card import Card
 
@@ -33,8 +32,7 @@ class CoordCard(Card):
 
     def __init__(self, fields, large_field=False, free_field=False):
         super().__init__(fields, large_field=large_field, free_field=free_field)
-        char2type = {'R': Coord.rectangular, 'C': Coord.cylindrical, 'S': Coord.spherical}
-        self.coord_type = char2type[self.fields[0][-1]]
+        self.coord_type = self.fields[0][-1]
         self._A = None
         self._B = None
         self._C = None

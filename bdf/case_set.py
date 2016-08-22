@@ -13,10 +13,10 @@ class CaseSet(Observable):
         self.cards = set()
 
     def __repr__(self):
-        return "'{} set {}'".format(self.type.name.upper(), self.id)
+        return "'{} set {}'".format(self.type.upper(), self.id)
 
     def __str__(self):
-        return '{} set {}'.format(self.type.name.upper(), self.id)
+        return '{} set {}'.format(self.type.upper(), self.id)
 
     @property
     def id(self):

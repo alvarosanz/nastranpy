@@ -1,10 +1,9 @@
 import numpy as np
-from nastranpy.bdf.cards.enums import Coord
 
 
 class CoordSystem(object):
 
-    def __init__(self, a0, b0, c0, coord_type=Coord.rectangular, method=1):
+    def __init__(self, a0, b0, c0, coord_type='R', method=1):
         self.coord_type = coord_type
 
         if method == 1:
@@ -45,18 +44,18 @@ class CoordSystem(object):
 
         xyz = np.dot(xyz0, self._M.T)
 
-        if self.coord_type is Coord.cylindrical:
+        if self.coord_type == 'C':
             return np.array(cart2cyl(*xyz))
-        elif self.coord_type is Coord.spherical:
+        elif self.coord_type == 'S':
             return np.array(cart2sph(*xyz))
 
         return xyz
 
     def get_xyz0(self, xyz, is_vector=False):
 
-        if self.coord_type is Coord.cylindrical:
+        if self.coord_type == 'C':
             xyz = cyl2cart(*xyz)
-        elif self.coord_type is Coord.spherical:
+        elif self.coord_type == 'S':
             xyz = sph2cart(*xyz)
 
         if is_vector:

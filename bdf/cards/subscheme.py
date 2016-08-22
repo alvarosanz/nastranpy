@@ -37,7 +37,7 @@ class Subscheme(object):
                         field = None
                     else:
 
-                        if field_info.type is Item.grid and isinstance(field[0], Card):
+                        if field_info.type == 'grid' and isinstance(field[0], Card):
                             vector = [field[0], None, None]
                         else:
                             vector = [0.0, 0.0, 0.0]

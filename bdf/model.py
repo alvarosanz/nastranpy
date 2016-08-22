@@ -1,11 +1,10 @@
 import os
 import csv
 import logging
-from nastranpy.bdf.cards.enums import Item, Set, Tag, str2type, str2tag
-from nastranpy.bdf.cards.card_interfaces import card_factory
+from nastranpy.bdf.cards.card_interfaces import card_factory, item_types, set_types, sorted_cards
 from nastranpy.bdf.include import Include
 from nastranpy.bdf.case_set import CaseSet
-from nastranpy.bdf.misc import sorted_cards, get_plural, indent, get_id_info, humansize, CallCounted
+from nastranpy.bdf.misc import get_plural, indent, get_id_info, humansize, CallCounted
 from nastranpy.bdf.id_pattern import IdPattern
 from nastranpy.time_tools import timeit
 
@@ -53,8 +52,8 @@ class Model(object):
 
     def clear(self):
         """Clear the model."""
-        self.items = {item_type: dict() for item_type in Item}
-        self.sets = {set_type: dict() for set_type in Set}
+        self.items = {item_type: dict() for item_type in item_types}
+        self.sets = {set_type: dict() for set_type in set_types}
         self.unsupported_cards = set()
         self.warnings = 0
         self.errors = 0
@@ -63,10 +62,10 @@ class Model(object):
             include.clear()
 
         for item_type in self.items:
-            setattr(self, get_plural(item_type.name), self.items[item_type])
+            setattr(self, get_plural(item_type), self.items[item_type])
 
         for set_type in self.sets:
-            setattr(self, get_plural(set_type.name), self.sets[set_type])
+            setattr(self, get_plural(set_type), self.sets[set_type])
 
     def read(self, files, card_names=None):
         """
@@ -190,7 +189,7 @@ class Model(object):
 
     def _arrange_grids(self):
         resolved_cards = set()
-        unresolved_cards = set(self.cards_by_type([Item.grid, Item.coord]))
+        unresolved_cards = set(self.cards_by_type(['grid', 'coord']))
 
         while unresolved_cards:
             cards2resolve = set()
@@ -217,10 +216,10 @@ class Model(object):
 
                 if caller.type in self.items:
                     self._update_mapping(self.items[caller.type], caller, caller.id, value,
-                                         '{} ID already used!'.format(caller.type.name.upper()))
+                                         '{} ID already used!'.format(caller.type.upper()))
                 elif caller.type in self.sets:
                     self._update_mapping(self.sets[caller.type], caller, caller.id, value,
-                                         '{} ID already used!'.format(caller.type.name.upper()))
+                                         '{} ID already used!'.format(caller.type.upper()))
             elif key == 'new_include_name':
                 self._update_mapping(self.includes, caller, caller.file, value,
                                      'Include name already used!')
@@ -232,7 +231,7 @@ class Model(object):
                 mapping = self.items[value.type]
 
                 if value.id in mapping:
-                    raise ValueError('{} ID already used!'.format(value.type.name.upper()))
+                    raise ValueError('{} ID already used!'.format(value.type.upper()))
 
                 mapping[value.id] = value
 
@@ -268,19 +267,16 @@ class Model(object):
         >>> all_grids = [grid.id for grid in model.cards('grid')]
         """
 
-        if card_type:
-            card_type = str2type(card_type)
-
         for item_type in self.items:
 
-            if not card_type or card_type is item_type:
+            if not card_type or card_type == item_type:
 
                 for card in self.items[item_type].values():
                     yield card
 
         for set_type in self.sets:
 
-            if not card_type or card_type is set_type:
+            if not card_type or card_type == set_type:
 
                 for case_set in self.sets[set_type].values():
 
@@ -312,7 +308,6 @@ class Model(object):
         --------
         >>> grid_CP_ids = [grid.CP.id for grid in model.cards_by_id('grid', [34, 543453, 234233])]
         """
-        card_type = str2type(card_type)
 
         if card_type in self.items:
             return (self.items[card_type][card_id] for card_id in card_ids)
@@ -339,7 +334,6 @@ class Model(object):
         --------
         >>> grid_coords = [grid.xyz0 for grid in model.cards_by_id_pattern('grid', ['9', '34', '*', '*', '*', '*', '1-8'])]
         """
-        card_type = str2type(card_type)
         id_pattern = IdPattern(id_pattern)
         return (card for card in self.cards(card_type) if card.id in id_pattern)
 
@@ -364,7 +358,6 @@ class Model(object):
         --------
         >>> card_ids = [card.id for card in model.cards_by_type(['grid', 'elem'])]
         """
-        card_types = [str2type(card_type) for card_type in card_types]
 
         if includes:
             includes = [self.includes[include_name] for include_name in includes]
@@ -394,7 +387,6 @@ class Model(object):
         --------
         >>> elem_grids = [elem.grids for elem in model.cards_by_tag(['e1D', 'e2D'])]
         """
-        card_tags = [str2tag(card_tag) for card_tag in card_tags]
 
         if includes:
             includes = [self.includes[include_name] for include_name in includes]
@@ -476,7 +468,7 @@ class Model(object):
         --------
         >>> elems = [elem for elem in model.elems_by_prop(3400023)]
         """
-        return (card for card in self.props[PID].dependent_cards(Item.elem))
+        return (card for card in self.props[PID].dependent_cards('elem'))
 
     def props_by_mat(self, MID):
         """
@@ -496,7 +488,7 @@ class Model(object):
         --------
         >>> props = [prop for prop in model.props_by_mat(9400023)]
         """
-        return (card for card in self.mats[MID].dependent_cards(Item.prop))
+        return (card for card in self.mats[MID].dependent_cards('prop'))
 
     def info(self, print_to_screen=True):
         """
@@ -514,13 +506,13 @@ class Model(object):
         """
         info = list()
 
-        for item_type in Item:
-            info.append('{}: {}'.format(get_plural(item_type.name).title(), len(self.items[item_type])))
+        for item_type in item_types:
+            info.append('{}: {}'.format(get_plural(item_type).title(), len(self.items[item_type])))
 
         info.append('')
 
-        for set_type in Set:
-            info.append('{}: {}'.format(set_type.name.upper() + ' sets', len(self.sets[set_type])))
+        for set_type in set_types:
+            info.append('{}: {}'.format(set_type.upper() + ' sets', len(self.sets[set_type])))
 
         if self.unsupported_cards:
             info.append('\nUnsupported cards: {}\n'.format(len(self.unsupported_cards)))
@@ -644,8 +636,8 @@ class Model(object):
             csv_writer = csv.writer(f, lineterminator='\n')
             row = ['Include']
 
-            for item_type in Item:
-                item_type_name = get_plural(item_type.name).title()
+            for item_type in item_types:
+                item_type_name = get_plural(item_type).title()
                 row += [item_type_name,
                         '{}: id min'.format(item_type_name),
                         '{}: id max'.format(item_type_name)]
@@ -655,7 +647,7 @@ class Model(object):
             for include in self.includes.values():
                 row = [include.file]
 
-                for item_type in Item:
+                for item_type in item_types:
                     row += include.get_id_info(item_type)
 
                 csv_writer.writerow(row)
@@ -768,7 +760,6 @@ class Model(object):
 
         >>> model.renumber('grids', correlation={5001:9005001, 5002:9005002, 5003:9005003, 5004:9005004})
         """
-        card_type = str2type(card_type)
 
         if card_type in self.items:
             mapping = self.items[card_type]
@@ -836,7 +827,7 @@ class Model(object):
         for card in cards:
             card.include = include
 
-            if move_element_grids and card.type is Item.elem:
+            if move_element_grids and card.type == 'elem':
 
                 for grid in card.grids:
                     grid.include = include
