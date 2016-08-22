@@ -484,8 +484,8 @@ class Model(object):
 
         Returns
         -------
-        str
-            Brief model summary.
+        str or None
+            Brief model summary (None if `print_to_screen` is True).
         """
         info = list()
 
@@ -512,8 +512,8 @@ class Model(object):
 
         if print_to_screen:
             print(info)
-
-        return info
+        else:
+            return info
 
     def get_id_info(self, card_type, detailed=False):
         """
