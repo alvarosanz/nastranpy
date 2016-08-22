@@ -46,11 +46,11 @@ class Include(Observable):
         ids = {card.id for card in self.cards if card.type is card_type}
         return get_id_info(ids, detailed=detailed)
 
-    def read(self):
+    def read(self, card_names=None):
 
         with open(self._file) as f:
 
-            for card in cards_in_file(f, generic_cards=False):
+            for card in cards_in_file(f, card_names=card_names, generic_cards=False):
                 card.include = self
 
     def write(self):

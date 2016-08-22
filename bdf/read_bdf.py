@@ -37,6 +37,10 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
     --------
     >>> grids = [grid for grid in cards_in_file(f, ['GRID'])]
     """
+
+    if card_names:
+        card_names = set(card_names)
+
     card = list()
     comment = ''
 

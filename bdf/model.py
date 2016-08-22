@@ -21,10 +21,11 @@ class Model(object):
 
         Parameters
         ----------
-        path : str
+        path : str, optional
             Path of the model.
-        files : list of str
-            List of include filenames.
+        files : list of str, optional
+            List of include filenames (the default is None, which implies that no
+            files will be imported).
         link_cards : bool, optional
             Whether or not link cards among each other.
 
@@ -67,7 +68,7 @@ class Model(object):
         for set_type in self.sets:
             setattr(self, get_plural(set_type.name), self.sets[set_type])
 
-    def read(self, files):
+    def read(self, files, card_names=None):
         """
         Read include files.
 
@@ -75,6 +76,17 @@ class Model(object):
         ----------
         files : list of str
             List of include filenames.
+        card_names : list of str, optional
+            List of card names to read (the default is None, which implies that all
+            cards will be imported).
+
+        Example:
+        --------
+        Import all cards:
+        >>> model.read(files)
+
+        Import only coordinate system cards (much faster):
+        >>> model.read(files, ['CORD2R', 'CORD2C', 'CORD2S', 'CORD1R', 'CORD1C', 'CORD1S'])
         """
         self.log.warning.counter = 0
         self.log.error.counter = 0
@@ -89,7 +101,7 @@ class Model(object):
             include._subscribe(self)
             self.includes[include.file] = include
             self.log.info('Reading file {} of {}: {} ({})'.format(str(counter), len(includes), include.file, humansize(os.path.getsize(include.file))))
-            include.read()
+            include.read(card_names)
 
             for card in list(include.cards):
                 self._classify_card(card)
