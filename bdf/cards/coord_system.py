@@ -12,30 +12,38 @@ class CoordSystem(object):
         elif method == 2:
             self.compute_matrix2(a0, b0, c0)
 
+    @property
+    def origin(self):
+        return self._origin
+
+    @property
+    def M(self):
+        return self._M
+
     def compute_matrix1(self, a0, b0, c0):
-        self.origin = a0
+        self._origin = a0
         e2 = np.cross(b0 - a0, c0 - a0)
         e2 /= np.linalg.norm(e2)
         e1 = np.cross(e2, b0 - a0)
         e1 /= np.linalg.norm(e1)
         e3 = np.cross(e1, e2)
-        self.M = np.array([e1, e2, e3])
+        self._M = np.array([e1, e2, e3])
 
     def compute_matrix2(self, a0, b0, c0):
-        self.origin = a0
+        self._origin = a0
         e1 = b0 - a0
         e1 /= np.linalg.norm(e1)
         e3 = np.cross(e1, c0 - a0)
         e3 /= np.linalg.norm(e3)
         e2 = np.cross(e3, e1)
-        self.M = np.array([e1, e2, e3])
+        self._M = np.array([e1, e2, e3])
 
     def get_xyz(self, xyz0, is_vector=False):
 
         if not is_vector:
-            xyz0 = xyz0 - self.origin
+            xyz0 = xyz0 - self._origin
 
-        xyz = np.dot(xyz0, self.M.T)
+        xyz = np.dot(xyz0, self._M.T)
 
         if self.coord_type is Coord.cylindrical:
             return np.array(cart2cyl(*xyz))
@@ -52,9 +60,9 @@ class CoordSystem(object):
             xyz = sph2cart(*xyz)
 
         if is_vector:
-            return np.dot(xyz, self.M)
+            return np.dot(xyz, self._M)
         else:
-            return self.origin + np.dot(xyz, self.M)
+            return self._origin + np.dot(xyz, self._M)
 
 
 def cart2cyl(x, y, z):
