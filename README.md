@@ -25,4 +25,4 @@ model.read(files)
 ```
 
 ## Contact
-Álvaro Sanz Oriz – alvaro.sanz@aernnova.com
+Alvaro Sanz Oriz – alvaro.sanz@aernnova.com
