@@ -696,21 +696,56 @@ class Model(object):
         if list(card.dependent_cards()):
             raise ValueError('{} is referred by other card/s!'.format(repr(card)))
         else:
+            self._delete_card(card)
 
-            for linked_card in card.cards():
-                linked_card._unsubscribe(card)
+    def _delete_card(self, card):
 
-            if card.type in self.items:
-                del self.items[card.type][card.id]
-            elif card.type in self.sets:
-                self.sets[card.type][card.id].cards.remove(card)
+        for linked_card in card.cards():
+            linked_card._unsubscribe(card)
 
-                if not self.sets[card.type][card.id].cards:
-                    del self.sets[card.type][card.id]
-            else:
-                self.unsupported_cards.remove(card)
+        if card.type in self.items:
+            del self.items[card.type][card.id]
+        elif card.type in self.sets:
+            self.sets[card.type][card.id].cards.remove(card)
 
-            card.include = None
+            if not self.sets[card.type][card.id].cards:
+                del self.sets[card.type][card.id]
+        else:
+            self.unsupported_cards.remove(card)
+
+        card.include = None
+
+    def get_unused_cards(self, card_type):
+        """
+        Get cards not referred by other cards.
+
+        Parameters
+        ----------
+        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
+            Card type.
+
+        Returns
+        -------
+        set of Card
+            Cards not referred by other cards.
+        """
+        return {card for card in self.cards(card_type) if not card.dependent_cards()}
+
+    def delete_unused_cards(self, card_type):
+        """
+        Delete cards not referred by other cards.
+
+        Parameters
+        ----------
+        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
+            Card type.
+        """
+        unused_cards = self.get_unused_cards(card_type)
+
+        for card in unused_cards:
+            self._delete_card(card)
+
+        self.log.info("{} unused cards of type '{}' deleted".format(len(unused_cards), card_type))
 
     def renumber(self, card_type, cards=None, start=None, step=None,
                  id_pattern=None, correlation=None):

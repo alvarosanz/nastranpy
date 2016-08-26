@@ -81,7 +81,7 @@ Write card fields to a csv file:
 
 ```sh
 model.print_cards(model.cards_by_type(['grid'],
-                  ['BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf']))
+                                      ['BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf']))
 ```
 
 Get ID info for a given card type:
@@ -110,7 +110,6 @@ correlation = {
 }
 
 model.renumber('grid', correlation=correlation)
-model.write(['BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf'])
 ```
 
 Renumber cards by start id and step:
@@ -127,7 +126,6 @@ id_list = [
 
 model.renumber('grid', model.cards_by_id('grid', id_list),
                start=4703465, step=5)
-model.write(['BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf'])
 ```
 
 Renumber cards by an id pattern:
@@ -146,7 +144,6 @@ id_list = [
 
 model.renumber('grid', model.cards_by_id('grid', id_list),
                id_pattern=['9', '34', '*', '*', '*', '*', '1-8'])
-model.write(['BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf'])
 ```
 
 Extend element by steps:
