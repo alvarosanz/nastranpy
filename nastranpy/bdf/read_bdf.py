@@ -10,8 +10,8 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
 
     Parameters
     ----------
-    file : file object
-        File object.
+    file : str
+        Include file path.
     card_names : list of str, optional
         Card names to read. Other cards will be ignored (the default is None, which
         implies all cards will be readed).
@@ -44,113 +44,117 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
     card = list()
     comment = ''
 
-    for line in file:
-        if re.search('^ *\$', line):
-            comment += line
-        elif re.search('^[a-zA-Z]', line):
+    with open(file) as f:
 
-            if card:
+        for line in f:
+            if re.search('^ *\$', line):
+                comment += line
+            elif re.search('^[a-zA-Z]', line):
 
-                if is_free_field:
-                    card = get_fields_from_free_field_string(card)
+                if card:
 
-                card = process_fields(card, not raw_output)
+                    if is_free_field:
+                        card = get_fields_from_free_field_string(card)
 
-                if not raw_output:
+                    card = process_fields(card, not raw_output)
 
-                    if generic_cards:
-                        card = Card(card, large_field=is_large_field, free_field=is_free_field)
+                    if not raw_output:
+
+                        if generic_cards:
+                            card = Card(card, large_field=is_large_field, free_field=is_free_field)
+                        else:
+                            card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
+
+                        card.include = file
+                        card.comment = card_comment
+
+                    yield card
+
+                if ignore_comments:
+                    card_comment = ''
+                else:
+                    card_comment = comment
+
+                comment = ''
+                card = list()
+                fields_from_empty_lines = list()
+                card_name = line[:8].strip()
+                card_id = line[8:16].strip()
+                is_free_field = False
+                is_large_field = False
+                field_length = 8
+                n_fields = 8
+
+                if ',' in line[:8]: # Free-field format
+                    is_free_field = True
+                    card_name, card_id = line.split(',')[:2]
+
+                if card_name[-1] == '*': # Large-field format
+                    is_large_field = True
+                    field_length = 16
+                    n_fields = 4
+                    card_name = card_name[:-1]
+                    card_id = line[8:24].strip()
+
+                card_name = card_name.upper()
+
+                if not card_names or card_name in card_names:
+
+                    if only_ids:
+                        yield [card_name, int(card_id)]
+                        continue
+
+                    if is_free_field:
+                        card = line[:-1]
                     else:
-                        card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
+                        card = [card_name]
 
-                    card.comment = card_comment
+                        for i in range(n_fields):
+                            card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
 
-                yield card
+            elif card:
 
-            if ignore_comments:
-                card_comment = ''
-            else:
-                card_comment = comment
-
-            comment = ''
-            card = list()
-            fields_from_empty_lines = list()
-            card_name = line[:8].strip()
-            card_id = line[8:16].strip()
-            is_free_field = False
-            is_large_field = False
-            field_length = 8
-            n_fields = 8
-
-            if ',' in line[:8]: # Free-field format
-                is_free_field = True
-                card_name, card_id = line.split(',')[:2]
-
-            if card_name[-1] == '*': # Large-field format
-                is_large_field = True
-                field_length = 16
-                n_fields = 4
-                card_name = card_name[:-1]
-                card_id = line[8:24].strip()
-
-            card_name = card_name.upper()
-
-            if not card_names or card_name in card_names:
-
-                if only_ids:
-                    yield [card_name, int(card_id)]
+                if not line[:-1].strip():
+                    fields_from_empty_lines += ['' for i in range(8)]
                     continue
 
-                if is_free_field:
-                    card = line[:-1]
+                comment = ''
+
+                if line[0] == '*':
+                    is_large_field = True
+                    field_length = 16
+                    n_fields = 4
                 else:
-                    card = [card_name]
+                    field_length = 8
+                    n_fields = 8
+
+                if is_free_field:
+                    card += line[:-1]
+                else:
+                    card += fields_from_empty_lines
+                    fields_from_empty_lines = list()
 
                     for i in range(n_fields):
                         card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
 
-        elif card:
-
-            if not line[:-1].strip():
-                fields_from_empty_lines += ['' for i in range(8)]
-                continue
-
-            comment = ''
-
-            if line[0] == '*':
-                is_large_field = True
-                field_length = 16
-                n_fields = 4
-            else:
-                field_length = 8
-                n_fields = 8
+        if card:
 
             if is_free_field:
-                card += line[:-1]
-            else:
-                card += fields_from_empty_lines
-                fields_from_empty_lines = list()
+                card = get_fields_from_free_field_string(card)
 
-                for i in range(n_fields):
-                    card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
+            card = process_fields(card, not raw_output)
 
-    if card:
+            if not raw_output:
 
-        if is_free_field:
-            card = get_fields_from_free_field_string(card)
+                if generic_cards:
+                    card = Card(card, large_field=is_large_field, free_field=is_free_field)
+                else:
+                    card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
 
-        card = process_fields(card, not raw_output)
+                card.include = file
+                card.comment = card_comment
 
-        if not raw_output:
-
-            if generic_cards:
-                card = Card(card, large_field=is_large_field, free_field=is_free_field)
-            else:
-                card = card_factory.get_card(card, large_field=is_large_field, free_field=is_free_field)
-
-            card.comment = card_comment
-
-        yield card
+            yield card
 
 
 def get_fields_from_free_field_string(free_field_string):

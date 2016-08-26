@@ -33,7 +33,6 @@ class Padding(object):
                     except StopIteration:
                         break
 
-
                 if not write_field and (index < self.first_field and column == 1 or
                                         index >= self.first_field and column == self.first_column):
                     write_field = True

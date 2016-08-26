@@ -90,12 +90,20 @@ class Card(Observable):
         if not self._include is value:
 
             if self._include:
-                self._include.cards.remove(self)
+
+                try:
+                    self._include.cards.remove(self)
+                except AttributeError:
+                    pass
 
             self._include = value
 
             if self._include:
-                self._include.cards.add(self)
+
+                try:
+                    self._include.cards.add(self)
+                except AttributeError:
+                    pass
 
     def _update(self, caller, **kwargs):
         pass

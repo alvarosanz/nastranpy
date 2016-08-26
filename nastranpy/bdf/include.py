@@ -1,5 +1,4 @@
 from nastranpy.bdf.observable import Observable
-from nastranpy.bdf.read_bdf import cards_in_file
 from nastranpy.bdf.cards.card_interfaces import item_types, set_types, sorted_cards
 from nastranpy.bdf.misc import get_plural, get_id_info
 
@@ -45,13 +44,6 @@ class Include(Observable):
     def get_id_info(self, card_type, detailed=False):
         ids = {card.id for card in self.cards if card.type == card_type}
         return get_id_info(ids, detailed=detailed)
-
-    def read(self, card_names=None):
-
-        with open(self._file) as f:
-
-            for card in cards_in_file(f, card_names=card_names, generic_cards=False):
-                card.include = self
 
     def write(self):
 

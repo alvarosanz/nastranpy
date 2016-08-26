@@ -3,6 +3,7 @@ import csv
 import logging
 from nastranpy.bdf.cards.card_interfaces import card_factory, item_types, set_types, sorted_cards
 from nastranpy.bdf.include import Include
+from nastranpy.bdf.read_bdf import cards_in_file
 from nastranpy.bdf.case_set import CaseSet
 from nastranpy.bdf.misc import timeit, get_plural, indent, get_id_info, humansize, CallCounted
 from nastranpy.bdf.id_pattern import IdPattern
@@ -26,7 +27,6 @@ class Model(object):
         """
         self.path = path
         self._link_cards = link_cards
-        self.includes = dict()
         self.clear()
 
     @property
@@ -38,11 +38,9 @@ class Model(object):
         self.items = {item_type: dict() for item_type in item_types}
         self.sets = {set_type: dict() for set_type in set_types}
         self.unsupported_cards = set()
+        self.includes = dict()
         self.warnings = 0
         self.errors = 0
-
-        for include in self.includes.values():
-            include.clear()
 
         for item_type in self.items:
             setattr(self, get_plural(item_type), self.items[item_type])
@@ -50,6 +48,7 @@ class Model(object):
         for set_type in self.sets:
             setattr(self, get_plural(set_type), self.sets[set_type])
 
+    @timeit
     def read(self, files, card_names=None):
         """
         Read include files.
@@ -74,19 +73,19 @@ class Model(object):
         self.log.error.counter = 0
 
         os.chdir(self.path)
-        self.log.info('Model path: {}'.format(self.path))
-        includes = [Include(file) for file in files]
-        counter = 0
+        self.log.info('Reading files ...')
 
-        for include in includes:
-            counter += 1
-            include._subscribe(self)
-            self.includes[include.file] = include
-            self.log.info('Reading file {} of {}: {} ({})'.format(str(counter), len(includes), include.file, humansize(os.path.getsize(include.file))))
-            include.read(card_names)
+        for file in files:
 
-            for card in list(include.cards):
+            for card in cards_in_file(file, card_names=card_names, generic_cards=False):
                 self._classify_card(card)
+
+                if not card.include in self.includes:
+                    include = Include(card.include)
+                    include._subscribe(self)
+                    self.includes[include.file] = include
+
+                card.include = self.includes[card.include]
 
         self.log.info('All files readed succesfully!')
 
@@ -135,12 +134,9 @@ class Model(object):
 
         includes = [self.includes[include_name] for include_name in includes]
         os.chdir(self.path)
-        self.log.info('Model path: {}'.format(self.path))
-        counter = 0
+        self.log.info('Writting files ...')
 
         for include in includes:
-            counter += 1
-            self.log.info('Writting file {} of {}: {}'.format(str(counter), len(includes), include.file))
             include.write()
 
         self.log.info('All files written succesfully!')
@@ -154,8 +150,8 @@ class Model(object):
                 previous_card = self.items[card.type][card.id]
                 self.log.warning('Already existing card (the old one will be overwritten!)\n{}'.format(
                                     indent("\n<== Old card in '{}':\n{}\n\n==> New card in '{}':\n{}\n".format(
-                                                    previous_card.include.file, indent(previous_card.head(), 8),
-                                                    card.include.file, indent(card.head(), 8)))))
+                                                    previous_card.include, indent(previous_card.head(), 8),
+                                                    card.include, indent(card.head(), 8)))))
 
             self.items[card.type][card.id] = card
         elif card.type in self.sets:
