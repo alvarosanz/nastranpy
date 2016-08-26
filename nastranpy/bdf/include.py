@@ -1,6 +1,6 @@
 from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.cards.card_interfaces import item_types, set_types, sorted_cards
-from nastranpy.bdf.misc import get_plural, get_id_info
+from nastranpy.bdf.misc import get_plural, get_id_info, assure_path_exists
 
 
 def iter_items_factory(card_type):
@@ -46,6 +46,7 @@ class Include(Observable):
         return get_id_info(ids, detailed=detailed)
 
     def write(self):
+        assure_path_exists(self._file)
 
         with open(self._file, 'w') as f:
 

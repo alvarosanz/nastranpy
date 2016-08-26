@@ -1,3 +1,4 @@
+import os
 import time
 
 
@@ -11,6 +12,13 @@ def timeit(method):
         return result
 
     return timed
+
+
+def assure_path_exists(path):
+    dir = os.path.dirname(path)
+
+    if not os.path.exists(dir):
+            os.makedirs(dir)
 
 
 def get_singular(name):
