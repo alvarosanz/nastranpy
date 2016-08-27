@@ -10,9 +10,9 @@ from nastranpy.bdf.id_pattern import IdPattern
 
 
 class Model(object):
-    log = logging.getLogger('nastranpy')
-    log.warning = CallCounted(log.warning)
-    log.error = CallCounted(log.error)
+    _log = logging.getLogger('nastranpy')
+    _log.warning = CallCounted(_log.warning)
+    _log.error = CallCounted(_log.error)
 
     def __init__(self, path=None, link_cards=True):
         """
@@ -69,11 +69,11 @@ class Model(object):
         Import only coordinate system cards (much faster):
         >>> model.read(files, ['CORD2R', 'CORD2C', 'CORD2S', 'CORD1R', 'CORD1C', 'CORD1S'])
         """
-        self.log.warning.counter = 0
-        self.log.error.counter = 0
+        self._log.warning.counter = 0
+        self._log.error.counter = 0
 
         os.chdir(self.path)
-        self.log.info('Reading files ...')
+        self._log.info('Reading files ...')
 
         for file in files:
 
@@ -87,7 +87,7 @@ class Model(object):
 
                 card.include = self.includes[card.include]
 
-        self.log.info('All files readed succesfully!')
+        self._log.info('All files readed succesfully!')
 
         if self._link_cards:
             all_items = {card_type: self.items[card_type] if card_type in self.items else
@@ -96,7 +96,7 @@ class Model(object):
         else:
             all_items = None
 
-        self.log.info('Processing cards ...')
+        self._log.info('Processing cards ...')
 
         for card in self.cards():
             card._process_fields(all_items)
@@ -104,19 +104,19 @@ class Model(object):
         if self._link_cards:
             self._arrange_grids()
 
-        self.warnings += self.log.warning.counter
-        self.errors += self.log.error.counter
-        self.log.info('\n' + indent(self.info(print_to_screen=False)) + '\n')
+        self.warnings += self._log.warning.counter
+        self.errors += self._log.error.counter
+        self._log.info('\n' + indent(self.info(print_to_screen=False)) + '\n')
 
         if self.unsupported_cards:
-            self.log.warning('The following cards are not supported:\n{}'.format(indent(', '.join({card.name for card in self.unsupported_cards}))))
+            self._log.warning('The following cards are not supported:\n{}'.format(indent(', '.join({card.name for card in self.unsupported_cards}))))
 
-        if self.log.error.counter:
-            self.log.info("Cards processed with errors! (see 'model.log' for more details)")
-        elif self.log.warning.counter:
-            self.log.info("Cards processed with warnings! (see 'model.log' for more details)")
+        if self._log.error.counter:
+            self._log.info("Cards processed with errors! (see 'model.log' for more details)")
+        elif self._log.warning.counter:
+            self._log.info("Cards processed with warnings! (see 'model.log' for more details)")
         else:
-            self.log.info('Cards processed succesfully!')
+            self._log.info('Cards processed succesfully!')
 
     def write(self, includes=None):
         """
@@ -134,12 +134,12 @@ class Model(object):
 
         includes = [self.includes[include_name] for include_name in includes]
         os.chdir(self.path)
-        self.log.info('Writting files ...')
+        self._log.info('Writting files ...')
 
         for include in includes:
             include.write()
 
-        self.log.info('All files written succesfully!')
+        self._log.info('All files written succesfully!')
 
     def _classify_card(self, card):
 
@@ -148,7 +148,7 @@ class Model(object):
 
             if card.id in self.items[card.type]:
                 previous_card = self.items[card.type][card.id]
-                self.log.warning('Already existing card (the old one will be overwritten!)\n{}'.format(
+                self._log.warning('Already existing card (the old one will be overwritten!)\n{}'.format(
                                     indent("\n<== Old card in '{}':\n{}\n\n==> New card in '{}':\n{}\n".format(
                                                     previous_card.include, indent(previous_card.head(), 8),
                                                     card.include, indent(card.head(), 8)))))
@@ -179,7 +179,7 @@ class Model(object):
                     cards2resolve.add(card)
 
             for card in cards2resolve:
-                card.settle()
+                card._settle()
 
             if not cards2resolve:
                 break
@@ -672,7 +672,7 @@ class Model(object):
         card = card_factory.get_card(card, large_field=large_field, free_field=free_field)
 
         try:
-            card.settle()
+            card._settle()
         except AttributeError:
             pass
 
@@ -741,7 +741,7 @@ class Model(object):
         for card in unused_cards:
             self._delete_card(card)
 
-        self.log.info("{} unused cards of type '{}' deleted".format(len(unused_cards), card_type))
+        self._log.info("{} unused cards of type '{}' deleted".format(len(unused_cards), card_type))
 
     def renumber(self, card_type, cards=None, start=None, step=None,
                  id_pattern=None, correlation=None):

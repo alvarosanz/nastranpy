@@ -8,14 +8,14 @@ class ElemCard(Card):
         super().__init__(fields, large_field=large_field, free_field=free_field)
         self._coord = None
 
-    def settle(self):
+    def _settle(self):
         pass
 
     @property
     def coord(self):
 
         if not self._coord:
-            self.settle()
+            self._settle()
 
         return self._coord
 
@@ -27,7 +27,7 @@ class ElemCard(Card):
             if key == 'grid_changed':
 
                 if self._coord:
-                    self.settle()
+                    self._settle()
 
     def extend(self, steps=None, max_steps=10000, **kwargs):
 

@@ -11,16 +11,16 @@ from nastranpy.bdf.cards.field_info import FieldInfo
 class Card(Observable):
     type = None
     tag = None
-    scheme = None
-    optional_scheme = None
-    padding = None
-    log = logging.getLogger('nastranpy')
+    _scheme = None
+    _optional_scheme = None
+    _padding = None
+    _log = logging.getLogger('nastranpy')
 
     def __init__(self, fields, large_field=False, free_field=False):
         super().__init__()
 
-        if self.padding:
-            fields = self.padding.unpadded(fields)
+        if self._padding:
+            fields = self._padding.unpadded(fields)
 
         self.fields = [field if field != '' else None for field in fields]
 
@@ -52,9 +52,9 @@ class Card(Observable):
         if self.tag:
             fields.append('tag: {}'.format(self.tag))
 
-        if self.scheme:
+        if self._scheme:
             fields += ['{}: {}'.format(field_info.name, repr(field)) for
-                       field_info, field in zip(self.scheme[2:], self.fields[2:]) if
+                       field_info, field in zip(self._scheme[2:], self.fields[2:]) if
                        field_info.name]
         else:
             fields += [repr(field) for field in self.fields[2:]]
@@ -118,8 +118,8 @@ class Card(Observable):
 
     def get_fields(self):
 
-        if self.padding:
-            fields = ['' if field is None else field for field in self.padding.padded(self._get_fields())]
+        if self._padding:
+            fields = ['' if field is None else field for field in self._padding.padded(self._get_fields())]
         else:
             fields = ['' if field is None else field for field, field_info in self._get_fields()]
 
@@ -172,7 +172,7 @@ class Card(Observable):
             try:
                 return items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
             except KeyError:
-                self.log.error('{} refers to a non-available card (type: {}, ID: {})'.format(repr(self), field_info.type.name, f))
+                self._log.error('{} refers to a non-available card (type: {}, ID: {})'.format(repr(self), field_info.type.name, f))
                 return f
 
         def get_subscheme(subscheme, items):
@@ -266,26 +266,26 @@ class Card(Observable):
 
             return field
 
-        if self.scheme:
+        if self._scheme:
             fields = list(reversed(self.fields))
             self.fields = [None if field_info.optional else get_field(field_info, items) for
-                           field_info in self.scheme]
+                           field_info in self._scheme]
 
-            if self.optional_scheme:
+            if self._optional_scheme:
 
                 while fields:
                     field = fields.pop()
 
-                    if field in self.optional_scheme:
-                        index, optional_field_info = self.optional_scheme[field]
+                    if field in self._optional_scheme:
+                        index, optional_field_info = self._optional_scheme[field]
                         self.fields[index] = get_field(optional_field_info, items)
 
         self._is_processed = True
 
     def _split(self):
 
-        if self.scheme and self.scheme[-1].other_card:
-            index = len(self.scheme) - 1
+        if self._scheme and self._scheme[-1].other_card:
+            index = len(self._scheme) - 1
 
             if len(self.fields) > index and self.fields[index]:
                 new_card = self._new_card([self.fields[0]] + self.fields[index:])
@@ -294,9 +294,9 @@ class Card(Observable):
 
     def _get_fields(self):
 
-        if self.scheme and self._is_processed:
+        if self._scheme and self._is_processed:
 
-            for field, field_info in zip(self.fields, self.scheme):
+            for field, field_info in zip(self.fields, self._scheme):
 
                 if field_info.optional:
 

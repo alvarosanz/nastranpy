@@ -74,28 +74,28 @@ def shell_settle_factory(card_name):
 def bar_axis(self):
 
     if not self._coord:
-        self.settle()
+        self._settle()
 
     return self._area
 
 def shell_normal(self):
 
     if not self._coord:
-        self.settle()
+        self._settle()
 
     return self._normal
 
 def shell_area(self):
 
     if not self._coord:
-        self.settle()
+        self._settle()
 
     return self._area
 
 def shell_centroid(self):
 
     if not self._coord:
-        self.settle()
+        self._settle()
 
     return self._centroid
 
@@ -113,30 +113,30 @@ card_interfaces_additional = {
     # Materials
     # Elements
     'CROD': {
-        'settle': (bar_settle_factory('CROD'), False),
+        '_settle': (bar_settle_factory('CROD'), False),
         'axis': (bar_axis, True),
     },
     'CONROD': {
-        'settle': (bar_settle_factory('CONROD'), False),
+        '_settle': (bar_settle_factory('CONROD'), False),
         'axis': (bar_axis, True),
     },
     'CBAR': {
-        'settle': (bar_settle_factory('CBAR'), False),
+        '_settle': (bar_settle_factory('CBAR'), False),
         'axis': (bar_axis, True),
     },
     'CBEAM': {
-        'settle': (bar_settle_factory('CBEAM'), False),
+        '_settle': (bar_settle_factory('CBEAM'), False),
         'axis': (bar_axis, True),
     },
     'CQUAD4': {
-        'settle': (shell_settle_factory('CQUAD4'), False),
+        '_settle': (shell_settle_factory('CQUAD4'), False),
         'normal': (shell_normal, True),
         'area': (shell_area, True),
         'centroid': (shell_centroid, True),
         'thickness': (shell_thickness, True),
     },
     'CTRIA3': {
-        'settle': (shell_settle_factory('CTRIA3'), False),
+        '_settle': (shell_settle_factory('CTRIA3'), False),
         'normal': (shell_normal, True),
         'area': (shell_area, True),
         'centroid': (shell_centroid, True),

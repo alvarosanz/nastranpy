@@ -43,7 +43,7 @@ class CoordCard(Card):
     def __str__(self):
         return super().__str__()
 
-    def settle(self):
+    def _settle(self):
 
         try:
 
@@ -62,7 +62,7 @@ class CoordCard(Card):
                     self._B = cp.get_xyz0(self._B)
                     self._C = cp.get_xyz0(self._C)
         except AttributeError:
-            self.log.error('Cannot settle {}'.format(repr(self)))
+            self._log.error('Cannot settle {}'.format(repr(self)))
 
         self.compute_matrix(self._A, self._B, self._C)
 
@@ -142,7 +142,7 @@ class CoordCard(Card):
         for key, value in kwargs.items():
 
             if key == 'grid_changed':
-                self.settle()
+                self._settle()
 
     @update_fields
     def get_fields(self):

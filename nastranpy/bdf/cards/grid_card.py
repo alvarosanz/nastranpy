@@ -25,7 +25,7 @@ class GridCard(Card):
     def __str__(self):
         return super().__str__()
 
-    def settle(self):
+    def _settle(self):
 
         if self._xyz0 is None:
             cp = self.fields[2]
@@ -35,7 +35,7 @@ class GridCard(Card):
                 try:
                     self._xyz0 = cp.get_xyz0(self.fields[3])
                 except AttributeError:
-                    self.log.error('Cannot settle {}'.format(repr(self)))
+                    self._log.error('Cannot settle {}'.format(repr(self)))
             else:
                 self._xyz0 = self.fields[3]
 

@@ -218,14 +218,14 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
     cls = type(card_name, cls_parents, {})
     cls.type = card_type
     cls.tag = card_tag
-    cls.scheme = card_scheme
-    cls.optional_scheme = {field_info.name: (index, field_info) for
+    cls._scheme = card_scheme
+    cls._optional_scheme = {field_info.name: (index, field_info) for
                            index, field_info in enumerate(card_scheme) if
                            field_info.optional}
-    cls.padding = card_padding
+    cls._padding = card_padding
 
-    if cls.optional_scheme and not cls.padding:
-        cls.padding = Padding()
+    if cls._optional_scheme and not cls._padding:
+        cls._padding = Padding()
 
     if card_scheme:
 
