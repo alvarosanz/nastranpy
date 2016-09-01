@@ -172,7 +172,7 @@ class Card(Observable):
             try:
                 return items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
             except KeyError:
-                self._log.error('{} refers to a non-available card (type: {}, ID: {})'.format(repr(self), field_info.type.name, f))
+                self._log.error('{} refers to a non-available card (type: {}, ID: {})'.format(repr(self), field_info.type, f))
                 return f
 
         def get_subscheme(subscheme, items):
