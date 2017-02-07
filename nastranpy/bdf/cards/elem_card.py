@@ -30,7 +30,27 @@ class ElemCard(Card):
                     self._settle()
 
     def extend(self, steps=None, max_steps=10000, **kwargs):
+        """
+        Get adjacent elements.
 
+        Parameters
+        ----------
+        steps : int, optional
+            Number of steps to extend. If not supplied, then all the elements attached
+            to the element will be returned.
+        max_steps : int, optional
+            Maximum number of steps to extend (only when `steps` is not supplied).
+
+        Returns
+        -------
+        set of Card
+            Elements attached to the element.
+
+        Examples
+        --------
+        >>> element.extend(1)
+        >>> element.extend(tags=['e2D'])
+        """
         if not steps:
             steps = max_steps
 

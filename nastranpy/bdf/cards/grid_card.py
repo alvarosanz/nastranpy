@@ -1,5 +1,6 @@
 import numpy as np
 from nastranpy.bdf.cards.card import Card
+from nastranpy.bdf.cards.filters import filter_factory
 
 
 def update_fields(func):
@@ -77,3 +78,48 @@ class GridCard(Card):
     @update_fields
     def get_fields(self):
         return super().get_fields()
+
+    def extend(self, steps=None, max_steps=10000, **kwargs):
+        """
+        Get adjacent elements.
+
+        Parameters
+        ----------
+        steps : int, optional
+            Number of steps to extend. If not supplied, then all the elements attached
+            to the element will be returned.
+        max_steps : int, optional
+            Maximum number of steps to extend (only when `steps` is not supplied).
+
+        Returns
+        -------
+        set of Card
+            Elements attached to the grid.
+
+        Examples
+        --------
+        >>> grid.extend(1)
+        >>> grid.extend(tags=['e2D'])
+        """
+        if not steps:
+            steps = max_steps
+
+        steps -= 1
+
+        if kwargs:
+            filter_element = filter_factory(kwargs)
+
+        elms = {elm for elm in self.elems if not kwargs or filter_element(elm)}
+        elms_diff = elms
+
+        for i in range(steps):
+            elms_ext = {elm_ext for elm in elms_diff for grid in elm.grids for
+                        elm_ext in grid.elems if not kwargs or filter_element(elm_ext)}
+            elms_diff = elms_ext - elms
+
+            if elms_diff:
+                elms |= elms_diff
+            else:
+                break
+
+        return elms
