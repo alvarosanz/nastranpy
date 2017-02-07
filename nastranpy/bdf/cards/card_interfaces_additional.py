@@ -41,7 +41,7 @@ def shell_settle_factory(card_name):
             self._coord = CoordSystem(G1, G2, G3, method=2)
             self._normal = self._coord.M[2]
             self._area = 0.5 * np.linalg.norm(G2 - G1) * np.dot(G3 - G1, self._coord.M[1])
-            self._centroid = (G1 + G2 + G3) / self._area
+            self._centroid = (G1 + G2 + G3) / 3
 
     elif card_name == 'CQUAD4':
 
@@ -67,7 +67,7 @@ def shell_settle_factory(card_name):
             area1 = 0.5 * diagonal * np.dot(G1 - G2, np.cross(self._coord.M[2], v2))
             area2 = 0.5 * diagonal * np.dot(G4 - G1, np.cross(self._coord.M[2], v2))
             self._area = area1 + area2
-            self._centroid = (area1 * (G1 + G2 + G3) + area2 * (G1 + G3 + G4)) / self._area
+            self._centroid = (area1 * (G1 + G2 + G3) / 3 + area2 * (G1 + G3 + G4) / 3) / self._area
 
     return wrapped
 
