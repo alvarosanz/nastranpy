@@ -32,6 +32,7 @@ def bar_settle_factory(card_name):
 
     return wrapped
 
+
 def shell_settle_factory(card_name):
 
     if card_name == 'CTRIA3':
@@ -71,12 +72,97 @@ def shell_settle_factory(card_name):
 
     return wrapped
 
+
+def prop_area_factory(card_name):
+
+    if card_name in ('PROD', 'PBAR', 'PBEAM'):
+
+        def wrapped(self):
+            return self.A
+
+    elif card_name == 'PBARL':
+
+        def wrapped(self):
+            section_type = self.TYPE
+            data = self.data
+
+            if section_type == 'ROD':
+                area = np.pi * data[0] ** 2
+            elif section_type == 'TUBE':
+                area = np.pi * (data[0] ** 2 - data[1] ** 2)
+            elif section_type == 'TUBE2':
+                area = np.pi * (data[0] ** 2 - (data[0] - data[1]) ** 2)
+            elif section_type == 'I':
+                area = data[2] * data[5] + (data[0] - data[5] - data[4]) * data[3] + data[1] * data[4]
+            elif section_type == 'CHAN':
+                area = data[1] * data[2] + 2 * data[3] * (data[0] - data[2])
+            elif section_type == 'T':
+                area = data[0] * data[2] + data[3] * (data[1] - data[2])
+            elif section_type == 'BOX':
+                area = 0.0
+            elif section_type == 'BAR':
+                area = data[0] * data[1]
+            elif section_type == 'CROSS':
+                area = 0.0
+            elif section_type == 'H':
+                area = 0.0
+            elif section_type == 'T1':
+                area = 0.0
+            elif section_type == 'I1':
+                area = 0.0
+            elif section_type == 'CHAN1':
+                area = 0.0
+            elif section_type == 'Z':
+                area = 0.0
+            elif section_type == 'CHAN2':
+                area = 0.0
+            elif section_type == 'I1':
+                area = 0.0
+            elif section_type == 'T2':
+                area = 0.0
+            elif section_type == 'BOX1':
+                area = 0.0
+            elif section_type == 'HEXA':
+                area = 0.0
+            elif section_type == 'HAT':
+                area = 0.0
+            elif section_type == 'HAT1':
+                area = 0.0
+            elif section_type == 'DBOX':
+                area = 0.0
+
+            return area
+
+    elif card_name == 'PBEAML':
+
+        def wrapped(self):
+            return 0.0
+
+    return wrapped
+
+
+def bar_area_factory(card_name):
+
+    if card_name == 'CONROD':
+
+        def wrapped(self):
+            return self.A
+
+    else:
+
+        def wrapped(self):
+            return self.prop.area
+
+    return wrapped
+
+
 def bar_axis(self):
 
     if not self._coord:
         self._settle()
 
     return self._area
+
 
 def shell_normal(self):
 
@@ -85,12 +171,14 @@ def shell_normal(self):
 
     return self._normal
 
+
 def shell_area(self):
 
     if not self._coord:
         self._settle()
 
     return self._area
+
 
 def shell_centroid(self):
 
@@ -99,11 +187,14 @@ def shell_centroid(self):
 
     return self._centroid
 
+
 def shell_thickness(self):
     return self.prop.thickness
 
+
 def PCOMP_thickness(self):
     return sum((ply.T for ply in self.plies))
+
 
 card_interfaces_additional = {
 #   card_name: {
@@ -115,18 +206,22 @@ card_interfaces_additional = {
     'CROD': {
         '_settle': (bar_settle_factory('CROD'), False),
         'axis': (bar_axis, True),
+        'area': (bar_area_factory('CROD'), True),
     },
     'CONROD': {
         '_settle': (bar_settle_factory('CONROD'), False),
         'axis': (bar_axis, True),
+        'area': (bar_area_factory('CONROD'), True),
     },
     'CBAR': {
         '_settle': (bar_settle_factory('CBAR'), False),
         'axis': (bar_axis, True),
+        'area': (bar_area_factory('CBAR'), True),
     },
     'CBEAM': {
         '_settle': (bar_settle_factory('CBEAM'), False),
         'axis': (bar_axis, True),
+        'area': (bar_area_factory('CBEAM'), True),
     },
     'CQUAD4': {
         '_settle': (shell_settle_factory('CQUAD4'), False),
@@ -143,6 +238,21 @@ card_interfaces_additional = {
         'thickness': (shell_thickness, True),
     },
     # Properties
+    'PROD': {
+        'area': (prop_area_factory('PROD'), True),
+    },
+    'PBAR': {
+        'area': (prop_area_factory('PBAR'), True),
+    },
+    'PBEAM': {
+        'area': (prop_area_factory('PBEAM'), True),
+    },
+    'PBARL': {
+        'area': (prop_area_factory('PBARL'), True),
+    },
+    'PBEAML': {
+        'area': (prop_area_factory('PBEAML'), True),
+    },
     'PCOMP': {
         'thickness': (PCOMP_thickness, True),
     },
