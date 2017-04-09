@@ -1,8 +1,8 @@
 import os
 import csv
 import logging
-from nastranpy.bdf.cards.card_interfaces import card_factory, item_types, set_types, sorted_cards
-from nastranpy.bdf.include import Include
+from nastranpy.bdf.cards.card_interfaces import item_types, set_types, sorted_cards
+from nastranpy.bdf.cards.card_factory import card_factory
 from nastranpy.bdf.read_bdf import cards_in_file
 from nastranpy.bdf.case_set import CaseSet
 from nastranpy.bdf.misc import timeit, get_plural, indent, get_id_info, humansize, CallCounted
@@ -38,7 +38,6 @@ class Model(object):
         self.items = {item_type: dict() for item_type in item_types}
         self.sets = {set_type: dict() for set_type in set_types}
         self.unsupported_cards = set()
-        self.includes = dict()
         self.warnings = 0
         self.errors = 0
 
@@ -72,37 +71,38 @@ class Model(object):
         self._log.warning.counter = 0
         self._log.error.counter = 0
 
+        if not self.path:
+            model_path = min({os.path.dirname(file) for file in files}, key=len)
+            assert all(file.startswith(model_path) for file in files), 'All include files must have a common parent path!'
+            self.path = model_path
+            files = [file.replace(self.path, '')[1:] for file in files]
+
         os.chdir(self.path)
         self._log.info('Reading files ...')
 
         for file in files:
+            self._classify_card(card_factory.get_card(['INCLUDE', file]))
 
             for card in cards_in_file(file, card_names=card_names, generic_cards=False):
                 self._classify_card(card)
 
-                if not card.include in self.includes:
-                    include = Include(card.include)
-                    include._subscribe(self)
-                    self.includes[include.file] = include
-
-                card.include = self.includes[card.include]
-
         self._log.info('All files readed succesfully!')
+
+        self._log.info('Processing cards ...')
 
         if self._link_cards:
             all_items = {card_type: self.items[card_type] if card_type in self.items else
                          self.sets[card_type] for
                          card_type in list(self.items) + list(self.sets)}
-        else:
-            all_items = None
 
-        self._log.info('Processing cards ...')
+            for card in self.cards():
+                card._process_fields(all_items)
 
-        for card in self.cards():
-            card._process_fields(all_items)
-
-        if self._link_cards:
             self._arrange_grids()
+        else:
+
+            for card in self.cards():
+                card._process_fields(None)
 
         self.warnings += self._log.warning.counter
         self.errors += self._log.error.counter
@@ -130,7 +130,7 @@ class Model(object):
         """
 
         if not includes:
-            includes = self.includes.values()
+            includes = self.includes
 
         includes = [self.includes[include_name] for include_name in includes]
         os.chdir(self.path)
@@ -142,6 +142,9 @@ class Model(object):
         self._log.info('All files written succesfully!')
 
     def _classify_card(self, card):
+
+        if card.include:
+            card.include = self.includes[card.include]
 
         if card.type in self.items:
             card._subscribe(self)
@@ -175,7 +178,7 @@ class Model(object):
 
             for card in unresolved_cards:
 
-                if all((linked_card in resolved_cards for linked_card in card.cards())):
+                if all((parent_card in resolved_cards for parent_card in card.parent_cards())):
                     cards2resolve.add(card)
 
             for card in cards2resolve:
@@ -447,7 +450,7 @@ class Model(object):
         --------
         >>> elems = [elem for elem in model.elems_by_prop(3400023)]
         """
-        return (card for card in self.props[PID].dependent_cards('elem'))
+        return (card for card in self.props[PID].child_cards('elem'))
 
     def props_by_mat(self, MID):
         """
@@ -467,7 +470,7 @@ class Model(object):
         --------
         >>> props = [prop for prop in model.props_by_mat(9400023)]
         """
-        return (card for card in self.mats[MID].dependent_cards('prop'))
+        return (card for card in self.mats[MID].child_cards('prop'))
 
     def info(self, print_to_screen=True):
         """
@@ -485,7 +488,7 @@ class Model(object):
         """
         info = list()
 
-        for item_type in item_types:
+        for item_type in (item_type for item_type in item_types if item_type != 'include'):
             info.append('{}: {}'.format(get_plural(item_type).title(), len(self.items[item_type])))
 
         info.append('')
@@ -615,7 +618,8 @@ class Model(object):
             csv_writer = csv.writer(f, lineterminator='\n')
             row = ['Include']
 
-            for item_type in item_types:
+            for item_type in (item_type for item_type in item_types if
+                              item_type != 'include'):
                 item_type_name = get_plural(item_type).title()
                 row += [item_type_name,
                         '{}: id min'.format(item_type_name),
@@ -626,7 +630,8 @@ class Model(object):
             for include in self.includes.values():
                 row = [include.file]
 
-                for item_type in item_types:
+                for item_type in (item_type for item_type in item_types if
+                                  item_type != 'include'):
                     row += include.get_id_info(item_type)
 
                 csv_writer.writerow(row)
@@ -689,15 +694,15 @@ class Model(object):
             Card to be deleted.
         """
 
-        if list(card.dependent_cards()):
+        if list(card.child_cards()):
             raise ValueError('{} is referred by other card/s!'.format(repr(card)))
         else:
             self._delete_card(card)
 
     def _delete_card(self, card):
 
-        for linked_card in card.cards():
-            linked_card._unsubscribe(card)
+        for parent_card in card.parent_cards():
+            parent_card._unsubscribe(card)
 
         if card.type in self.items:
             del self.items[card.type][card.id]
@@ -725,7 +730,7 @@ class Model(object):
         set of Card
             Cards not referred by other cards.
         """
-        return {card for card in self.cards(card_type) if not card.dependent_cards()}
+        return {card for card in self.cards(card_type) if not card.child_cards()}
 
     def delete_unused_cards(self, card_type):
         """

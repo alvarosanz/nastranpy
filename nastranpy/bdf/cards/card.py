@@ -62,7 +62,7 @@ class Card(Observable):
         return '{{{}}}'.format(', '.join(fields))
 
     def __contains__(self, value):
-        return value in self.cards()
+        return value in self.parent_cards()
 
     @property
     def name(self):
@@ -108,11 +108,11 @@ class Card(Observable):
     def _update(self, caller, **kwargs):
         pass
 
-    def cards(self, type=None):
+    def parent_cards(self, type=None):
         return (field for field, field_info in self._get_fields() if
                 isinstance(field, Card) and (type is None or field.type == type))
 
-    def dependent_cards(self, type=None):
+    def child_cards(self, type=None):
         return (card for card in self.observers if
                 isinstance(card, Card) and (type is None or card.type == type))
 

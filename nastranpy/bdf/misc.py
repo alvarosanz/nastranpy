@@ -17,8 +17,8 @@ def timeit(method):
 def assure_path_exists(path):
     dir = os.path.dirname(path)
 
-    if not os.path.exists(dir):
-            os.makedirs(dir)
+    if dir and not os.path.exists(dir):
+        os.makedirs(dir)
 
 
 def get_singular(name):

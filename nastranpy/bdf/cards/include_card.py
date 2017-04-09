@@ -1,4 +1,4 @@
-from nastranpy.bdf.observable import Observable
+from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.card_interfaces import item_types, set_types, sorted_cards
 from nastranpy.bdf.misc import get_plural, get_id_info, assure_path_exists
 
@@ -11,11 +11,12 @@ def iter_items_factory(card_type):
     return wrapped
 
 
-class Include(Observable):
+class IncludeCard(Card):
 
-    def __init__(self, file=None):
-        super().__init__()
-        self._file = file
+    def __init__(self, fields, large_field=False, free_field=False):
+        fields[1] = fields[1].replace("'", "")
+        super().__init__(fields, large_field=large_field, free_field=free_field)
+        self._file = fields[1]
         self.id_pattern = None
         self.clear()
 
@@ -40,6 +41,7 @@ class Include(Observable):
             self.changed = True
             self._notify(new_include_name=value)
             self._file = value
+            self.fields[1] = value
 
     def get_id_info(self, card_type, detailed=False):
         ids = {card.id for card in self.cards if card.type == card_type}
@@ -60,16 +62,16 @@ class Include(Observable):
         self.commentted_cards.clear()
 
     def is_self_contained(self):
-        return all((linked_card in self.cards or
-                    linked_card in self.commentted_cards) for
-                    card in self.cards for linked_card in card.cards())
+        return all((parent_card in self.cards or
+                    parent_card in self.commentted_cards) for
+                    card in self.cards for parent_card in card.parent_cards())
 
     def make_self_contained(self, move_cards=False):
         cards = self.cards.copy()
         cards_diff = cards
 
         for i in range(10):
-            cards_ext = {linked_card for card in cards_diff for linked_card in card.cards()}
+            cards_ext = {parent_card for card in cards_diff for parent_card in card.parent_cards()}
             cards_diff = cards_ext - cards
 
             if cards_diff:
@@ -87,4 +89,4 @@ class Include(Observable):
 
 
 for card_type in list(item_types) + list(set_types):
-    setattr(Include, get_plural(card_type), iter_items_factory(card_type))
+    setattr(IncludeCard, get_plural(card_type), iter_items_factory(card_type))

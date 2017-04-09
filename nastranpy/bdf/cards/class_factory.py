@@ -5,8 +5,10 @@ from nastranpy.bdf.cards.set_card import SetCard
 from nastranpy.bdf.cards.coord_card import CoordCard
 from nastranpy.bdf.cards.elem_card import ElemCard
 from nastranpy.bdf.cards.grid_card import GridCard
+from nastranpy.bdf.cards.include_card import IncludeCard
 from nastranpy.bdf.cards.subscheme import Subscheme
 from nastranpy.bdf.cards.padding import Padding
+from nastranpy.bdf.cards.card_interfaces import card_interfaces
 from nastranpy.bdf.cards.card_interfaces_additional import card_interfaces_additional
 from nastranpy.bdf.misc import get_singular
 
@@ -212,6 +214,8 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
         cls_parents = (ElemCard,)
     elif card_type == 'grid':
         cls_parents = (GridCard,)
+    elif card_type == 'include':
+        cls_parents = (IncludeCard,)
     else:
         cls_parents = (Card,)
 
@@ -219,9 +223,12 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
     cls.type = card_type
     cls.tag = card_tag
     cls._scheme = card_scheme
-    cls._optional_scheme = {field_info.name: (index, field_info) for
-                           index, field_info in enumerate(card_scheme) if
-                           field_info.optional}
+
+    if card_scheme:
+        cls._optional_scheme = {field_info.name: (index, field_info) for
+                               index, field_info in enumerate(card_scheme) if
+                               field_info.optional}
+
     cls._padding = card_padding
 
     if cls._optional_scheme and not cls._padding:
@@ -271,3 +278,6 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
                 setattr(cls, method_name, function)
 
     return cls
+
+
+card_classes = {card_name: class_factory(*card_interface) for card_name, card_interface in card_interfaces.items()}
