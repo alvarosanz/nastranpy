@@ -93,3 +93,6 @@ class CardList(object):
                 pass
 
         self._cards.clear()
+
+    def index(self, value):
+        return self._cards.index(value)

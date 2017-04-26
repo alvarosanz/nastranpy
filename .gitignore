@@ -87,3 +87,7 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Sublime Text project settings
+*.sublime-project
+*.sublime-workspace

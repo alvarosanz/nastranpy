@@ -196,6 +196,14 @@ def PCOMP_thickness(self):
     return sum((ply.T for ply in self.plies))
 
 
+def get_nearby_grids(self, grid):
+    index = self.grids.index(grid)
+    n_grids = len(self.grids)
+    index_prev = (index - 1) % n_grids
+    index_next = (index + 1) % n_grids
+    return (self.grids[index_prev], self.grids[index_next])
+
+
 card_interfaces_additional = {
 #   card_name: {
 #       method_name: (function, is_property),
@@ -229,6 +237,7 @@ card_interfaces_additional = {
         'area': (shell_area, True),
         'centroid': (shell_centroid, True),
         'thickness': (shell_thickness, True),
+        'get_nearby_grids': (get_nearby_grids, False),
     },
     'CTRIA3': {
         '_settle': (shell_settle_factory('CTRIA3'), False),
@@ -236,6 +245,7 @@ card_interfaces_additional = {
         'area': (shell_area, True),
         'centroid': (shell_centroid, True),
         'thickness': (shell_thickness, True),
+        'get_nearby_grids': (get_nearby_grids, False),
     },
     # Properties
     'PROD': {
