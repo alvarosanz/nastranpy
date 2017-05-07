@@ -26,15 +26,14 @@ class Padding(object):
                 if write_field:
 
                     try:
-                        field, field_info = next(fields)
+                        field, field_info, is_optional_flag = next(fields)
 
-                        if field_info:
-                            write_field = not field_info.optional_flag
+                        if is_optional_flag:
+                            write_field = False
                     except StopIteration:
                         break
 
-                if not write_field and (index < self.first_field and column == 1 or
-                                        index >= self.first_field and column == self.first_column):
+                if not write_field and column == self.first_column:
                     write_field = True
 
                 if write_field:

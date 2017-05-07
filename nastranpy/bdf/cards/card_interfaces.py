@@ -1,10 +1,34 @@
 from nastranpy.bdf.cards.padding import Padding
-from nastranpy.bdf.cards.field_info import FieldInfo as F
 
+
+class FieldInfo(object):
+
+    def __init__(self, name=None, type=None,
+                 seq_type=None, length=None, subscheme=None,
+                 alternate_name=None, update_grid=False,
+                 optional=False, other_card=False):
+        self.name = name
+        self.type = type
+        self.seq_type = seq_type
+
+        if self.seq_type == 'vector':
+            self.length = 3
+        else:
+            self.length = length
+
+        self.subscheme = subscheme
+        self.alternate_name = alternate_name
+        self.update_grid = update_grid
+        self.optional = optional
+        self.other_card = other_card
+
+
+F = FieldInfo
 
 item_types = ('include', 'coord', 'elem', 'grid', 'mat', 'prop')
 set_types = ('mpc', 'spc', 'load')
 tag_types = ('e1D', 'e2D', 'e3D', 'eRigid', 'eSpring', 'eMass', 'ePlot')
+seq_types = ('vector', 'list', 'set')
 
 item_type_sorting = {item_type: str(i).ljust(2, '0') for i, item_type in
                      enumerate(item_types + set_types)}

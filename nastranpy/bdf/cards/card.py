@@ -4,7 +4,6 @@ from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.write_bdf import print_card
 from nastranpy.bdf.cards.card_list import CardList
 from nastranpy.bdf.cards.card_set import CardSet
-from nastranpy.bdf.cards.field_info import FieldInfo
 
 
 class Card(Observable):
@@ -108,7 +107,7 @@ class Card(Observable):
         pass
 
     def parent_cards(self, type=None):
-        return (field for field, field_info in self._get_fields() if
+        return (field for field, _, _ in self._get_fields() if
                 isinstance(field, Card) and (type is None or field.type == type))
 
     def child_cards(self, type=None):
@@ -120,7 +119,7 @@ class Card(Observable):
         if self._padding:
             fields = ['' if field is None else field for field in self._padding.padded(self._get_fields())]
         else:
-            fields = ['' if field is None else field for field, field_info in self._get_fields()]
+            fields = ['' if field is None else field for field, _, _ in self._get_fields()]
 
         for index, field in enumerate(fields):
 
@@ -302,7 +301,7 @@ class Card(Observable):
                     if field is None:
                         continue
                     else:
-                        yield field_info.name, FieldInfo(field_info.name, optional_flag=True)
+                        yield field_info.name, field_info, True
 
                 if field_info.seq_type:
 
@@ -318,11 +317,11 @@ class Card(Observable):
                                 if subsubfield_info.seq_type:
 
                                     for subsubsubfield in subsubfield:
-                                        yield subsubsubfield, subsubfield_info
+                                        yield subsubsubfield, subsubfield_info, False
                                 else:
-                                    yield subsubfield, subsubfield_info
+                                    yield subsubfield, subsubfield_info, False
                         else:
-                            yield subfield, field_info
+                            yield subfield, field_info, False
 
                 elif field_info.subscheme:
 
@@ -331,16 +330,16 @@ class Card(Observable):
                         if subfield_info.seq_type:
 
                             for subsubfield in subfield:
-                                yield subsubfield, subfield_info
+                                yield subsubfield, subfield_info, False
                         else:
-                            yield subfield, subfield_info
+                            yield subfield, subfield_info, False
                 else:
-                    yield field, field_info
+                    yield field, field_info, False
 
         else:
 
             for field in self.fields:
-                yield field, None
+                yield field, None, False
 
     def _new_card(self, fields):
         new_card = type(self)(fields, large_field=self.large_field, free_field=self.free_field)
