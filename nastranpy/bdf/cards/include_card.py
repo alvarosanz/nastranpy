@@ -43,6 +43,10 @@ class IncludeCard(Card):
             self._file = value
             self.fields[1] = value
 
+    def print(self, *args, **kwargs):
+        return "INCLUDE '{}'".format('\n         '.join([self._file[i:i+62] for i in
+                                                         range(0, len(self._file), 62)]))
+
     def get_id_info(self, card_type, detailed=False):
         ids = {card.id for card in self.cards if card.type == card_type}
         return get_id_info(ids, detailed=detailed)
