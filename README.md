@@ -20,12 +20,9 @@ Import the model:
 ```sh
 import nastranpy
 
-model = nastranpy.Model(path='/Users/Alvaro/nastran_model')
-model.read(['BulkData/0000additional_cards_from_launcher.bdf',
-            'BulkData/3C0733_Sp1_act_v05.bdf',
-            'BulkData/3C0734_Sp1_Hng_outbd_v04.bdf',
-            'BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf',
-            'Loads/3C0748_air_pressure_loads.bdf'])
+
+model = nastranpy.Model()
+model.read(['/Users/Alvaro/nastran_model_input/nastran_launcher.dat'])
 ```
 
 Export the model:
@@ -33,6 +30,18 @@ Export the model:
 ```sh
 model.path = '/Users/Alvaro/nastran_model_modified'
 model.write()
+```
+
+Get help of a given method:
+
+```sh
+help(model.cards_by_id)
+```
+
+Get help of a given card:
+
+```sh
+nastranpy.card_help('GRID')
 ```
 
 Get a single card by its id:
@@ -43,9 +52,9 @@ grid_card = model.grids[5462]
 elem_card = model.elems[234232]
 prop_card = model.props[2342]
 mat_card = model.mats[4232]
-mpc_card = model.mpcs[325234]
-spc_card = model.spcs[234232]
-load_card = model.loads[234232]
+mpc_card_set = model.mpcs[325234]
+spc_card_set = model.spcs[234232]
+load_card_set = model.loads[234232]
 ```
 
 Get cards by different ways:
