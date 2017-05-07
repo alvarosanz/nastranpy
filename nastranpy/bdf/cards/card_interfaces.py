@@ -170,9 +170,9 @@ card_interfaces = {
                [F(), F(), F('sets', 'spc', seq_type='set')]),
     # LOADs
     'FORCE': ('FORCE', 'load',
-              [F(), F(), F('G', 'grid'), F('CID', 'coord'), F('F'), F('n', seq_type='vector')]),
+              [F(), F(), F('G', 'grid', alternate_name='grid'), F('CID', 'coord', alternate_name='coord'), F('_scale_factor'), F('_vector', seq_type='vector')]),
     'MOMENT': ('MOMENT', 'load',
-               [F(), F(), F('G', 'grid'), F('CID', 'coord'), F('M'), F('n', seq_type='vector')]),
+               [F(), F(), F('G', 'grid', alternate_name='grid'), F('CID', 'coord', alternate_name='coord'), F('_scale_factor'), F('_vector', seq_type='vector')]),
     'PLOAD4': ('PLOAD4', 'load',
                [F(), F(), F('elem', 'elem'), F('P1'), F('P2'), F('P3'), F('P4'), F('G1', 'grid'), F('G3', 'grid', alternate_name='G4'),
                 F('CID', 'coord'), F('n', seq_type='vector'), F('SORL'), F('LDIR')]),

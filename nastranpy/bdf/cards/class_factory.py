@@ -5,6 +5,7 @@ from nastranpy.bdf.cards.coord_card import CoordCard
 from nastranpy.bdf.cards.elem_card import ElemCard
 from nastranpy.bdf.cards.grid_card import GridCard
 from nastranpy.bdf.cards.include_card import IncludeCard
+from nastranpy.bdf.cards.vector_card import VectorCard
 from nastranpy.bdf.cards.subscheme import Subscheme
 from nastranpy.bdf.cards.padding import Padding
 from nastranpy.bdf.cards.card_interfaces import card_interfaces
@@ -205,7 +206,9 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
         return wrapped
 
-    if card_type in ('mpc', 'spc', 'load'):
+    if card_name in ('FORCE', 'MOMENT'):
+        cls_parents = (SetCard, VectorCard,)
+    elif card_type in ('mpc', 'spc', 'load'):
         cls_parents = (SetCard,)
     elif card_type == 'coord':
         cls_parents = (CoordCard,)
