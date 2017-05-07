@@ -53,7 +53,7 @@ class Card(Observable):
         if self._scheme:
             fields += ['{}: {}'.format(field_info.name, repr(field)) for
                        field_info, field in zip(self._scheme[2:], self.fields[2:]) if
-                       field_info.name]
+                       field_info.name and field_info.name[0] != '_']
         else:
             fields += [repr(field) for field in self.fields[2:]]
 
