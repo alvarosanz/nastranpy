@@ -1,5 +1,4 @@
 import numpy as np
-from nastranpy.bdf.cards.enums import Seq
 from nastranpy.bdf.cards.card import Card
 from nastranpy.bdf.cards.set_card import SetCard
 from nastranpy.bdf.cards.coord_card import CoordCard
@@ -66,7 +65,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
     def get_field_factory(index, field_info, alternate_name=False):
 
-        if field_info.seq_type is Seq.vector:
+        if field_info.seq_type == 'vector':
 
             if field_info.type == 'grid':
 
@@ -109,7 +108,7 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
             if field_info.seq_type:
 
-                if field_info.seq_type is Seq.vector:
+                if field_info.seq_type == 'vector':
 
                     def wrapped(self, value):
                         old_value = self.fields[index]
@@ -199,9 +198,9 @@ def class_factory(card_name, card_type, card_scheme=None, card_tag=None, card_pa
 
             subscheme = field_info.subscheme(args, self)
 
-            if field_info.seq_type is Seq.list:
+            if field_info.seq_type == 'list':
                 self.fields[index].append(subscheme)
-            elif field_info.seq_type is Seq.set:
+            elif field_info.seq_type == 'set':
                 self.fields[index].add(subscheme)
 
         return wrapped

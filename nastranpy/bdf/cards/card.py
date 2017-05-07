@@ -2,7 +2,6 @@ import numpy as np
 import logging
 from nastranpy.bdf.observable import Observable
 from nastranpy.bdf.write_bdf import print_card
-from nastranpy.bdf.cards.enums import Seq
 from nastranpy.bdf.cards.card_list import CardList
 from nastranpy.bdf.cards.card_set import CardSet
 from nastranpy.bdf.cards.field_info import FieldInfo
@@ -216,21 +215,21 @@ class Card(Observable):
                         field_info.length is None and isinstance(fields[-1], (float, str))):
                         break
 
-                if field_info.seq_type is Seq.list:
+                if field_info.seq_type == 'list':
 
                     if field_info.type:
                         field = CardList(self, cards=subfields, update_grid=field_info.update_grid)
                     else:
                         field = list(subfields)
 
-                elif field_info.seq_type is Seq.set:
+                elif field_info.seq_type == 'set':
 
                     if field_info.type:
                         field = CardSet(self, cards=subfields, update_grid=field_info.update_grid)
                     else:
                         field = set(subfields)
 
-                elif field_info.seq_type is Seq.vector:
+                elif field_info.seq_type == 'vector':
 
                     if not subfields or all(subfield is None for subfield in subfields):
                         field = None
@@ -307,7 +306,7 @@ class Card(Observable):
 
                 if field_info.seq_type:
 
-                    if field_info.seq_type is Seq.vector and field is None:
+                    if field_info.seq_type == 'vector' and field is None:
                         field = [None, None, None]
 
                     for subfield in field:

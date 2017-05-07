@@ -1,4 +1,3 @@
-from nastranpy.bdf.cards.enums import Seq
 from nastranpy.bdf.cards.card_list import CardList
 from nastranpy.bdf.cards.card_set import CardSet
 
@@ -17,21 +16,21 @@ class Subscheme(object):
 
             if field_info.seq_type:
 
-                if field_info.seq_type is Seq.list:
+                if field_info.seq_type == 'list':
 
                     if field_info.type:
                         field = CardList(card, cards=field, update_grid=field_info.update_grid)
                     else:
                         field = list(field)
 
-                elif field_info.seq_type is Seq.set:
+                elif field_info.seq_type == 'set':
 
                     if field_info.type:
                         field = CardSet(card, cards=field, update_grid=field_info.update_grid)
                     else:
                         field = set(field)
 
-                elif field_info.seq_type is Seq.vector:
+                elif field_info.seq_type == 'vector':
 
                     if not field or all(subfield is None for subfield in field):
                         field = None

@@ -1,6 +1,3 @@
-from nastranpy.bdf.cards.enums import Seq
-
-
 class FieldInfo(object):
 
     def __init__(self, name=None, type=None,
@@ -12,7 +9,7 @@ class FieldInfo(object):
         self.type = type
         self.seq_type = seq_type
 
-        if self.seq_type is Seq.vector:
+        if self.seq_type == 'vector':
             self.length = 3
         else:
             self.length = length
