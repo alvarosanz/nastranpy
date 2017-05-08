@@ -33,7 +33,6 @@ class Card(Observable):
         self.free_field = free_field
         self.is_commented = False
         self.comment = ''
-        self.print_comment = True
         self._include = None
         self._is_processed = False
 
@@ -133,7 +132,7 @@ class Card(Observable):
 
         return fields[:last_index + 1]
 
-    def print(self, large_field=None, free_field=None, comment=None, is_commented=None, comment_symbol='$: '):
+    def print(self, large_field=None, free_field=None, print_comment=False, is_commented=None, comment_symbol='$: '):
 
         if large_field is None:
             large_field = self.large_field
@@ -141,12 +140,10 @@ class Card(Observable):
         if free_field is None:
             free_field = self.free_field
 
-        if comment is None:
-
-            if self.print_comment:
-                comment = self.comment
-            else:
-                comment = ''
+        if print_comment:
+            comment = self.comment
+        else:
+            comment = ''
 
         if is_commented is None:
             is_commented = self.is_commented
@@ -345,7 +342,6 @@ class Card(Observable):
         new_card = type(self)(fields, large_field=self.large_field, free_field=self.free_field)
         new_card.is_commented = self.is_commented
         new_card.comment = self.comment
-        new_card.print_comment = self.print_comment
         new_card.include = self.include
         new_card.observers = self.observers.copy()
         new_card.changed = True
