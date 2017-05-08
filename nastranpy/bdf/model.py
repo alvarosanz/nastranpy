@@ -472,6 +472,11 @@ class Model(object):
         """
         return (card for card in self.mats[MID].child_cards('prop'))
 
+    @property
+    def log_path(self):
+        return [log_handler for log_handler in self._log.handlers if
+                log_handler._name == 'model_log_file'][0].baseFilename
+
     def info(self, print_to_screen=True):
         """
         Get a brief model summary.
