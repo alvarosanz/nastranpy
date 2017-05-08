@@ -174,7 +174,7 @@ card_interfaces = {
     'MOMENT': ('MOMENT', 'load',
                [F(), F(), F('G', 'grid', alternate_name='grid'), F('CID', 'coord', alternate_name='coord'), F('_scale_factor'), F('_vector', seq_type='vector')]),
     'PLOAD4': ('PLOAD4', 'load',
-               [F(), F(), F('elem', 'elem'), F('P1'), F('P2'), F('P3'), F('P4'), F('G1', 'grid'), F('G3', 'grid', alternate_name='G4'),
+               [F(), F(), F('EID1', 'elem', alternate_name='elem'), F('P1'), F('P2'), F('P3'), F('P4'), F(), F('EID2', 'elem'),
                 F('CID', 'coord'), F('n', seq_type='vector'), F('SORL'), F('LDIR')]),
     # Other
     'INCLUDE': ('INCLUDE', 'include'),
