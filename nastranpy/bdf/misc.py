@@ -1,17 +1,19 @@
 import os
 import time
+from functools import wraps
 
 
-def timeit(method):
+def timeit(func):
 
-    def timed(*args, **kw):
+    @wraps(func)
+    def wrapped(*args, **kw):
         ts = time.time()
-        result = method(*args, **kw)
+        result = func(*args, **kw)
         te = time.time()
         print('{0:2.1f} sec'.format(te - ts))
         return result
 
-    return timed
+    return wrapped
 
 
 def assure_path_exists(path):
