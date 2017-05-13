@@ -83,7 +83,8 @@ class Model(object):
         for file in files:
             self._classify_card(card_factory.get_card(['INCLUDE', file]))
 
-            for card in cards_in_file(file, card_names=card_names, generic_cards=False):
+            for card in cards_in_file(file, card_names=card_names, generic_cards=False,
+                                      logger=self._log):
                 self._classify_card(card)
 
         self._log.info('All files readed succesfully!')
@@ -507,6 +508,7 @@ class Model(object):
 
         info.append('\nIncludes: {}'.format(len(self.includes)))
         info.append('\nModel path: {}'.format(self.path))
+        info.append('\nModel log: {}'.format(self.log_path))
 
         if self.warnings or self.errors:
             info.append('\nWarnings: {}'.format(self.warnings))

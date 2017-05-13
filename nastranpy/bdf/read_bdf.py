@@ -1,10 +1,11 @@
+import os
 import re
 from nastranpy.bdf.cards.card_factory import card_factory
 from nastranpy.bdf.cards.card import Card
 
 
 def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignore_comments=False,
-                  generic_cards=True):
+                  generic_cards=True, logger=None):
     """
     Get cards in file.
 
@@ -22,6 +23,9 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
     ignore_comments : bool, optional
         Whether or not to ignore the comments in the file.
     generic_cards : bool, optional
+        Whether or not to return a generic Card or the corresponding card object
+        (i.e. GRID card).
+    logger : Logger Object
 
     Yields
     -------
@@ -77,9 +81,19 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
 
                             if card.name == 'INCLUDE':
 
-                                for card_in_file in cards_in_file(card.fields[1], card_names, raw_output,
-                                                                  only_ids, ignore_comments, generic_cards):
-                                    yield card_in_file
+                                try:
+
+                                    for card_in_file in cards_in_file(os.path.join(os.path.dirname(file), card.fields[1]),
+                                                                      card_names, raw_output, only_ids, ignore_comments,
+                                                                      generic_cards, logger):
+                                        yield card_in_file
+
+                                except FileNotFoundError:
+
+                                    if logger:
+                                        logger.warning("No such file: '{}'".format(card.fields[1]))
+                                    else:
+                                        raise
 
                     if ignore_comments:
                         card_comment = ''
@@ -181,9 +195,19 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
 
                 if card.name == 'INCLUDE':
 
-                    for card_in_file in cards_in_file(card.fields[1], card_names, raw_output,
-                                                      only_ids, ignore_comments, generic_cards):
-                        yield card_in_file
+                    try:
+
+                        for card_in_file in cards_in_file(os.path.join(os.path.dirname(file), card.fields[1]),
+                                                          card_names, raw_output, only_ids, ignore_comments,
+                                                          generic_cards, logger):
+                            yield card_in_file
+
+                    except FileNotFoundError:
+
+                        if logger:
+                            logger.warning("No such file: '{}'".format(card.fields[1]))
+                        else:
+                            raise
 
 
 def get_fields_from_free_field_string(free_field_string):
