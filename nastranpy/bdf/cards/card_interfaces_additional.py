@@ -161,7 +161,7 @@ def bar_axis(self):
     if not self._coord:
         self._settle()
 
-    return self._area
+    return self._axis
 
 
 def shell_normal(self):
