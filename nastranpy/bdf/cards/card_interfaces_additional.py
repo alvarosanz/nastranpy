@@ -99,37 +99,35 @@ def prop_area_factory(card_name):
             elif section_type == 'T':
                 area = data[0] * data[2] + data[3] * (data[1] - data[2])
             elif section_type == 'BOX':
-                area = 0.0
+                area = data[0] * data[1] - (data[0] - 2 * data[3]) * (data[1] - 2 * data[2])
             elif section_type == 'BAR':
                 area = data[0] * data[1]
             elif section_type == 'CROSS':
-                area = 0.0
+                area = data[1] * data[2] + data[0] * data[3]
             elif section_type == 'H':
-                area = 0.0
+                area = data[1] * data[2] + data[0] * data[3]
             elif section_type == 'T1':
-                area = 0.0
+                area = data[0] * data[2] + data[1] * data[3]
             elif section_type == 'I1':
-                area = 0.0
+                area = data[1] * data[3] + data[0] * (data[3] - data[2])
             elif section_type == 'CHAN1':
-                area = 0.0
+                area = data[1] * data[3] + data[0] * (data[3] - data[2])
             elif section_type == 'Z':
-                area = 0.0
+                area = data[1] * data[3] + data[0] * (data[3] - data[2])
             elif section_type == 'CHAN2':
-                area = 0.0
-            elif section_type == 'I1':
-                area = 0.0
+                area = 2 * data[0] * data[2] + data[1] * (data[3] - 2 * data[0])
             elif section_type == 'T2':
-                area = 0.0
+                area = data[0] * data[2] + data[3] * (data[1] - data[2])
             elif section_type == 'BOX1':
-                area = 0.0
+                area = data[0] * (data[2] + data[3]) + (data[1] - data[2] - data[3]) * (data[4] + data[5])
             elif section_type == 'HEXA':
-                area = 0.0
+                area = data[2] * (data[1] - data[0])
             elif section_type == 'HAT':
-                area = 0.0
+                area = 2 * data[1] + (data[3] + data[0]) + data[1] * (data[2] - 2 * data[1])
             elif section_type == 'HAT1':
-                area = 0.0
+                area = data[0] * (data[3] + data[4]) + 2 * data[3] * (data[1] - data[3] - data[4])
             elif section_type == 'DBOX':
-                area = 0.0
+                area = None
 
             return area
 
