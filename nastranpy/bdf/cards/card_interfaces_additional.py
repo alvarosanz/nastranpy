@@ -29,6 +29,7 @@ def bar_settle_factory(card_name):
 
         self._coord = CoordSystem(G1, G2, G1 + v, method=2)
         self._axis = self._coord.M[0]
+        self._centroid = (G1 + G2) / 2
 
     return wrapped
 
@@ -178,7 +179,7 @@ def shell_area(self):
     return self._area
 
 
-def shell_centroid(self):
+def centroid(self):
 
     if not self._coord:
         self._settle()
@@ -213,27 +214,31 @@ card_interfaces_additional = {
         '_settle': (bar_settle_factory('CROD'), False),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CROD'), True),
+        'centroid': (centroid, True),
     },
     'CONROD': {
         '_settle': (bar_settle_factory('CONROD'), False),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CONROD'), True),
+        'centroid': (centroid, True),
     },
     'CBAR': {
         '_settle': (bar_settle_factory('CBAR'), False),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CBAR'), True),
+        'centroid': (centroid, True),
     },
     'CBEAM': {
         '_settle': (bar_settle_factory('CBEAM'), False),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CBEAM'), True),
+        'centroid': (centroid, True),
     },
     'CQUAD4': {
         '_settle': (shell_settle_factory('CQUAD4'), False),
         'normal': (shell_normal, True),
         'area': (shell_area, True),
-        'centroid': (shell_centroid, True),
+        'centroid': (centroid, True),
         'thickness': (shell_thickness, True),
         'get_nearby_grids': (get_nearby_grids, False),
     },
@@ -241,7 +246,7 @@ card_interfaces_additional = {
         '_settle': (shell_settle_factory('CTRIA3'), False),
         'normal': (shell_normal, True),
         'area': (shell_area, True),
-        'centroid': (shell_centroid, True),
+        'centroid': (centroid, True),
         'thickness': (shell_thickness, True),
         'get_nearby_grids': (get_nearby_grids, False),
     },
