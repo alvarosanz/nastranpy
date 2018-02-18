@@ -172,7 +172,7 @@ class Model(object):
 
     def _arrange_grids(self):
         resolved_cards = set()
-        unresolved_cards = set(self.cards_by_type(['grid', 'coord']))
+        unresolved_cards = set(self._cards(['grid', 'coord']))
 
         while unresolved_cards:
             cards2resolve = set()
@@ -229,14 +229,27 @@ class Model(object):
 
         mapping[new_key] = mapping.pop(old_key)
 
-    def cards(self, card_type=None):
+    def cards(self, card_filters=None, card_ids=None, includes=None):
         """
-        Get cards of the specified type.
+        Get cards by specifying different queries.
 
         Parameters
         ----------
-        card_type : {None, 'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}, optional
-            Card type (the default is None, which implies all model cards are returned).
+        card_filters : str or list of str, optional
+            Any combination of the following options are available (the default is None,
+            which implies all model cards are considered):
+
+            Card types: 'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc' or 'load'
+            Card tags: 'e1D', 'e2D', 'e3D', 'eRigid', 'eSpring', 'eMass' or 'ePlot'
+            Card names: 'GRID', 'CBAR', 'CORD1R', 'CQUAD4', 'PSHELL', etc ...
+
+        card_ids : list of int (or list of str), optional
+            List of card ids (or pattern of the id digits). The default is None,
+            which implies all model cards are considered.
+        includes : str or list of str, optional
+            Include filename/s (the default is None, which implies all model cards
+            are considered).
+
 
         Yields
         -------
@@ -245,233 +258,107 @@ class Model(object):
 
         Examples
         --------
-        >>> all_cards = [card for card in model.cards()]
+        Get grids by ids:
+        >>> grids = [grid for grid in model.cards('grid', [34, 543453, 234233])]
 
-        >>> all_grids = [grid.id for grid in model.cards('grid')]
+        Get elements by an ID pattern:
+        >>> elems = [elem for elem in model.cards('elem', ['9', '34', '*', '*', '*', '*', '1-8'])]
+
+        Get all CQUAD4 and CTRIA cards:
+        >>> elems = [elem for elem in model.cards(['CQUAD4', 'CTRIA3']]
+
+        Get all shell element cards in a set includes:
+        >>> elems = [elem for elem in model.cards('e2D', includes=['3C0734_Sp1_Hng_outbd_v04.bdf',
+                                                                   'SMM3v2_S541700_Wing-Box_V16.2_08.bdf'])]
         """
+        card_types = None
+        card_tags = None
+        card_names = None
+
+        if card_filters:
+
+            if isinstance(card_filters, str):
+                card_filters = [card_filters]
+
+            card_types = {card_type for card_type in card_filters if
+                          card_type in self.items or card_type in self.sets}
+            card_tags = {card_tag for card_tag in card_filters if
+                         card_tag in card_factory.tags2types}
+            card_names = {card_name for card_name in card_filters if
+                          card_name in card_factory.names2types}
+            card_types |= {card_factory.tags2types[card_tag] for card_tag in card_tags}
+            card_types |= {card_factory.names2types[card_name] for card_name in card_names}
+
+        by_ids = False
+
+        if card_ids:
+
+            if not isinstance(card_ids, str) and isinstance(card_ids[0], str):
+                card_ids = IdPattern(card_ids)
+            elif len(card_types) == 1:
+                card_type = card_types.pop()
+
+                if card_type in self.items:
+                    yield from (self.items[card_type][card_id] for card_id in card_ids)
+                elif card_type in self.sets:
+                    yield from (card for card_id in card_ids for card in self.sets[card_type][card_id].cards)
+
+                return
+            else:
+                card_ids = set(card_ids)
+                by_ids = True
+
+        if includes:
+
+            yield from (card for include in includes for card in self.includes[include].cards if
+                        (not card_types or card.type in card_types) and
+                        (not card_tags or card.tag in card_tags) and
+                        (not card_names or card.name in card_names) and
+                        (not card_ids or card.id in card_ids))
+
+        else:
+
+            if by_ids:
+                yield from (card for card in self._cards(card_types, card_ids) if
+                            (not card_tags or card.tag in card_tags) and
+                            (not card_names or card.name in card_names))
+
+            else:
+                yield from (card for card in self._cards(card_types) if
+                            (not card_tags or card.tag in card_tags) and
+                            (not card_names or card.name in card_names) and
+                            (not card_ids or card.id in card_ids))
+
+    def _cards(self, card_types=None, card_ids=None):
 
         for item_type in self.items:
 
-            if not card_type or card_type == item_type:
+            if not card_types or item_type in card_types:
 
-                for card in self.items[item_type].values():
-                    yield card
+                if card_ids:
+
+                    for card_id in card_ids:
+                        yield self.items[item_type][card_id]
+
+                else:
+                    yield from self.items[item_type].values()
 
         for set_type in self.sets:
 
-            if not card_type or card_type == set_type:
+            if not card_types or set_type in card_types:
 
-                for case_set in self.sets[set_type].values():
+                if card_ids:
 
-                    for card in case_set.cards:
-                        yield card
+                    for card_id in card_ids:
+                        yield from self.sets[set_type][card_id].cards
 
-        if not card_type:
+                else:
 
-            for card in self.unsupported_cards:
-                yield card
+                    for case_set in self.sets[set_type].values():
+                        yield from case_set.cards
 
-    def cards_by_id(self, card_type, card_ids):
-        """
-        Get cards by specifying the ids.
-
-        Parameters
-        ----------
-        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
-            Card type.
-        card_ids : list of int
-            List of card ids.
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> grid_CP_ids = [grid.CP.id for grid in model.cards_by_id('grid', [34, 543453, 234233])]
-        """
-
-        if card_type in self.items:
-            return (self.items[card_type][card_id] for card_id in card_ids)
-        elif card_type in self.sets:
-            return (card for card_id in card_ids for card in self.sets[card_type][card_id].cards)
-
-    def cards_by_id_pattern(self, card_type, id_pattern):
-        """
-        Get cards by specifying an id pattern.
-
-        Parameters
-        ----------
-        card_type : {'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc', 'load'}
-            Card type.
-        id_pattern : list of str
-            Pattern of the id digits.
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> grid_coords = [grid.xyz0 for grid in model.cards_by_id_pattern('grid', ['9', '34', '*', '*', '*', '*', '1-8'])]
-        """
-        id_pattern = IdPattern(id_pattern)
-        return (card for card in self.cards(card_type) if card.id in id_pattern)
-
-    def cards_by_type(self, card_types, includes=None):
-        """
-        Return an iterator of cards by specifying the type.
-
-        Parameters
-        ----------
-        card_types : list of str
-            Card types ('coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc' or 'load').
-        includes : list of str, optional
-            Include filenames (the default is None, which implies all model cards of
-            the specified types are returned).
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> card_ids = [card.id for card in model.cards_by_type(['grid', 'elem'])]
-        """
-
-        if includes:
-            includes = [self.includes[include_name] for include_name in includes]
-            return (card for include in includes for card in include.cards if
-                    card.type in card_types)
-        else:
-            return (card for card_type in card_types for card in self.cards(card_type))
-
-    def cards_by_tag(self, card_tags, includes=None):
-        """
-        Get cards by specifying the tag.
-
-        Parameters
-        ----------
-        card_tags : list of str
-            Card tags ('e1D', 'e2D', 'e3D', 'eRigid', 'eSpring', 'eMass' or 'ePlot').
-        includes : list of str, optional
-            Include filenames (the default is None, which implies all model cards of
-            the specified tags are returned).
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> elem_grids = [elem.grids for elem in model.cards_by_tag(['e1D', 'e2D'])]
-        """
-
-        if includes:
-            includes = [self.includes[include_name] for include_name in includes]
-            return (card for include in includes for card in include.cards if
-                    card.tag in card_tags)
-        else:
-            card_types = card_factory.get_card_types(card_tags)
-            return (card for card_type in card_types for card in self.cards(card_type) if
-                    card.tag in card_tags)
-
-    def cards_by_name(self, card_names, includes=None):
-        """
-        Get cards by specifying the name.
-
-        Parameters
-        ----------
-        card_names : list of str
-            Card names.
-        includes : list of str, optional
-            Include filenames (the default is None, which implies all model cards of
-            the specified names are returned).
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> elem_grids = [elem.grids for elem in model.cards_by_names(['CQUAD4', 'CTRIA3'])]
-        """
-
-        if includes:
-            includes = [self.includes[include_name] for include_name in includes]
-            return (card for include in includes for card in include.cards if
-                    card.name in card_names)
-        else:
-            card_types = card_factory.get_card_types(card_names)
-            return (card for card_type in card_types for card in self.cards(card_type) if
-                    card.name in card_names)
-
-    def cards_by_include(self, includes):
-        """
-        Get cards by specifying the include.
-
-        Parameters
-        ----------
-        includes : list of str
-            Include filenames.
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> cards = [card for card in model.cards_by_include(['3C0734_Sp1_Hng_outbd_v04.bdf',
-                                                               'SMM3v2_S541700_Wing-Box_V16.2_08.bdf'])]
-        """
-        includes = [self.includes[include_name] for include_name in includes]
-        return (card for include in includes for card in include.cards)
-
-    def elems_by_prop(self, PID):
-        """
-        Get element cards by specifying the property ID.
-
-        Parameters
-        ----------
-        PID : int
-            Property id.
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> elems = [elem for elem in model.elems_by_prop(3400023)]
-        """
-        return (card for card in self.props[PID].child_cards('elem'))
-
-    def props_by_mat(self, MID):
-        """
-        Get property cards by specifying the material ID.
-
-        Parameters
-        ----------
-        MID : int
-            Material id.
-
-        Yields
-        -------
-        Card
-            Card object.
-
-        Examples
-        --------
-        >>> props = [prop for prop in model.props_by_mat(9400023)]
-        """
-        return (card for card in self.mats[MID].child_cards('prop'))
+        if not card_types and not card_ids:
+            yield from self.unsupported_cards
 
     @property
     def log_path(self):

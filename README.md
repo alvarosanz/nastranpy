@@ -4,7 +4,7 @@ A library to interact with nastran models.
 
 ## Requirements
 
-* python 3.x
+* python 3.3 (or later)
 * numpy
 
 ## Installation
@@ -35,7 +35,7 @@ model.write()
 Get help of a given method:
 
 ```sh
-help(model.cards_by_id)
+help(model.cards)
 ```
 
 Get help of a given card:
@@ -60,18 +60,23 @@ load_card_set = model.loads[234232]
 Get cards by different ways:
 
 ```sh
-grid_ids = [grid.id for grid in
-            model.cards_by_id_pattern('grid',
-                                      ['9', '34', '*', '*', '*', '*', '1-8'])]
-grids = [grid for grid in model.cards_by_id('grid', grid_ids)]
-elems = [elem for elem in model.cards_by_tag(['e2D'])]
-props = [prop for prop in model.cards_by_type(['prop'])]
-pcomps = [prop for prop in model.cards_by_name(['PCOMP', 'PCOMPG'])]
-cards_by_include = [card for card in
-                    model.cards_by_include(['BulkData/3C0733_Sp1_act_v05.bdf',
-                                            'BulkData/3C0734_Sp1_Hng_outbd_v04.bdf',])]
-elems_by_prop = [elem for elem in model.elems_by_prop(3311059)]
-props_by_mat = [prop for prop in model.props_by_mat(98000009)]
+# Get grids by ids:
+grids = [grid for grid in model.cards('grid', [34, 543453, 234233])]
+
+# Get elements by an ID pattern:
+elems = [elem for elem in model.cards('elem', ['9', '34', '*', '*', '1-8'])]
+
+# Get all CQUAD4 and CTRIA cards:
+elems = [elem for elem in model.cards(['CQUAD4', 'CTRIA3']]
+
+# Get all shell element cards in a set includes:
+elems = [elem for elem in model.cards('e2D', includes=['Sp1_Hng_outbd_v04.bdf',
+                                                       'Wing-Box_V16.2.bdf'])]
+# Get all element card with a given property:
+elems = [elem for elem in self.props[400021].child_cards('elem')]
+
+# Get all property card with a given material:
+props = [prop for prop in self.mats[10].child_cards('prop')]
 ```
 
 Get model info:
@@ -89,8 +94,7 @@ model.print_summary()
 Write card fields to a csv file:
 
 ```sh
-model.print_cards(model.cards_by_type(['grid'],
-                                      ['BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf']))
+model.print_cards(model.cards('grid', includes=['BulkData/Sp2_Sprdr_v05.bdf']))
 ```
 
 Get ID info for a given card type:
@@ -104,7 +108,7 @@ Get shell geometrical info:
 
 ```sh
 shells_info = {shell.id: (shell.area, shell.normal, shell.centroid) for
-               shell in model.cards_by_tag(['e2D'])}
+               shell in model.cards('e2D')}
 ```
 
 Renumber cards by correlation:
@@ -133,7 +137,7 @@ id_list = [
     235490,
 ]
 
-model.renumber('grid', model.cards_by_id('grid', id_list),
+model.renumber('grid', model.cards('grid', id_list),
                start=4703465, step=5)
 ```
 
@@ -151,7 +155,7 @@ id_list = [
     235515,
 ]
 
-model.renumber('grid', model.cards_by_id('grid', id_list),
+model.renumber('grid', model.cards('grid', id_list),
                id_pattern=['9', '34', '*', '*', '*', '*', '1-8'])
 ```
 
