@@ -159,16 +159,22 @@ model.renumber('grid', model.cards('grid', id_list),
                id_pattern=['9', '34', '*', '*', '*', '*', '1-8'])
 ```
 
-Extend element by steps:
+Extend elements by steps:
 
 ```sh
-model.elems[3612829].extend(2)
+# Extend from an element
+model.elems[3612829].extend(steps=2)
+# Extend from a grid
+model.grids[3815443].extend(steps=2)
 ```
 
-Extend element by filter:
+Extend elements by filter:
 
 ```sh
-model.elems[8048206].extend(tags=['e2D'])
+# Extend from an element
+model.elems[8048206].extend('e2D')
+# Extend from a grid
+model.grids[8020333].extend('e2D')
 ```
 
 Make include self-contained:
