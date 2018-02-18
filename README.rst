@@ -13,9 +13,9 @@ Requirements
 Installation
 ============
 
-Execute the folloging command::
+Run the following command::
 
-$ pip install -e <nastranpy_folder>
+pip install nastranpy
 
 
 Usage example
@@ -160,4 +160,4 @@ Make include self-contained::
 
 Contact
 =======
-Alvaro Sanz Oriz – alvaro.sanz.oriz@gmail.com
+Álvaro Sanz Oriz – alvaro.sanz.oriz@gmail.com
