@@ -15,7 +15,7 @@ Installation
 
 Run the following command::
 
-pip install nastranpy
+    pip install nastranpy
 
 
 Usage example

@@ -239,7 +239,7 @@ class Model(object):
             Any combination of the following options are available (the default is None,
             which implies all model cards are considered):
 
-            Card types: 'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc' or 'load'
+            Card types: 'include', 'coord', 'elem', 'grid', 'mat', 'prop', 'mpc', 'spc' or 'load'
             Card tags: 'e1D', 'e2D', 'e3D', 'eRigid', 'eSpring', 'eMass' or 'ePlot'
             Card names: 'GRID', 'CBAR', 'CORD1R', 'CQUAD4', 'PSHELL', etc ...
 
