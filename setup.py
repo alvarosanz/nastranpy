@@ -3,13 +3,15 @@ from distutils.core import setup
 
 setup(
     name='nastranpy',
-    version='0.1',
+    version='0.1.1',
     description='A library to interact with nastran models',
-    url='https://bitbucket.org/alvarosanz/nastranpy',
-    author='Alvaro Sanz Oriz',
-    author_email='alvaro.sanz@aernnova.com',
+    url='https://github.com/alvarosanz/nastranpy',
+    author='Álvaro Sanz Oriz',
+    author_email='alvaro.sanz.oriz@gmail.com',
     packages=['nastranpy',],
-    license='Creative Commons Attribution-Noncommercial-Share Alike license',
-    long_description=open('README.md').read(),
+    license='MIT',
+    keywords='NASTRAN FEM engineering',
+    long_description=open('README.rst').read(),
     install_requires=['numpy'],
+    python_requires='>=3.3',
 )
