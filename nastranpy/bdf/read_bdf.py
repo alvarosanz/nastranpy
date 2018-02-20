@@ -223,14 +223,15 @@ def process_fields(fields, convert_to_numbers, nastran_exp_re=re.compile('(.+[^E
 
     for field in fields:
         field = field.strip().upper()
-        nastran_exp_match = nastran_exp_re.search(field)
-
-        if nastran_exp_match:
-            field = nastran_exp_match.group(1) + 'E' + nastran_exp_match.group(2)
 
         if convert_to_numbers:
 
             if '.' in field:
+                nastran_exp_match = nastran_exp_re.search(field)
+
+                if nastran_exp_match:
+                    field = nastran_exp_match.group(1) + 'E' + nastran_exp_match.group(2)
+
                 field = float(field)
             elif field.isdigit():
                 field = int(field)
