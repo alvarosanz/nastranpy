@@ -159,111 +159,111 @@ class Card(Observable):
         else:
             return '\n'.join(card[:lines])
 
-    def _process_fields(self, items=None):
+    def _pop_field(self, fields, field_info, items):
+        f = fields.pop()
 
-        def pop_field(fields, field_info, items):
-            f = fields.pop()
+        try:
+            return items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
+        except KeyError:
+            self._log.error('{} refers to a non-available card (type: {}, ID: {})'.format(repr(self), field_info.type, f))
+            return f
 
-            try:
-                return items[field_info.type][f] if items and field_info.type and f and isinstance(f, int) else f
-            except KeyError:
-                self._log.error('{} refers to a non-available card (type: {}, ID: {})'.format(repr(self), field_info.type, f))
-                return f
+    def _get_subscheme(self, fields, subscheme, items):
+        field = list()
 
-        def get_subscheme(subscheme, items):
-            field = list()
-
-            for field_info in subscheme.scheme:
-
-                if field_info.seq_type:
-                    field.append(list())
-
-                    for i in range(1, len(fields) + 1):
-                        field[-1].append(pop_field(fields, field_info, items))
-
-                        if (not fields or
-                            i == field_info.length or
-                            field_info.length is None and isinstance(fields[-1], (float, str))):
-                            break
-                else:
-
-                    try:
-                        field.append(pop_field(fields, field_info, items))
-                    except IndexError:
-                        field.append(None)
-
-            return subscheme(field, self)
-
-        def get_field(field_info, items):
+        for field_info in subscheme.scheme:
 
             if field_info.seq_type:
-                subfields = list()
+                field.append(list())
 
                 for i in range(1, len(fields) + 1):
-
-                    if field_info.subscheme:
-                        subfields.append(get_subscheme(field_info.subscheme, items))
-                    else:
-                        subfields.append(pop_field(fields, field_info, items))
+                    field[-1].append(self._pop_field(fields, field_info, items))
 
                     if (not fields or
                         i == field_info.length or
                         field_info.length is None and isinstance(fields[-1], (float, str))):
                         break
-
-                if field_info.seq_type == 'list':
-
-                    if field_info.type:
-                        field = CardList(self, cards=subfields, update_grid=field_info.update_grid)
-                    else:
-                        field = list(subfields)
-
-                elif field_info.seq_type == 'set':
-
-                    if field_info.type:
-                        field = CardSet(self, cards=subfields, update_grid=field_info.update_grid)
-                    else:
-                        field = set(subfields)
-
-                elif field_info.seq_type == 'vector':
-
-                    if not subfields or all(subfield is None for subfield in subfields):
-                        field = None
-                    else:
-
-                        if field_info.type == 'grid' and isinstance(subfields[0], Card):
-                            vector = [subfields[0], None, None]
-                        else:
-                            vector = [0.0, 0.0, 0.0]
-                            vector[:len(subfields)] = [x if x else 0.0 for x in subfields]
-
-                        field = np.array(vector)
-
-            elif field_info.subscheme:
-                field = get_subscheme(field_info.subscheme, items)
             else:
 
                 try:
-                    field = pop_field(fields, field_info, items)
-
-                    if field_info.type:
-
-                        try:
-                            field._subscribe(self)
-
-                            if field_info.update_grid:
-                                field.elems.add(self)
-                        except AttributeError:
-                            pass
-
+                    field.append(self._pop_field(fields, field_info, items))
                 except IndexError:
-                    field = None
+                    field.append(None)
 
-            return field
+        return subscheme(field, self)
+
+    def _get_field(self, fields, field_info, items):
+
+        if field_info.seq_type:
+            subfields = list()
+
+            for i in range(1, len(fields) + 1):
+
+                if field_info.subscheme:
+                    subfields.append(self._get_subscheme(fields, field_info.subscheme, items))
+                else:
+                    subfields.append(self._pop_field(fields, field_info, items))
+
+                if (not fields or
+                    i == field_info.length or
+                    field_info.length is None and isinstance(fields[-1], (float, str))):
+                    break
+
+            if field_info.seq_type == 'list':
+
+                if field_info.type:
+                    field = CardList(self, cards=subfields, update_grid=field_info.update_grid)
+                else:
+                    field = list(subfields)
+
+            elif field_info.seq_type == 'set':
+
+                if field_info.type:
+                    field = CardSet(self, cards=subfields, update_grid=field_info.update_grid)
+                else:
+                    field = set(subfields)
+
+            elif field_info.seq_type == 'vector':
+
+                if not subfields or all(subfield is None for subfield in subfields):
+                    field = None
+                else:
+
+                    if field_info.type == 'grid' and isinstance(subfields[0], Card):
+                        vector = [subfields[0], None, None]
+                    else:
+                        vector = [0.0, 0.0, 0.0]
+                        vector[:len(subfields)] = [x if x else 0.0 for x in subfields]
+
+                    field = np.array(vector)
+
+        elif field_info.subscheme:
+            field = self._get_subscheme(fields, field_info.subscheme, items)
+        else:
+
+            try:
+                field = self._pop_field(fields, field_info, items)
+
+                if field_info.type:
+
+                    try:
+                        field._subscribe(self)
+
+                        if field_info.update_grid:
+                            field.elems.add(self)
+                    except AttributeError:
+                        pass
+
+            except IndexError:
+                field = None
+
+        return field
+
+    def _process_fields(self, items=None):
 
         if self._scheme:
             fields = list(reversed(self.fields))
-            self.fields = [None if field_info.optional else get_field(field_info, items) for
+            self.fields = [None if field_info.optional else self._get_field(fields, field_info, items) for
                            field_info in self._scheme]
 
             if self._optional_scheme:
@@ -273,7 +273,7 @@ class Card(Observable):
 
                     if field in self._optional_scheme:
                         index, optional_field_info = self._optional_scheme[field]
-                        self.fields[index] = get_field(optional_field_info, items)
+                        self.fields[index] = self._get_field(fields, optional_field_info, items)
 
         self._is_processed = True
 

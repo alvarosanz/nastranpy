@@ -49,14 +49,17 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
     comment = ''
 
     with open(file) as f:
+        comment_re = re.compile('^ *\$')
+        end_line_comment_re = re.compile(' *\$.*$')
+        card_name_re = re.compile('^[a-zA-Z]')
 
         for line in f:
-            if re.search('^ *\$', line):
+            if comment_re.search(line):
                 comment += line
             else:
-                line = re.sub(' *\$.*$', '', line)
+                line = end_line_comment_re.sub('', line)
 
-                if re.search('^[a-zA-Z]', line):
+                if card_name_re.search(line):
 
                     if card:
 
@@ -138,10 +141,7 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
                         if is_free_field:
                             card = line[:-1]
                         else:
-                            card = [card_name]
-
-                            for i in range(n_fields):
-                                card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
+                            card = [card_name] + [line[:-1][8 + i * field_length:8 + (i + 1) * field_length] for i in range(n_fields)]
 
                 elif card:
 
@@ -168,9 +168,7 @@ def cards_in_file(file, card_names=None, raw_output=False, only_ids=False, ignor
                     else:
                         card += fields_from_empty_lines
                         fields_from_empty_lines = list()
-
-                        for i in range(n_fields):
-                            card.append(line[:-1][8 + i * field_length:8 + (i + 1) * field_length])
+                        card += [line[:-1][8 + i * field_length:8 + (i + 1) * field_length] for i in range(n_fields)]
 
         if card:
 
@@ -220,26 +218,22 @@ def get_fields_from_free_field_string(free_field_string):
     return fields
 
 
-def process_fields(fields, convert_to_numbers):
+def process_fields(fields, convert_to_numbers, nastran_exp_re=re.compile('(.+[^E])([\+-].+)')):
     processed_fields = list()
 
     for field in fields:
         field = field.strip().upper()
-        nastran_exp_match = re.search('(.+[^E])([\+-].+)', field)
+        nastran_exp_match = nastran_exp_re.search(field)
 
-        if (nastran_exp_match):
+        if nastran_exp_match:
             field = nastran_exp_match.group(1) + 'E' + nastran_exp_match.group(2)
 
         if convert_to_numbers:
 
             if '.' in field:
                 field = float(field)
-            else:
-
-                try:
-                    field = int(field)
-                except ValueError:
-                    pass
+            elif field.isdigit():
+                field = int(field)
 
         processed_fields.append(field)
 

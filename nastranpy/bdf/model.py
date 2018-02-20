@@ -47,7 +47,7 @@ class Model(object):
         for set_type in self.sets:
             setattr(self, get_plural(set_type), self.sets[set_type])
 
-    @timeit
+    # @timeit
     def read(self, files, card_names=None):
         """
         Read include files.
@@ -96,13 +96,13 @@ class Model(object):
                          self.sets[card_type] for
                          card_type in list(self.items) + list(self.sets)}
 
-            for card in self.cards():
+            for card in self._cards():
                 card._process_fields(all_items)
 
             self._arrange_grids()
         else:
 
-            for card in self.cards():
+            for card in self._cards():
                 card._process_fields(None)
 
         self.warnings += self._log.warning.counter
@@ -271,6 +271,11 @@ class Model(object):
         >>> elems = [elem for elem in model.cards('e2D', includes=['3C0734_Sp1_Hng_outbd_v04.bdf',
                                                                    'SMM3v2_S541700_Wing-Box_V16.2_08.bdf'])]
         """
+
+        if not card_filters and not card_ids and not includes:
+            yield from self._cards()
+            return
+
         card_types = None
         card_tags = None
         card_names = None
