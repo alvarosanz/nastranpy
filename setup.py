@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nastranpy',
-    version='0.1.2',
+    version='0.1.3',
     description='A library to interact with nastran models',
     url='https://github.com/alvarosanz/nastranpy',
     author='Álvaro Sanz Oriz',
@@ -12,6 +12,6 @@ setup(
     license='MIT',
     keywords='NASTRAN FEM engineering',
     long_description=open('README.rst').read(),
-    install_requires=['numpy'],
+    install_requires=['numpy', 'pandas'],
     python_requires='>=3.3',
 )

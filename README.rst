@@ -9,6 +9,7 @@ Requirements
 
 * python 3.3 (or later)
 * numpy
+* pandas
 
 Installation
 ============
