@@ -13,5 +13,5 @@ setup(
     keywords='NASTRAN FEM engineering',
     long_description=open('README.rst').read(),
     install_requires=['numpy', 'pandas'],
-    python_requires='>=3.3',
+    python_requires='>=3.6',
 )

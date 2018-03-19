@@ -1,6 +1,5 @@
 import os
 import json
-from collections import OrderedDict
 import numpy as np
 import pandas as pd
 from nastranpy.results.read_files import tables_in_pch
@@ -115,14 +114,14 @@ def write_database(files, database_path, max_chunk_size=1e8):
         table['EIDs'].tofile(os.path.join(table_path, tables_specs[table_name]['columns'][1] + '.bin'))
 
         with open(os.path.join(table_path, '#header.json'), 'w') as f:
-            header = OrderedDict()
+            header = dict()
             header['name'] = table_name
             header['columns'] = [(field_name, tables_specs[table_name]['dtypes'][field_name]) for
                                  field_name in tables_specs[table_name]['columns']]
             header[get_plural(tables_specs[table_name]['columns'][0])] = n_LIDs
             header[get_plural(tables_specs[table_name]['columns'][1])] = n_EIDs
 
-            common_items = OrderedDict()
+            common_items = dict()
 
             for item in ['TITLE', 'SUBTITLE', 'LABEL']:
                 common_items[item] = None
@@ -136,12 +135,12 @@ def write_database(files, database_path, max_chunk_size=1e8):
                         header[item] = common_items[item]
 
             if not all(item is None for item in common_items.values()):
-                header['LOAD CASES INFO'] = OrderedDict()
+                header['LOAD CASES INFO'] = dict()
 
                 for LID in sorted(load_cases_info[table_name]):
 
                     if any(item for item in load_cases_info[table_name][LID].values()):
-                        header['LOAD CASES INFO'][LID] = OrderedDict()
+                        header['LOAD CASES INFO'][LID] = dict()
 
                         for item in ['TITLE', 'SUBTITLE', 'LABEL']:
 

@@ -7,7 +7,7 @@ A library to interact with nastran models.
 Requirements
 ============
 
-* python 3.3 (or later)
+* python 3.6 (or later)
 * numpy
 * pandas
 
