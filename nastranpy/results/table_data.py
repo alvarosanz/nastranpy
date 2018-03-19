@@ -44,8 +44,8 @@ class TableData(object):
 
     @property
     def LIDs(self):
-        return self._LIDs
+        return np.array(self._LIDs)
 
     @property
     def EIDs(self):
-        return self._EIDs
+        return np.array(self._EIDs)

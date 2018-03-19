@@ -112,7 +112,7 @@ class DataBase(object):
         else:
             print('Database already loaded!')
 
-    def query(self, table_name, fields, aggregation_options=None,
+    def query(self, table_name, fields, aggregation_options=None, return_stats=False,
               LIDs=None, EIDs=None, LID_combinations=None,
               geometry=None, weights=None):
         is_singular_instance = False
@@ -125,15 +125,20 @@ class DataBase(object):
         fields = [(field[4:-1], True) if field[:4] == 'ABS(' and field[-1] == ')' else
                   (field, False) for field in fields]
 
-        fields = [self.tables[table_name][field].get_array(LIDs, EIDs, LID_combinations,
-                                                           absolute_value=use_abs) for field, use_abs in fields]
+        arrays = list()
+
+        for field, use_abs in fields:
+            array, LIDs_returned, EIDs_returned = self.tables[table_name][field].get_array(LIDs, EIDs, LID_combinations,
+                                                                                           return_indexes=True,
+                                                                                           absolute_value=use_abs)
+            arrays.append(array)
 
         if aggregation_options is None:
 
             if is_singular_instance:
-                return fields[0]
+                return arrays[0]
             else:
-                return fields
+                return arrays
 
         else:
             aggregations = list()
@@ -145,6 +150,7 @@ class DataBase(object):
                 is_singular_instance = True
 
             for aggregation_option in aggregation_options:
+                stats = None
                 aggregation_sequence = None
 
                 if not isinstance(aggregation_option, str):
@@ -159,7 +165,7 @@ class DataBase(object):
                     else:
                         raise ValueError('Unsupported aggregation function: {}'.format(func))
 
-                args = [field for field in fields]
+                args = [array for array in arrays]
 
                 if not geometry is None:
                     args.append(geometry)
@@ -172,22 +178,53 @@ class DataBase(object):
                         aggregation_sequence = [aggregation_sequence]
 
                     for method, axis in aggregation_sequence:
+                        last_axis = axis[:3].upper()
 
-                        if axis.upper() not in ('LIDS', 'EIDS', 'GIDS', 'LID', 'EID', 'GID'):
-                            raise ValueError(f"Illegal axis ('{axis}')! Use 'LIDs', 'EIDs' or 'GIDs' instead.")
+                        if len(array.shape) == 2:
 
-                        axis = 0 if axis[:3].upper() == 'LID' else 1
+                            if axis.upper() not in ('LIDS', 'EIDS', 'GIDS', 'LID', 'EID', 'GID'):
+                                raise ValueError(f"Illegal axis ('{axis}')! Use 'LIDs', 'EIDs' or 'GIDs' instead.")
+
+                            axis = 0 if last_axis == 'LID' else 1
+
+                        else:
+                            axis = 0
 
                         if method.upper() == 'AVG':
+
+                            if return_stats:
+                                stats = None
+
                             array = np.average(array, axis, weights)
                         elif method.upper() == 'MAX':
-                            array = np.max(array, axis)
+
+                            if return_stats:
+                                stats = array.argmax(axis)
+
+                            array = array.max(axis)
                         elif method.upper() == 'MIN':
-                            array = np.min(array, axis)
+
+                            if return_stats:
+                                stats = array.argmin(axis)
+
+                            array = array.min(axis)
                         else:
                             raise ValueError('Unsupported aggregation method: {}'.format(method))
 
-                aggregations.append(array)
+                if return_stats:
+
+                    if not stats is None:
+
+                        if last_axis == 'LID':
+                            IDs = LIDs_returned
+                        else:
+                            IDs = EIDs_returned
+
+                        stats = IDs[stats]
+
+                    aggregations.append((array, stats))
+                else:
+                    aggregations.append(array)
 
             if is_singular_instance:
                 return aggregations[0]
@@ -203,8 +240,9 @@ class DataBase(object):
         info.append(f'Name: {self.name}')
         info.append(f'Version: {self.version}')
         info.append(f'Date: {self.date}')
-        info.append(f'Total size: {humansize(self._nbytes)} \n'.format())
+        info.append(f'Total size: {humansize(self._nbytes)}'.format())
         info.append(f'Number of tables: {len(self.tables)}'.format())
+        info.append('')
 
         for table_name, table_path, table_header in self._walk_header():
             LIDs_name = get_plural(table_header['columns'][0][0])

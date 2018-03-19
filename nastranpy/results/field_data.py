@@ -21,7 +21,7 @@ class FieldData(object):
         self._item_size = np.dtype(self._dtype).itemsize
 
     def get_array(self, LIDs=None, EIDs=None, LID_combinations=None,
-                  absolute_value=False, max_size=2e9):
+                  return_indexes=False, absolute_value=False, max_size=2e9):
         LIDs_combined_used = list()
 
         if LID_combinations:
@@ -96,7 +96,21 @@ class FieldData(object):
         if absolute_value:
             array = np.abs(array)
 
-        return array
+        if return_indexes:
+
+            if LIDs is None:
+                LIDs = np.array(self._LIDs)
+            else:
+                LIDs = np.array(LIDs)
+
+            if EIDs is None:
+                EIDs = np.array(self._EIDs)
+            else:
+                EIDs = np.array(EIDs)
+
+            return array, LIDs, EIDs
+        else:
+            return array
 
     def get_series(self, LIDs=None, EIDs=None):
         array = self.get_array(LIDs, EIDs)
@@ -118,11 +132,11 @@ class FieldData(object):
 
     @property
     def LIDs(self):
-        return self._LIDs
+        return np.array(self._LIDs)
 
     @property
     def EIDs(self):
-        return self._EIDs
+        return np.array(self._EIDs)
 
     @property
     def dtype(self):
