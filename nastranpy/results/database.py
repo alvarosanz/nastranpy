@@ -231,8 +231,9 @@ class DataBase(object):
             else:
                 return aggregations
 
-    def get_dataframe(self, table_name, LIDs=None, EIDs=None, columns=None):
-        return self.tables[table_name].get_dataframe(LIDs, EIDs, columns)
+    def get_dataframe(self, table_name, LIDs=None, EIDs=None, columns=None,
+                      fields_derived=None):
+        return self.tables[table_name].get_dataframe(LIDs, EIDs, columns, fields_derived)
 
     def info(self, print_to_screen=True):
         info = list()

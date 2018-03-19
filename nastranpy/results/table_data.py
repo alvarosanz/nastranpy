@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from nastranpy.results.queries import query_functions
 
 
 class TableData(object):
@@ -22,7 +23,7 @@ class TableData(object):
     def __getitem__(self, key):
         return self._fields[key]
 
-    def get_dataframe(self, LIDs=None, EIDs=None, columns=None):
+    def get_dataframe(self, LIDs=None, EIDs=None, columns=None, fields_derived=None):
 
         if LIDs is None:
             LIDs = self._LIDs
@@ -33,10 +34,30 @@ class TableData(object):
         if columns is None:
             columns = self._names
 
-        return pd.DataFrame({name: self._fields[name].get_array(LIDs, EIDs).ravel() for name in columns},
-                            columns=columns, index=pd.MultiIndex.from_product([LIDs, EIDs],
-                                                                              names=[self._LID_name,
-                                                                                     self._EID_name,]))
+        data = {name: self._fields[name].get_array(LIDs, EIDs).ravel() for name in columns}
+
+        if fields_derived:
+
+            for field_name, field_args, field_func in fields_derived:
+
+                if not callable(field_func):
+
+                    if field_func.upper() in query_functions:
+                        field_func = query_functions[field_func.upper()]
+                    else:
+                        raise ValueError('Unsupported field function: {}'.format(field_func))
+
+                field_args = [field.upper() for field in field_args]
+                field_args = [(field[4:-1], True) if field[:4] == 'ABS(' and field[-1] == ')' else
+                              (field, False) for field in field_args]
+                arrays = [self._fields[name].get_array(LIDs, EIDs, absolute_value=use_abs) for
+                          name, use_abs in field_args]
+                data[field_name] = field_func(*arrays).ravel()
+                columns.append(field_name)
+
+        return pd.DataFrame(data, columns=columns,
+                            index=pd.MultiIndex.from_product([LIDs, EIDs], names=[self._LID_name,
+                                                                                  self._EID_name,]))
 
     @property
     def names(self):
