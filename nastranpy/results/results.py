@@ -6,7 +6,7 @@ import pandas as pd
 from nastranpy.results.read_files import tables_in_pch
 from nastranpy.results.database import DataBase
 from nastranpy.results.tables_specs import tables_specs
-from nastranpy.bdf.misc import get_plural
+from nastranpy.bdf.misc import get_plural, get_hasher, hash_bytestr
 
 
 def get_tables(files):
@@ -30,7 +30,7 @@ def get_tables(files):
 
 
 def create_database(files, database_path, database_name, database_version,
-                    database_project=None, max_chunk_size=1e8):
+                    database_project=None, max_chunk_size=1e8, checksum='sha256'):
 
     if not os.path.exists(database_path):
         os.mkdir(database_path)
@@ -123,6 +123,7 @@ def create_database(files, database_path, database_name, database_version,
                                  field_name in tables_specs[table_name]['columns']]
             header[get_plural(tables_specs[table_name]['columns'][0])] = n_LIDs
             header[get_plural(tables_specs[table_name]['columns'][1])] = n_EIDs
+            header['checksum'] = checksum
 
             common_items = dict()
 
@@ -186,6 +187,15 @@ def create_database(files, database_path, database_name, database_version,
                     chunk = field_array[:, i0:i1].T
                     chunk.tofile(f)
                     i0 += n_EIDs_per_chunk
+
+        files = [field for field in tables_specs[table_name]['columns']]
+        files += [field + '#T' for field in tables_specs[table_name]['columns'][2:]]
+        files = [os.path.join(table_path, field + '.bin') for field in files]
+
+        for file in files:
+
+            with open(file, 'rb') as f_in, open(file[:-3] + checksum, 'wb') as f_out:
+                f_out.write(hash_bytestr(f_in, get_hasher(checksum)))
 
     with open(os.path.join(database_path, '#header.json'), 'w') as f:
 

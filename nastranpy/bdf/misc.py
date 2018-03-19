@@ -1,5 +1,6 @@
 import os
 import time
+import hashlib
 from functools import wraps
 
 
@@ -90,6 +91,39 @@ def humansize(nbytes):
 
     f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
     return '%s %s' % (f, suffixes[i])
+
+
+def hash_bytestr(file, hasher, blocksize=65536, ashexstr=False):
+
+    for block in file_as_blockiter(file, blocksize):
+        hasher.update(block)
+
+    if ashexstr:
+        return hasher.hexdigest()
+    else:
+        return hasher.digest()
+
+
+def file_as_blockiter(file, blocksize):
+
+    with file:
+        block = file.read(blocksize)
+
+        while len(block) > 0:
+            yield block
+            block = file.read(blocksize)
+
+
+def get_hasher(hash_type):
+
+    if hash_type == 'md5':
+        return hashlib.md5()
+    elif hash_type == 'sha1':
+        return hashlib.sha1()
+    elif hash_type == 'sha256':
+        return hashlib.sha256()
+    else:
+        raise ValueError(f"Unsupported checksum method: {hash_type}")
 
 
 class CallCounted(object):

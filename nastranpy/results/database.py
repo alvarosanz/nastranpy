@@ -4,7 +4,7 @@ import numpy as np
 from nastranpy.results.field_data import FieldData
 from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
-from nastranpy.bdf.misc import get_plural, humansize, indent
+from nastranpy.bdf.misc import get_plural, humansize, indent, get_hasher, hash_bytestr
 
 
 class DataBase(object):
@@ -111,6 +111,30 @@ class DataBase(object):
 
         else:
             print('Database already loaded!')
+
+    def check(self):
+
+        files_corrupted = list()
+
+        for table_name, table_path, table_header in self._walk_header():
+
+            files = [field for field, _ in table_header['columns']]
+            files += [field + '#T' for field, _ in table_header['columns'][2:]]
+            files = [os.path.join(table_path, field + '.bin') for field in files]
+
+            for file in files:
+
+                with open(file, 'rb') as f, open(file[:-3] + table_header['checksum'], 'rb') as f_checksum:
+
+                    if f_checksum.read() != hash_bytestr(f, get_hasher(table_header['checksum'])):
+                        files_corrupted.append(file)
+
+        if files_corrupted:
+
+            for file in files_corrupted:
+                print(f"'{file}' is corrupted!")
+        else:
+            print('Everything is OK!')
 
     def query(self, table_name, fields, aggregation_options=None, return_stats=False,
               LIDs=None, EIDs=None, LID_combinations=None,
