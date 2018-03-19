@@ -1,8 +1,10 @@
 import os
 import json
+import datetime
 import numpy as np
 import pandas as pd
 from nastranpy.results.read_files import tables_in_pch
+from nastranpy.results.database import DataBase
 from nastranpy.results.tables_specs import tables_specs
 from nastranpy.bdf.misc import get_plural
 
@@ -27,7 +29,8 @@ def get_tables(files):
     return {table_name: pd.concat(tables[table_name]) for table_name in tables}
 
 
-def create_database(files, database_path, max_chunk_size=1e8):
+def create_database(files, database_path, database_name, database_version,
+                    database_project=None, max_chunk_size=1e8):
 
     if not os.path.exists(database_path):
         os.mkdir(database_path)
@@ -185,5 +188,15 @@ def create_database(files, database_path, max_chunk_size=1e8):
                     i0 += n_EIDs_per_chunk
 
     with open(os.path.join(database_path, '#header.json'), 'w') as f:
-        json.dump({'name': os.path.basename(database_path),
-                   'tables': [table for table in tables],}, f, indent=4)
+
+        if database_project is None:
+            database_project = ''
+
+        json.dump({'project': database_project,
+                   'name': database_name,
+                   'version': database_version,
+                   'date': str(datetime.date.today()),
+                   'tables': [table for table in tables]}, f, indent=4)
+
+    print('Database created succesfully!')
+    return DataBase(database_path)

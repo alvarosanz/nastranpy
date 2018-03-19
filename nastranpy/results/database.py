@@ -19,6 +19,26 @@ class DataBase(object):
         self.tables = None
         self._nbytes = 0
         self._header = None
+        self._project = None
+        self._name = None
+        self._version = None
+        self._date = None
+
+    @property
+    def project(self):
+        return self._project
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def date(self):
+        return self._date
 
     def _walk_header(self):
 
@@ -41,6 +61,14 @@ class DataBase(object):
     def load(self):
 
         if self.tables is None:
+
+            with open(os.path.join(self.path, '#header.json')) as f:
+                database_header = json.load(f)
+                self._project = database_header['project']
+                self._name = database_header['name']
+                self._version = database_header['version']
+                self._date = database_header['date']
+
             self.tables = dict()
 
             for table_name, table_path, table_header in self._walk_header():
@@ -171,16 +199,17 @@ class DataBase(object):
 
     def info(self, print_to_screen=True):
         info = list()
-
-        info.append('Number of tables: {}'.format(len(self.tables)))
-        info.append('Total size: {} \n'.format(humansize(self._nbytes)))
+        info.append(f'Project: {self.project}')
+        info.append(f'Name: {self.name}')
+        info.append(f'Version: {self.version}')
+        info.append(f'Date: {self.date}')
+        info.append(f'Total size: {humansize(self._nbytes)} \n'.format())
+        info.append(f'Number of tables: {len(self.tables)}'.format())
 
         for table_name, table_path, table_header in self._walk_header():
             LIDs_name = get_plural(table_header['columns'][0][0])
             EIDs_name = get_plural(table_header['columns'][1][0])
-            info.append("Table name: '{}' ({}: {}, {}: {})".format(table_name,
-                                                                   LIDs_name, table_header[LIDs_name],
-                                                                   EIDs_name, table_header[EIDs_name]))
+            info.append(f"Table name: '{table_name}' ({LIDs_name}: {table_header[LIDs_name]}, {EIDs_name}: {table_header[EIDs_name]})")
             info.append('   ' + ' '.join(['_' * 6 for _, _ in table_header['columns']]))
             info.append('  |' + '|'.join([' ' * 6 for _, _ in table_header['columns']]) + '|')
             info.append('  |' + '|'.join([name.center(6) for name, _ in table_header['columns']]) + '|')
