@@ -3,7 +3,7 @@ import json
 import numpy as np
 from nastranpy.results.field_data import FieldData
 from nastranpy.results.table_data import TableData
-from nastranpy.results.query_functions import query_functions
+from nastranpy.results.queries import query_functions
 from nastranpy.bdf.misc import get_plural, humansize, indent
 
 
@@ -13,6 +13,7 @@ class DataBase(object):
         self.path = path
         self.model = model
         self.clear()
+        self.load()
 
     def clear(self):
         self.tables = None
@@ -83,9 +84,9 @@ class DataBase(object):
         else:
             print('Database already loaded!')
 
-    def query(self, table_name, fields, LIDs=None, EIDs=None,
-              aggregation_options=None, geometry=None, weights=None,
-              LID_combinations=None):
+    def query(self, table_name, fields, aggregation_options=None,
+              LIDs=None, EIDs=None, LID_combinations=None,
+              geometry=None, weights=None):
         is_singular_instance = False
 
         if isinstance(fields, str):
@@ -120,8 +121,8 @@ class DataBase(object):
 
                 if not callable(func):
 
-                    if func in query_functions:
-                        func = query_functions[func]
+                    if func.upper() in query_functions:
+                        func = query_functions[func.upper()]
                     else:
                         raise ValueError('Unsupported aggregation function: {}'.format(func))
 
@@ -139,11 +140,16 @@ class DataBase(object):
 
                     for method, axis in aggregation_sequence:
 
-                        if method == 'avg':
+                        if axis.upper() not in ('LIDS', 'EIDS', 'GIDS', 'LID', 'EID', 'GID'):
+                            raise ValueError(f"Illegal axis ('{axis}')! Use 'LIDs', 'EIDs' or 'GIDs' instead.")
+
+                        axis = 0 if axis[:3].upper() == 'LID' else 1
+
+                        if method.upper() == 'AVG':
                             array = np.average(array, axis, weights)
-                        elif method == 'max':
+                        elif method.upper() == 'MAX':
                             array = np.max(array, axis)
-                        elif method == 'min':
+                        elif method.upper() == 'MIN':
                             array = np.min(array, axis)
                         else:
                             raise ValueError('Unsupported aggregation method: {}'.format(method))

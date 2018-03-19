@@ -27,7 +27,7 @@ def get_tables(files):
     return {table_name: pd.concat(tables[table_name]) for table_name in tables}
 
 
-def write_database(files, database_path, max_chunk_size=1e8):
+def create_database(files, database_path, max_chunk_size=1e8):
 
     if not os.path.exists(database_path):
         os.mkdir(database_path)

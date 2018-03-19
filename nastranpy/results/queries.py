@@ -40,3 +40,7 @@ query_functions = {
     'MIN PPAL (2D)': min_ppal_2D,
     'MAX SHEAR (2D)': max_shear_2D,
 }
+
+query_templates = {
+
+}
