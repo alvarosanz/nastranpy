@@ -20,7 +20,8 @@ class FieldData(object):
         self._dtype = self._data_by_LID.dtype
         self._item_size = np.dtype(self._dtype).itemsize
 
-    def get_array(self, LIDs=None, EIDs=None, LID_combinations=None, max_size=2e9):
+    def get_array(self, LIDs=None, EIDs=None, LID_combinations=None,
+                  absolute_value=False, max_size=2e9):
         LIDs_derived = list()
 
         if LID_combinations:
@@ -95,9 +96,12 @@ class FieldData(object):
 
                 array_combined[len(LIDs_requested) + i, :] = LID_combined
 
-            return array_combined
-        else:
-            return array
+            array = array_combined
+
+        if absolute_value:
+            array = np.abs(array)
+
+        return array
 
     def get_series(self, LIDs=None, EIDs=None):
         array = self.get_array(LIDs, EIDs)

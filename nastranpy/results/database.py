@@ -93,7 +93,12 @@ class DataBase(object):
             fields = [fields]
             is_singular_instance = True
 
-        fields = [self.tables[table_name][field].get_array(LIDs, EIDs, LID_combinations) for field in fields]
+        fields = [field.upper() for field in fields]
+        fields = [(field[4:-1], True) if field[:4] == 'ABS(' and field[-1] == ')' else
+                  (field, False) for field in fields]
+
+        fields = [self.tables[table_name][field].get_array(LIDs, EIDs, LID_combinations,
+                                                           absolute_value=use_abs) for field, use_abs in fields]
 
         if aggregation_options is None:
 
