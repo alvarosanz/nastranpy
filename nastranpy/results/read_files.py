@@ -42,7 +42,7 @@ def tables_in_pch(file, tables_specs=None):
                         if is_format:
                             table.df = pd.read_fwf(data, names=names, widths=widths,
                                                    usecols=usecols, dtype=dtype,
-                                                   index_col=index_col)[sorted_cols]
+                                                   index_col=usecols[:2])[usecols[2:]]
                         else:
                             table.df = pd.read_fwf(data, header=0)
 
@@ -76,10 +76,7 @@ def tables_in_pch(file, tables_specs=None):
                              enumerate(name for row in tables_specs[table_type]['pch_format'] for name, _ in row)]
                     widths = [18 for row in tables_specs[table_type]['pch_format'] for _, _ in row]
                     usecols = tables_specs[table_type]['columns']
-                    sorted_cols = [name for name in usecols if name not in tables_specs[table_type]['index']]
                     dtype = tables_specs[table_type]['dtypes']
-                    index_col = [i for index in tables_specs[table_type]['index'] for row in
-                                 tables_specs[table_type]['pch_format'] for i, (name, _) in enumerate(row) if name == index]
                 else:
                     is_format = False
 
@@ -105,7 +102,7 @@ def tables_in_pch(file, tables_specs=None):
             if is_format:
                 table.df = pd.read_fwf(data, names=names, widths=widths,
                                        usecols=usecols, dtype=dtype,
-                                       index_col=index_col)[sorted_cols]
+                                       index_col=usecols[:2])[usecols[2:]]
             else:
                 table.df = pd.read_fwf(data, header=0)
 

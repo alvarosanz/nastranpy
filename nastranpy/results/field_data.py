@@ -131,6 +131,10 @@ class FieldData(object):
         return self._name
 
     @property
+    def index_labels(self):
+        return (self._LID_name, self._EID_name)
+
+    @property
     def LIDs(self):
         return np.array(self._LIDs)
 

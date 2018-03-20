@@ -64,6 +64,10 @@ class TableData(object):
         return [name for name in self._names]
 
     @property
+    def index_labels(self):
+        return tuple(self._names[:2])
+
+    @property
     def LIDs(self):
         return np.array(self._LIDs)
 
