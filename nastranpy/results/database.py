@@ -166,9 +166,15 @@ class DataBase(object):
         else:
             print('Everything is OK!')
 
-    def query(self, table_name, fields, query_outputs=None,
+    def query(self, table=None, fields=None, outputs=None,
               LIDs=None, EIDs=None, LID_combinations=None,
-              geometry=None, weights=None, return_stats=True):
+              geometry=None, weights=None, return_stats=True, file=None, **kwargs):
+
+        if file:
+            return self.query(**get_query_from_file(file))
+        elif not table and not fields:
+            raise ValueError('You must specify a query!')
+
         EID_groups = None
 
         if isinstance(EIDs, dict):
@@ -185,25 +191,25 @@ class DataBase(object):
         field_arrays = dict()
 
         for field, field_mod, use_abs in fields:
-            array, LIDs_returned, EIDs_returned = self.tables[table_name][field].get_array(LIDs, EIDs, LID_combinations,
-                                                                                           return_indexes=True,
-                                                                                           absolute_value=use_abs)
-            field_arrays[field_mod] = array
+            field_array, LIDs_returned, EIDs_returned = self.tables[table][field].get_array(LIDs, EIDs, LID_combinations,
+                                                                                            return_indexes=True,
+                                                                                            absolute_value=use_abs)
+            field_arrays[field_mod] = field_array
 
         iEIDs = {EID: i for i, EID in enumerate(EIDs_returned)}
 
         if geometry:
             geometry = np.array([geometry[EID] for EID in EIDs_returned])
 
-        if query_outputs is None:
-            outputs = {field: array for field, array in field_arrays.items()}
+        if not outputs:
+            query = {field: array for field, array in field_arrays.items()}
         else:
-            outputs = dict()
+            query = dict()
 
-            if not isinstance(query_outputs, list):
-                query_outputs = [query_outputs]
+            if not isinstance(outputs, list):
+                outputs = [outputs]
 
-            for query_output in query_outputs:
+            for query_output in outputs:
 
                 if isinstance(query_output, str):
                     output_field = query_output
@@ -218,31 +224,34 @@ class DataBase(object):
                     elif output_field.upper() in query_functions:
                         output_array = query_functions[output_field.upper()](*field_arrays.values(), geometry)
                     else:
-                        raise ValueError('Unsupported aggregation function: {}'.format(output_field))
+                        raise ValueError('Unsupported output field: {}'.format(output_field))
                 else:
                     output_array = output_field(*field_arrays.values(), geometry)
                     output_field = output_field.__name__
 
                 if EID_groups:
-                    outputs[output_field] = dict()
+                    query[output_field] = dict()
 
                     for EID_group in EID_groups:
                         EIDs = np.array(EID_groups[EID_group])
                         weights = np.array([weights[EID] for EID in EIDs]) if weights else None
-                        outputs[output_field][EID_group] = self._get_output(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
-                                                                           aggregations,
-                                                                           LIDs_returned, EIDs,
-                                                                           weights, return_stats)
+                        query[output_field][EID_group] = self._get_output(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
+                                                                          aggregations,
+                                                                          LIDs_returned, EIDs,
+                                                                          weights, return_stats)
 
                 else:
                     EIDs = EIDs_returned
                     weights = np.array([weights[EID] for EID in EIDs]) if weights else None
-                    outputs[output_field] = self._get_output(output_array,
-                                                            aggregations,
-                                                            LIDs_returned, EIDs,
-                                                            weights, return_stats)
+                    query[output_field] = self._get_output(output_array,
+                                                           aggregations,
+                                                           LIDs_returned, EIDs,
+                                                           weights, return_stats)
 
-        return outputs
+        return query
+
+    def write_query(self, query, path):
+        pass
 
     def get_dataframe(self, table_name, LIDs=None, EIDs=None, columns=None,
                       fields_derived=None):
@@ -250,45 +259,52 @@ class DataBase(object):
 
     @staticmethod
     def _get_output(output_array, aggregations, LIDs, EIDs, weights, return_stats):
-        LID_stats = None
 
         if aggregations:
             aggregations = aggregations.strip().upper().split('/')
+            LID_stats = None
 
             for i, aggregation in enumerate(aggregations):
                 axis = 1 - i
 
-                if aggregation.upper() == 'AVG':
+                if aggregation == 'AVG':
+                    output_array = np.average(output_array, axis, weights)
+                elif aggregation == 'MAX':
 
-                    if return_stats:
-                        LID_stats = None
+                    if axis == 0 and return_stats:
+                        LID_stats = LIDs[output_array.argmax(axis)]
 
-                    if axis == 1:
-                        output_array = np.average(output_array, axis, weights)
-                    else:
-                        output_array = np.average(output_array, axis, weights)
+                    output_array = np.max(output_array, axis)
+                elif aggregation == 'MIN':
 
-                elif aggregation.upper() == 'MAX':
+                    if axis == 0 and return_stats:
+                        LID_stats = LIDs[output_array.argmin(axis)]
 
-                    if return_stats:
-                        LID_stats = output_array.argmax(axis)
-
-                    output_array = output_array.max(axis)
-                elif aggregation.upper() == 'MIN':
-
-                    if return_stats:
-                        LID_stats = output_array.argmin(axis)
-
-                    output_array = output_array.min(axis)
+                    output_array = np.min(output_array, axis)
                 else:
                     raise ValueError('Unsupported aggregation method: {}'.format(aggregation))
 
         if aggregations and return_stats:
-
-            if not LID_stats is None:
-                IDs = LIDs if axis == 0 else EIDs
-                LID_stats = IDs[LID_stats]
-
             return (output_array, LID_stats)
         else:
             return output_array
+
+
+def get_query_from_file(file):
+
+    try:
+
+        with open(file) as f:
+            query = json.load(f)
+
+    except TypeError:
+        query = json.load(file)
+
+    query = {key: value if value else None for key, value in query.items()}
+
+    for field in ('LID_combinations', 'geometry', 'weights'):
+
+        if query[field]:
+            query[field] = {int(key): value for key, value in query[field].items()}
+
+    return query
