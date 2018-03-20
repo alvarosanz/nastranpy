@@ -57,6 +57,7 @@ class FieldData(object):
             if LIDs is None:
                 LIDs = list()
 
+            LIDs2output = list(LIDs) + list(LID_combinations)
             LIDs_requested = set(LIDs)
             LIDs = list(LIDs) + list({LID for seq in LID_combinations.values() for _, LID in seq if
                                       LID not in LIDs_requested and LID in self._iLIDs})
@@ -103,6 +104,7 @@ class FieldData(object):
                 array[:n_LIDs, :] = self._data_by_EID[iEIDs, :][:, iLIDs].T
 
         if LID_combinations:
+            LIDs = LIDs2output
             array_combined = np.empty((len(LIDs_requested) + len(LID_combinations), n_EIDs),
                                       dtype=self._dtype)
 
