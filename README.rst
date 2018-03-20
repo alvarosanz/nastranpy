@@ -2,7 +2,7 @@
 nastranpy
 *********
 
-A library to interact with nastran models.
+A library to interact with nastran models and results.
 
 Requirements
 ============
@@ -19,15 +19,15 @@ Run the following command::
     pip install nastranpy
 
 
-Usage example
-=============
+Usage example: Handling nastran models
+======================================
 
 Import the model::
 
     import nastranpy
 
 
-    model = nastranpy.Model()
+    model = nastranpy.bdf.Model()
     model.read(['/Users/Alvaro/nastran_model_input/nastran_launcher.dat'])
 
 Export the model::
@@ -158,6 +158,76 @@ Make include self-contained::
     include = model.includes['BulkData/3C0748_Sp2_ob_Sprdr_v05.bdf']
     include.make_self_contained()
 
+
+Usage example: Handling nastran results
+======================================
+
+Create a new database ::
+
+    import nastranpy
+
+    files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
+    database_path = '/Users/Alvaro/databases/FooDatabase'
+    database_name = 'Foo database'
+    database_version = '0.0.1'
+
+    database = nastranpy.results.create_database(files, database_path,
+                                                 database_name, database_version)
+
+Load an existing database ::
+
+    database = nastranpy.results.DataBase(database_path)
+
+Check database integrity ::
+
+    database.check()
+
+Display database info ::
+
+    database.info()
+
+Perform a query::
+
+    query = ['ELEMENT FORCES - QUAD4', # table
+             ('NX', 'NY', 'ABS(NXY)'), # query fields
+             # query outputs:
+             [
+                 'NX',
+                 'NY',
+                 'ABS(NXY)',
+             ],
+
+            ]
+
+    query = database.query('ELEMENT FORCES - QUAD4', # table
+                           ('NX', 'NY', 'ABS(NXY)'), # query fields
+                           # query outputs:
+                           [
+                               'NX',
+                               'NY',
+                               'ABS(NXY)',
+                           ],
+                           LIDs=queried_LIDs,
+                           EIDs=queried_EIDs)
+
+Perform an aggregation query::
+
+    query = database.query('ELEMENT FORCES - QUAD4', # table
+                           ('NX', 'NY', 'NXY'), # query fields
+                           # query outputs:
+                           [
+                               ('MAX PPAL (2D)', 'AVG/MAX'),
+                               ('MIN PPAL (2D)', 'AVG/MIN'),
+                               ('MAX SHEAR (2D)', 'AVG/MAX'),
+                               ('VON MISES (2D)', 'AVG/MAX'),
+                           ],
+                           LIDs=queried_LIDs,
+                           LID_combinations=linear_combined_subcases, # Additional subcases as a combination of the existing ones
+                           EIDs=queried_EIDs)
+
+Get a pandas dataframe::
+
+    df = get_dataframe('ELEMENT FORCES - QUAD4', LIDs=queried_LIDs, EIDs=queried_EIDs)
 
 Contact
 =======
