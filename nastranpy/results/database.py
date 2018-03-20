@@ -166,125 +166,129 @@ class DataBase(object):
         else:
             print('Everything is OK!')
 
-    def query(self, table_name, fields, aggregation_options=None, return_stats=False,
+    def query(self, table_name, fields, query_outputs=None,
               LIDs=None, EIDs=None, LID_combinations=None,
-              geometry=None, weights=None):
-        is_singular_instance = False
+              geometry=None, weights=None, return_stats=True):
+        EID_groups = None
+
+        if isinstance(EIDs, dict):
+            EID_groups = dict(EIDs)
+            EIDs = sorted({EID for EID_group in EIDs.values() for EID in EID_group})
 
         if isinstance(fields, str):
             fields = [fields]
-            is_singular_instance = True
 
         fields = [field.upper() for field in fields]
-        fields = [(field[4:-1], True) if field[:4] == 'ABS(' and field[-1] == ')' else
-                  (field, False) for field in fields]
+        fields = [(field[4:-1], field, True) if field[:4] == 'ABS(' and field[-1] == ')' else
+                  (field, field, False) for field in fields]
 
-        arrays = list()
+        field_arrays = dict()
 
-        for field, use_abs in fields:
+        for field, field_mod, use_abs in fields:
             array, LIDs_returned, EIDs_returned = self.tables[table_name][field].get_array(LIDs, EIDs, LID_combinations,
                                                                                            return_indexes=True,
                                                                                            absolute_value=use_abs)
-            arrays.append(array)
+            field_arrays[field_mod] = array
 
-        if aggregation_options is None:
+        iEIDs = {EID: i for i, EID in enumerate(EIDs_returned)}
 
-            if is_singular_instance:
-                return arrays[0]
-            else:
-                return arrays
+        if geometry:
+            geometry = np.array([geometry[EID] for EID in EIDs_returned])
 
+        if query_outputs is None:
+            outputs = {field: array for field, array in field_arrays.items()}
         else:
-            aggregations = list()
+            outputs = dict()
 
-            is_singular_instance = False
+            if not isinstance(query_outputs, list):
+                query_outputs = [query_outputs]
 
-            if not isinstance(aggregation_options, list):
-                aggregation_options = [aggregation_options]
-                is_singular_instance = True
+            for query_output in query_outputs:
 
-            for aggregation_option in aggregation_options:
-                stats = None
-                aggregation_sequence = None
-
-                if not isinstance(aggregation_option, str):
-                    func, aggregation_sequence = aggregation_option
+                if isinstance(query_output, str):
+                    output_field = query_output
+                    aggregations = None
                 else:
-                    func = aggregation_option
+                    output_field, aggregations = query_output
 
-                if not callable(func):
+                if not callable(output_field):
 
-                    if func.upper() in query_functions:
-                        func = query_functions[func.upper()]
+                    if output_field in field_arrays:
+                        output_array = np.array(field_arrays[output_field])
+                    elif output_field.upper() in query_functions:
+                        output_array = query_functions[output_field.upper()](*field_arrays.values(), geometry)
                     else:
-                        raise ValueError('Unsupported aggregation function: {}'.format(func))
-
-                args = [array for array in arrays]
-
-                if not geometry is None:
-                    args.append(geometry)
-
-                array = func(*args)
-
-                if aggregation_sequence:
-
-                    if not isinstance(aggregation_sequence, list):
-                        aggregation_sequence = [aggregation_sequence]
-
-                    for method, axis in aggregation_sequence:
-                        last_axis = axis[:3].upper()
-
-                        if len(array.shape) == 2:
-
-                            if axis.upper() not in ('LIDS', 'EIDS', 'GIDS', 'LID', 'EID', 'GID'):
-                                raise ValueError(f"Illegal axis ('{axis}')! Use 'LIDs', 'EIDs' or 'GIDs' instead.")
-
-                            axis = 0 if last_axis == 'LID' else 1
-
-                        else:
-                            axis = 0
-
-                        if method.upper() == 'AVG':
-
-                            if return_stats:
-                                stats = None
-
-                            array = np.average(array, axis, weights)
-                        elif method.upper() == 'MAX':
-
-                            if return_stats:
-                                stats = array.argmax(axis)
-
-                            array = array.max(axis)
-                        elif method.upper() == 'MIN':
-
-                            if return_stats:
-                                stats = array.argmin(axis)
-
-                            array = array.min(axis)
-                        else:
-                            raise ValueError('Unsupported aggregation method: {}'.format(method))
-
-                if return_stats:
-
-                    if not stats is None:
-
-                        if last_axis == 'LID':
-                            IDs = LIDs_returned
-                        else:
-                            IDs = EIDs_returned
-
-                        stats = IDs[stats]
-
-                    aggregations.append((array, stats))
+                        raise ValueError('Unsupported aggregation function: {}'.format(output_field))
                 else:
-                    aggregations.append(array)
+                    output_array = output_field(*field_arrays.values(), geometry)
+                    output_field = output_field.__name__
 
-            if is_singular_instance:
-                return aggregations[0]
-            else:
-                return aggregations
+                if EID_groups:
+                    outputs[output_field] = dict()
+
+                    for EID_group in EID_groups:
+                        EIDs = np.array(EID_groups[EID_group])
+                        weights = np.array([weights[EID] for EID in EIDs]) if weights else None
+                        outputs[output_field][EID_group] = self._get_output(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
+                                                                           aggregations,
+                                                                           LIDs_returned, EIDs,
+                                                                           weights, return_stats)
+
+                else:
+                    EIDs = EIDs_returned
+                    weights = np.array([weights[EID] for EID in EIDs]) if weights else None
+                    outputs[output_field] = self._get_output(output_array,
+                                                            aggregations,
+                                                            LIDs_returned, EIDs,
+                                                            weights, return_stats)
+
+        return outputs
 
     def get_dataframe(self, table_name, LIDs=None, EIDs=None, columns=None,
                       fields_derived=None):
         return self.tables[table_name].get_dataframe(LIDs, EIDs, columns, fields_derived)
+
+    @staticmethod
+    def _get_output(output_array, aggregations, LIDs, EIDs, weights, return_stats):
+        LID_stats = None
+
+        if aggregations:
+            aggregations = aggregations.strip().upper().split('/')
+
+            for i, aggregation in enumerate(aggregations):
+                axis = 1 - i
+
+                if aggregation.upper() == 'AVG':
+
+                    if return_stats:
+                        LID_stats = None
+
+                    if axis == 1:
+                        output_array = np.average(output_array, axis, weights)
+                    else:
+                        output_array = np.average(output_array, axis, weights)
+
+                elif aggregation.upper() == 'MAX':
+
+                    if return_stats:
+                        LID_stats = output_array.argmax(axis)
+
+                    output_array = output_array.max(axis)
+                elif aggregation.upper() == 'MIN':
+
+                    if return_stats:
+                        LID_stats = output_array.argmin(axis)
+
+                    output_array = output_array.min(axis)
+                else:
+                    raise ValueError('Unsupported aggregation method: {}'.format(aggregation))
+
+        if aggregations and return_stats:
+
+            if not LID_stats is None:
+                IDs = LIDs if axis == 0 else EIDs
+                LID_stats = IDs[LID_stats]
+
+            return (output_array, LID_stats)
+        else:
+            return output_array
