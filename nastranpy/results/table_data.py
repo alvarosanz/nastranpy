@@ -20,6 +20,22 @@ class TableData(object):
                    field in self._fields.values()):
             raise ValueError('Inconsistent fields!')
 
+    @property
+    def names(self):
+        return [name for name in self._names]
+
+    @property
+    def index_labels(self):
+        return tuple(self._names[:2])
+
+    @property
+    def LIDs(self):
+        return np.array(self._LIDs)
+
+    @property
+    def EIDs(self):
+        return np.array(self._EIDs)
+
     def __getitem__(self, key):
         return self._fields[key]
 
@@ -58,19 +74,3 @@ class TableData(object):
         return pd.DataFrame(data, columns=columns,
                             index=pd.MultiIndex.from_product([LIDs, EIDs], names=[self._LID_name,
                                                                                   self._EID_name,]))
-
-    @property
-    def names(self):
-        return [name for name in self._names]
-
-    @property
-    def index_labels(self):
-        return tuple(self._names[:2])
-
-    @property
-    def LIDs(self):
-        return np.array(self._LIDs)
-
-    @property
-    def EIDs(self):
-        return np.array(self._EIDs)

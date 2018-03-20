@@ -18,7 +18,7 @@ class DataBase(object):
     def clear(self):
         self.tables = None
         self._nbytes = 0
-        self._header = None
+        self._table_headers = None
         self._project = None
         self._name = None
         self._version = None
@@ -42,8 +42,8 @@ class DataBase(object):
 
     def _walk_header(self):
 
-        if self._header is None:
-            self._header = list()
+        if self._table_headers is None:
+            self._table_headers = list()
 
             with open(os.path.join(self.path, '#header.json')) as f:
                 database_header = json.load(f)
@@ -54,9 +54,39 @@ class DataBase(object):
                 with open(os.path.join(table_path, '#header.json')) as f:
                     table_header = json.load(f)
 
-                self._header.append((table_name, table_path, table_header))
+                self._table_headers.append((table_name, table_path, table_header))
 
-        yield from self._header
+        yield from self._table_headers
+
+    def info(self, print_to_screen=True):
+        info = list()
+        info.append(f'Project: {self.project}')
+        info.append(f'Name: {self.name}')
+        info.append(f'Version: {self.version}')
+        info.append(f'Date: {self.date}')
+        info.append(f'Total size: {humansize(self._nbytes)}'.format())
+        info.append(f'Number of tables: {len(self.tables)}'.format())
+        info.append('')
+
+        for table_name, table_path, table_header in self._walk_header():
+            LIDs_name = get_plural(table_header['columns'][0][0])
+            EIDs_name = get_plural(table_header['columns'][1][0])
+            info.append(f"Table name: '{table_name}' ({LIDs_name}: {table_header[LIDs_name]}, {EIDs_name}: {table_header[EIDs_name]})")
+            info.append('   ' + ' '.join(['_' * 6 for _, _ in table_header['columns']]))
+            info.append('  |' + '|'.join([' ' * 6 for _, _ in table_header['columns']]) + '|')
+            info.append('  |' + '|'.join([name.center(6) for name, _ in table_header['columns']]) + '|')
+            info.append('  |' + '|'.join(['_' * 6 for _, _ in table_header['columns']]) + '|')
+            info.append('  |' + '|'.join([' ' * 6 for _, _ in table_header['columns']]) + '|')
+            info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table_header['columns']]) + '|')
+            info.append('  |' + '|'.join(['_' * 6 for _, _ in table_header['columns']]) + '|')
+            info.append('')
+
+        info = '\n'.join(info)
+
+        if print_to_screen:
+            print(info)
+        else:
+            return info
 
     def load(self):
 
@@ -258,33 +288,3 @@ class DataBase(object):
     def get_dataframe(self, table_name, LIDs=None, EIDs=None, columns=None,
                       fields_derived=None):
         return self.tables[table_name].get_dataframe(LIDs, EIDs, columns, fields_derived)
-
-    def info(self, print_to_screen=True):
-        info = list()
-        info.append(f'Project: {self.project}')
-        info.append(f'Name: {self.name}')
-        info.append(f'Version: {self.version}')
-        info.append(f'Date: {self.date}')
-        info.append(f'Total size: {humansize(self._nbytes)}'.format())
-        info.append(f'Number of tables: {len(self.tables)}'.format())
-        info.append('')
-
-        for table_name, table_path, table_header in self._walk_header():
-            LIDs_name = get_plural(table_header['columns'][0][0])
-            EIDs_name = get_plural(table_header['columns'][1][0])
-            info.append(f"Table name: '{table_name}' ({LIDs_name}: {table_header[LIDs_name]}, {EIDs_name}: {table_header[EIDs_name]})")
-            info.append('   ' + ' '.join(['_' * 6 for _, _ in table_header['columns']]))
-            info.append('  |' + '|'.join([' ' * 6 for _, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join([name.center(6) for name, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join(['_' * 6 for _, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join([' ' * 6 for _, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join(['_' * 6 for _, _ in table_header['columns']]) + '|')
-            info.append('')
-
-        info = '\n'.join(info)
-
-        if print_to_screen:
-            print(info)
-        else:
-            return info

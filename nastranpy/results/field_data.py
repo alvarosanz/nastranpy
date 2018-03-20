@@ -20,6 +20,34 @@ class FieldData(object):
         self._dtype = self._data_by_LID.dtype
         self._item_size = np.dtype(self._dtype).itemsize
 
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def index_labels(self):
+        return (self._LID_name, self._EID_name)
+
+    @property
+    def LIDs(self):
+        return np.array(self._LIDs)
+
+    @property
+    def EIDs(self):
+        return np.array(self._EIDs)
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def shape(self):
+        return self._data_by_LID.shape
+
+    @property
+    def size(self):
+        return self._data_by_LID.size
+
     def get_array(self, LIDs=None, EIDs=None, LID_combinations=None,
                   return_indexes=False, absolute_value=False, max_size=2e9):
         LIDs_combined_used = list()
@@ -125,31 +153,3 @@ class FieldData(object):
                                                                          names=[self._LID_name,
                                                                                 self._EID_name,]),
                          name = self._name)
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def index_labels(self):
-        return (self._LID_name, self._EID_name)
-
-    @property
-    def LIDs(self):
-        return np.array(self._LIDs)
-
-    @property
-    def EIDs(self):
-        return np.array(self._EIDs)
-
-    @property
-    def dtype(self):
-        return self._dtype
-
-    @property
-    def shape(self):
-        return self._data_by_LID.shape
-
-    @property
-    def size(self):
-        return self._data_by_LID.size
