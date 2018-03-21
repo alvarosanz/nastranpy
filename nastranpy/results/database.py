@@ -2,6 +2,7 @@ import os
 import json
 import csv
 import numpy as np
+import pandas as pd
 from nastranpy.results.field_data import FieldData
 from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
@@ -202,13 +203,18 @@ class DataBase(object):
         if geometry:
             geometry = np.array([geometry[EID] for EID in EIDs_returned])
 
+        index0 = LIDs_returned
+        index1 = EIDs_returned
+
         if not outputs:
-            query = {field: (array, LIDs_returned, EIDs_returned, None) for field, array in field_arrays.items()}
+            query = {field: (array, None) for field, array in field_arrays.items()}
         else:
             query = dict()
 
             if not isinstance(outputs, list):
                 outputs = [outputs]
+
+            all_aggregations = list()
 
             for query_output in outputs:
 
@@ -217,6 +223,7 @@ class DataBase(object):
                     aggregations = None
                 else:
                     output_field, aggregations = query_output
+                    all_aggregations.append(aggregations)
 
                 if not callable(output_field):
 
@@ -225,7 +232,7 @@ class DataBase(object):
                     elif output_field.upper() in query_functions:
                         output_array = query_functions[output_field.upper()](*field_arrays.values(), geometry)
                     else:
-                        raise ValueError('Unsupported output field: {}'.format(output_field))
+                        raise ValueError(f"Unsupported output field: '{output_field}'")
                 else:
                     output_array = output_field(*field_arrays.values(), geometry)
                     output_field = output_field.__name__
@@ -237,99 +244,76 @@ class DataBase(object):
 
                     query[output_field] = dict()
 
-                    for EID_group in EID_groups:
+                    if len(aggregations.split('-')) == 2:
+                        n = 1
+                    else:
+                        n = len(LIDs_returned)
+
+                    array_agg = np.empty((len(EID_groups), n), dtype=output_array.dtype)
+
+                    for i, EID_group in enumerate(EID_groups):
                         EIDs = np.array(EID_groups[EID_group])
                         weights = np.array([weights[EID] for EID in EIDs]) if weights else None
-                        query[output_field][EID_group] = self._get_output(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
-                                                                          aggregations,
-                                                                          LIDs_returned, EIDs,
-                                                                          weights)
+                        array_agg[i, :] = self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
+                                                          aggregations, LIDs_returned, weights)
 
+                    query[output_field] = (array_agg, aggregations)
+                    index0 = list(EID_groups)
+                    index1 = LIDs_returned
                 else:
-                    EIDs = EIDs_returned
-                    weights = np.array([weights[EID] for EID in EIDs]) if weights else None
-                    query[output_field] = self._get_output(output_array,
-                                                           aggregations,
-                                                           LIDs_returned, EIDs,
-                                                           weights)
 
-        return query
+                    if aggregations:
+                        raise ValueError('A pick query must not be aggregated!')
 
-    def write_query(self, query, path):
-        pass
+                    query[output_field] = (output_array, None)
 
-        # def iter_query(query):
+            if len({0 if aggregations is None else len(aggregations.split('-')) for
+                    aggregations in all_aggregations}) > 1:
+                raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
 
-        #     try:
-        #         for name, (array, LIDs, EIDs, aggregations) in query.items():
-        #             yield (name, aggregations, array, EIDs, LIDs)
+        data = {f'{field} ({aggregations})' if aggregations else field: array.ravel() for
+                field, (array, aggregations) in query.items()}
+        columns = list(data)
 
-        #     except ValueError:
+        if EID_groups:
+            index_names = ['Group', self.tables[table]._LID_name]
+        else:
+            index_names = [self.tables[table]._LID_name, self.tables[table]._EID_name]
 
-        #         for name in query:
-        #             EID_groups = list()
-        #             arrays = list()
+        index = pd.MultiIndex.from_product([index0, index1], names=index_names)
 
-        #             for EID_group, (array, LIDs, EIDs, aggregations) in query[name].items():
-        #                 EID_groups.append(EID_group)
-        #                 arrays.append(array)
-
-        #             yield (name, aggregations, array, EID_groups, LIDs)
-
-
-        # for name, aggregation, rows, indexes, header in iter_query(query):
-        #     filename = f'{name}_{aggregations}.csv' if aggregations else f'{name}.csv'
-        #     name = f'{name} ({aggregations})' if aggregations else name
-
-        #     with open(os.path.join(path, filename), 'w') as f:
-        #         csv_writer = csv.writer(f, lineterminator='\n')
-        #         csv_writer.
-
-        #         for row in rows:
-        #             csv_writer.writerow(row)
-
-
-    def get_dataframe(self, table_name, LIDs=None, EIDs=None, columns=None,
-                      fields_derived=None):
-        return self.tables[table_name].get_dataframe(LIDs, EIDs, columns, fields_derived)
+        return pd.DataFrame(data, columns=columns, index=index)
 
     @staticmethod
-    def _get_output(output_array, aggregations, LIDs, EIDs, weights):
+    def _aggregate(output_array, aggregations, LIDs, weights):
 
-        if aggregations:
-            EIDs = None
+        for i, aggregation in enumerate(aggregations.strip().upper().split('-')):
+            axis = 1 - i
 
-            for i, aggregation in enumerate(aggregations.strip().upper().split('-')):
-                axis = 1 - i
-
-                if aggregation == 'AVG':
-
-                    if axis == 0:
-                        LIDs = None
-
-                    output_array = np.average(output_array, axis, weights)
-                elif aggregation == 'MAX':
-
-                    if axis == 0:
-                        LIDs = LIDs[output_array.argmax(axis)]
-
-                    output_array = np.max(output_array, axis)
-                elif aggregation == 'MIN':
-
-                    if axis == 0:
-                        LIDs = LIDs[output_array.argmin(axis)]
-
-                    output_array = np.min(output_array, axis)
-                else:
-                    raise ValueError('Unsupported aggregation method: {}'.format(aggregation))
+            if aggregation == 'AVG':
 
                 if axis == 0:
-                    output_array = np.array([output_array])
+                    raise ValueError("'AVG' aggregation cannot be applied to LIDs!")
 
-                    if not LIDs is None:
-                        LIDs = np.array([LIDs])
+                output_array = np.average(output_array, axis, weights)
+            elif aggregation == 'MAX':
 
-        return (output_array, LIDs, EIDs)
+                if axis == 0:
+                    LIDs = np.array([LIDs[output_array.argmax(axis)]])
+                    output_array = np.array([np.max(output_array, axis)])
+                else:
+                    output_array = np.max(output_array, axis)
+            elif aggregation == 'MIN':
+
+                if axis == 0:
+                    LIDs = np.array([LIDs[output_array.argmin(axis)]])
+                    output_array = np.array([np.min(output_array, axis)])
+                else:
+                    output_array = np.min(output_array, axis)
+            else:
+                raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
+
+        return output_array
 
 
 def get_query_from_file(file):
