@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import csv
 import numpy as np
 import pandas as pd
@@ -168,9 +169,8 @@ class DataBase(object):
         else:
             print('Everything is OK!')
 
-    def query(self, table=None, fields=None, outputs=None,
-              LIDs=None, EIDs=None, LID_combinations=None,
-              geometry=None, weights=None, return_stats=True, file=None, **kwargs):
+    def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
+              geometry=None, weights=None, file=None, custom_functions=None, **kwargs):
 
         if file:
             return self.query(**get_query_from_file(file))
@@ -180,96 +180,93 @@ class DataBase(object):
         EID_groups = None
 
         if isinstance(EIDs, dict):
-            EID_groups = dict(EIDs)
-            EIDs = sorted({EID for EID_group in EIDs.values() for EID in EID_group})
-
-        if isinstance(fields, str):
-            fields = [fields]
-
-        fields = [field.upper() for field in fields]
-        fields = [(field[4:-1], field, True) if field[:4] == 'ABS(' and field[-1] == ')' else
-                  (field, field, False) for field in fields]
-
-        field_arrays = dict()
-
-        for field, field_mod, use_abs in fields:
-            field_array, LIDs_returned, EIDs_returned = self.tables[table][field].get_array(LIDs, EIDs, LID_combinations,
-                                                                                            return_indexes=True,
-                                                                                            absolute_value=use_abs)
-            field_arrays[field_mod] = field_array
-
-        iEIDs = {EID: i for i, EID in enumerate(EIDs_returned)}
+            EID_groups = EIDs
+            EIDs = sorted({EID for EIDs in EIDs.values() for EID in EIDs})
+            iEIDs = {EID: i for i, EID in enumerate(EIDs)}
 
         if geometry:
-            geometry = np.array([geometry[EID] for EID in EIDs_returned])
+            geometry = np.array([geometry[EID] for EID in EIDs])
 
-        index0 = LIDs_returned
-        index1 = EIDs_returned
+        query = dict()
+        fields = dict()
+        all_aggregations = list()
 
-        if not outputs:
-            query = {field: (array, None) for field, array in field_arrays.items()}
-        else:
-            query = dict()
+        for output in outputs:
 
-            if not isinstance(outputs, list):
-                outputs = [outputs]
+            if isinstance(output, str):
+                output_field, is_absolute = self._is_abs(output.upper())
+                aggregations = None
+            else:
+                output_field, is_absolute = self._is_abs(output[0].upper())
+                aggregations = output[1].upper()
+                all_aggregations.append(aggregations)
 
-            all_aggregations = list()
+            if output_field in self.tables[table]:
+                field_array, LIDs, EIDs = self.tables[table][output_field].get_array(LIDs, EIDs, is_absolute)
+                fields[output_field] = field_array
+                output_array = np.array(fields[output_field])
 
-            for query_output in outputs:
+                if is_absolute:
+                    output_field = f'ABS({output_field})'
 
-                if isinstance(query_output, str):
-                    output_field = query_output
-                    aggregations = None
+            else:
+                func_name, func_args = self._get_args(output_field)
+
+                if func_name in query_functions:
+                    func = query_functions[func_name]
+                elif custom_functions and func_name in custom_functions:
+                    func = custom_functions[func_name]
                 else:
-                    output_field, aggregations = query_output
-                    all_aggregations.append(aggregations)
+                    raise ValueError(f"Unsupported output: '{output_field}'")
 
-                if not callable(output_field):
+                output_field = func_name
+                args = list()
 
-                    if output_field in field_arrays:
-                        output_array = np.array(field_arrays[output_field])
-                    elif output_field.upper() in query_functions:
-                        output_array = query_functions[output_field.upper()](*field_arrays.values(), geometry)
-                    else:
-                        raise ValueError(f"Unsupported output field: '{output_field}'")
+                for arg in func_args:
+
+                    if arg not in fields:
+                        field_array, LIDs, EIDs = self.tables[table][arg].get_array(LIDs, EIDs)
+                        fields[arg] = field_array
+
+                    args.append(fields[arg])
+
+                output_array = func(*args, geometry)
+
+            if EID_groups:
+
+                if not aggregations:
+                    raise ValueError('A grouped query must be aggregated!')
+
+                query[output_field] = dict()
+
+                if len(aggregations.split('-')) == 2:
+                    n = 1
                 else:
-                    output_array = output_field(*field_arrays.values(), geometry)
-                    output_field = output_field.__name__
+                    n = len(LIDs)
 
-                if EID_groups:
+                array_agg = np.empty((len(EID_groups), n), dtype=output_array.dtype)
 
-                    if not aggregations:
-                        raise ValueError('A grouped query must be aggregated!')
+                for i, EID_group in enumerate(EID_groups):
+                    EIDs = np.array(EID_groups[EID_group])
+                    weights = np.array([weights[EID] for EID in EIDs]) if weights else None
+                    array_agg[i, :] = self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
+                                                      aggregations, LIDs, weights)
 
-                    query[output_field] = dict()
+                query[output_field] = (array_agg, aggregations)
+                index0 = list(EID_groups)
+                index1 = LIDs
+            else:
 
-                    if len(aggregations.split('-')) == 2:
-                        n = 1
-                    else:
-                        n = len(LIDs_returned)
+                if aggregations:
+                    raise ValueError('A pick query must not be aggregated!')
 
-                    array_agg = np.empty((len(EID_groups), n), dtype=output_array.dtype)
+                query[output_field] = (output_array, None)
+                index0 = LIDs
+                index1 = EIDs
 
-                    for i, EID_group in enumerate(EID_groups):
-                        EIDs = np.array(EID_groups[EID_group])
-                        weights = np.array([weights[EID] for EID in EIDs]) if weights else None
-                        array_agg[i, :] = self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
-                                                          aggregations, LIDs_returned, weights)
-
-                    query[output_field] = (array_agg, aggregations)
-                    index0 = list(EID_groups)
-                    index1 = LIDs_returned
-                else:
-
-                    if aggregations:
-                        raise ValueError('A pick query must not be aggregated!')
-
-                    query[output_field] = (output_array, None)
-
-            if len({0 if aggregations is None else len(aggregations.split('-')) for
-                    aggregations in all_aggregations}) > 1:
-                raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
+        if len({0 if aggregations is None else len(aggregations.split('-')) for
+                aggregations in all_aggregations}) > 1:
+            raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
 
         data = {f'{field} ({aggregations})' if aggregations else field: array.ravel() for
                 field, (array, aggregations) in query.items()}
@@ -285,9 +282,22 @@ class DataBase(object):
         return pd.DataFrame(data, columns=columns, index=index)
 
     @staticmethod
+    def _is_abs(field_str):
+
+        if field_str[:4] == 'ABS(' and field_str[-1] == ')':
+            return field_str[4:-1], True
+        else:
+            return field_str, False
+
+    @staticmethod
+    def _get_args(func_str):
+        re_match = re.search('(.+)\((.+?)\)', func_str)
+        return re_match[1], [arg.strip() for arg in re_match[2].split(',')]
+
+    @staticmethod
     def _aggregate(output_array, aggregations, LIDs, weights):
 
-        for i, aggregation in enumerate(aggregations.strip().upper().split('-')):
+        for i, aggregation in enumerate(aggregations.strip().split('-')):
             axis = 1 - i
 
             if aggregation == 'AVG':
@@ -328,9 +338,14 @@ def get_query_from_file(file):
 
     query = {key: value if value else None for key, value in query.items()}
 
-    for field in ('LID_combinations', 'geometry', 'weights'):
+    for field in ('LIDs', 'geometry', 'weights'):
 
-        if query[field]:
-            query[field] = {int(key): value for key, value in query[field].items()}
+        try:
+
+            if query[field]:
+                query[field] = {int(key): value for key, value in query[field].items()}
+
+        except AttributeError:
+            pass
 
     return query

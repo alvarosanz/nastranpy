@@ -39,6 +39,9 @@ class TableData(object):
     def __getitem__(self, key):
         return self._fields[key]
 
+    def __contains__(self, value):
+        return value in self._fields
+
     def get_dataframe(self, LIDs=None, EIDs=None, columns=None, fields_derived=None):
 
         if LIDs is None:
