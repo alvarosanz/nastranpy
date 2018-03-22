@@ -84,8 +84,8 @@ def create_database(files, database_path, database_name, database_version,
                         'dtypes': tables_specs[table_name]['dtypes'],
                     }
 
-                    tables[table_name]['LIDs'] = [table.df.index.get_level_values(0)[0]]
-                    tables[table_name]['EIDs'] = table.df.index.get_level_values(1)
+                    tables[table_name]['LIDs'] = [table.df.index.get_level_values(0).values[0]]
+                    tables[table_name]['EIDs'] = table.df.index.get_level_values(1).values
                     tables[table_name]['files'] = dict()
 
                     for field_name in tables_specs[table_name]['columns'][2:]:
@@ -93,14 +93,30 @@ def create_database(files, database_path, database_name, database_version,
                         table.df[field_name].values.tofile(tables[table_name]['files'][field_name])
 
                 else:
-                    tables[table_name]['LIDs'].append(table.df.index.get_level_values(0)[0])
+                    LID = table.df.index.get_level_values(0).values[0]
+                    tables[table_name]['LIDs'].append(LID)
+                    EIDs = table.df.index.get_level_values(1).values
+                    index = None
 
-                    if not np.array_equal(tables[table_name]['EIDs'],
-                                          table.df.index.get_level_values(1)):
-                        raise ValueError("Inconsistent EIDs! ('{}')".format(table_name))
+                    if not np.array_equal(tables[table_name]['EIDs'], EIDs):
+                        iEIDs = {EID: i for i, EID in enumerate(EIDs)}
+                        label = tables_specs[table_name]['columns'][1] + 's'
+
+                        try:
+                            index = np.array([iEIDs[EID] for EID in tables[table_name]['EIDs']])
+                        except KeyError:
+                            print(f'WARNING: Missing {label}! The whole subcase will be omitted (LID: {LID})')
+                            continue
+
+                        if len(index) < len(EIDs):
+                            print(f'WARNING: Additional {label} found! These will be ommitted (LID: {LID})')
 
                     for field_name in tables_specs[table_name]['columns'][2:]:
-                        table.df[field_name].values.tofile(tables[table_name]['files'][field_name])
+
+                        if index is None:
+                            table.df[field_name].values.tofile(tables[table_name]['files'][field_name])
+                        else:
+                            table.df[field_name].values[index].tofile(tables[table_name]['files'][field_name])
 
                 load_cases_info[table_name][table.subcase] = {'TITLE': table.title,
                                                               'SUBTITLE': table.subtitle,
