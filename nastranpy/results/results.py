@@ -4,7 +4,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from nastranpy.results.read_files import tables_in_pch
-from nastranpy.results.database import DataBase
+from nastranpy.results.database import DataBase, get_query_from_file
 from nastranpy.results.tables_specs import tables_specs
 from nastranpy.bdf.misc import get_plural, get_hasher, hash_bytestr
 
@@ -27,6 +27,16 @@ def get_tables(files):
             tables[table_name].append(table.df)
 
     return {table_name: pd.concat(tables[table_name]) for table_name in tables}
+
+
+def query(file):
+    query = get_query_from_file(file)
+    database = DataBase(query['path'])
+
+    if query['check']:
+        database.check()
+
+    return database.query(**query)
 
 
 def create_database(files, database_path, database_name, database_version,

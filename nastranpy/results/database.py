@@ -255,7 +255,7 @@ class DataBase(object):
                     index1 = None
                 else:
                     n = len(LIDs)
-                    index1 = np.array(LIDs)
+                    index1 = np.array(list(LIDs))
 
                 array_agg = np.empty((len(EID_groups), n), dtype=output_array.dtype)
                 LIDs_agg = np.empty((len(EID_groups), n), dtype=self.tables[table].LIDs.dtype)
@@ -276,8 +276,8 @@ class DataBase(object):
                     raise ValueError('A pick query must not be aggregated!')
 
                 query[output_field] = output_array
-                index0 = np.array(LIDs)
-                index1 = np.array(EIDs)
+                index0 = np.array(list(LIDs))
+                index1 = EIDs
 
         if len({0 if aggregations is None else len(aggregations.split('-')) for
                 aggregations in all_aggregations}) > 1:
