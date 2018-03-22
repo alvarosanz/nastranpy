@@ -146,7 +146,7 @@ class DataBase(object):
             print('Database already loaded!')
 
     def check(self):
-
+        print('Checking data integrity ...')
         files_corrupted = list()
 
         for table_name, table_path, table_header in self._walk_header():
@@ -154,10 +154,11 @@ class DataBase(object):
             files = [field for field, _ in table_header['columns']]
             files += [field + '#T' for field, _ in table_header['columns'][2:]]
             files = [os.path.join(table_path, field + '.bin') for field in files]
+            files.append(os.path.join(table_path, '#header.json'))
 
             for file in files:
 
-                with open(file, 'rb') as f, open(file[:-3] + table_header['checksum'], 'rb') as f_checksum:
+                with open(file, 'rb') as f, open(os.path.splitext(file)[0] + '.' + table_header['checksum'], 'rb') as f_checksum:
 
                     if f_checksum.read() != hash_bytestr(f, get_hasher(table_header['checksum'])):
                         files_corrupted.append(file)
@@ -212,10 +213,10 @@ class DataBase(object):
             else:
                 func_name, func_args = self._get_args(output_field)
 
-                if func_name in query_functions:
-                    func = query_functions[func_name]
-                elif custom_functions and func_name in custom_functions:
+                if custom_functions and func_name in custom_functions:
                     func = custom_functions[func_name]
+                elif func_name in query_functions[table]:
+                    func, func_args = query_functions[table][func_name]
                 else:
                     raise ValueError(f"Unsupported output: '{output_field}'")
 
@@ -292,7 +293,11 @@ class DataBase(object):
     @staticmethod
     def _get_args(func_str):
         re_match = re.search('(.+)\((.+?)\)', func_str)
-        return re_match[1], [arg.strip() for arg in re_match[2].split(',')]
+
+        if re_match:
+            return re_match[1], [arg.strip() for arg in re_match[2].split(',')]
+        else:
+            return func_str, None
 
     @staticmethod
     def _aggregate(output_array, aggregations, LIDs, weights):

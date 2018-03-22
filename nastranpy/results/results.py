@@ -191,10 +191,11 @@ def create_database(files, database_path, database_name, database_version,
         files = [field for field in tables_specs[table_name]['columns']]
         files += [field + '#T' for field in tables_specs[table_name]['columns'][2:]]
         files = [os.path.join(table_path, field + '.bin') for field in files]
+        files.append(os.path.join(table_path, '#header.json'))
 
         for file in files:
 
-            with open(file, 'rb') as f_in, open(file[:-3] + checksum, 'wb') as f_out:
+            with open(file, 'rb') as f_in, open(os.path.splitext(file)[0] + '.' + checksum, 'wb') as f_out:
                 f_out.write(hash_bytestr(f_in, get_hasher(checksum)))
 
     with open(os.path.join(database_path, '#header.json'), 'w') as f:

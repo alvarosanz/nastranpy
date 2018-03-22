@@ -35,8 +35,16 @@ def max_shear_2D(sxx, syy, sxy, thickness=None):
 
 
 query_functions = {
-    'VON_MISES': von_mises_2D,
-    'MAX_PPAL': max_ppal_2D,
-    'MIN_PPAL': min_ppal_2D,
-    'MAX_SHEAR': max_shear_2D,
+    'ELEMENT FORCES - QUAD4': {
+        'VON_MISES': [von_mises_2D, ('NX', 'NY', 'NXY')],
+        'MAX_PPAL': [max_ppal_2D, ('NX', 'NY', 'NXY')],
+        'MIN_PPAL': [min_ppal_2D, ('NX', 'NY', 'NXY')],
+        'MAX_SHEAR': [max_shear_2D, ('NX', 'NY', 'NXY')],
+    },
+    'ELEMENT FORCES - TRIA3': {
+        'VON_MISES': [von_mises_2D, ('NX', 'NY', 'NXY')],
+        'MAX_PPAL': [max_ppal_2D, ('NX', 'NY', 'NXY')],
+        'MIN_PPAL': [min_ppal_2D, ('NX', 'NY', 'NXY')],
+        'MAX_SHEAR': [max_shear_2D, ('NX', 'NY', 'NXY')],
+    },
 }
