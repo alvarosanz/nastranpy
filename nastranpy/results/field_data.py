@@ -48,7 +48,7 @@ class FieldData(object):
     def size(self):
         return self._data_by_LID.size
 
-    def get_array(self, LIDs=None, EIDs=None, absolute_value=False, max_size=2e9):
+    def get_array(self, LIDs=None, EIDs=None, max_size=2e9):
 
         try:
             LIDs_queried = [LID for LID, seq in LIDs.items() if not seq]
@@ -123,21 +123,4 @@ class FieldData(object):
                 else:
                     array[LIDs_index[LID], :] = array0[LIDs_queried_index[LID], :]
 
-        if absolute_value:
-            array = np.abs(array)
-
         return array, LIDs, EIDs
-
-    def get_series(self, LIDs=None, EIDs=None):
-        array = self.get_array(LIDs, EIDs)
-
-        if LIDs is None:
-            LIDs = self._LIDs
-
-        if EIDs is None:
-            EIDs = self._EIDs
-
-        return pd.Series(array.ravel(), index=pd.MultiIndex.from_product([LIDs, EIDs],
-                                                                         names=[self._LID_name,
-                                                                                self._EID_name,]),
-                         name = self._name)

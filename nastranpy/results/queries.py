@@ -33,18 +33,27 @@ def max_shear_2D(sxx, syy, sxy, thickness=None):
     else:
         return value / thickness
 
+def stress_2D(value, thickness):
+    return value / thickness
+
 
 query_functions = {
     'ELEMENT FORCES - QUAD4': {
-        'VON_MISES': [von_mises_2D, ('NX', 'NY', 'NXY')],
-        'MAX_PPAL': [max_ppal_2D, ('NX', 'NY', 'NXY')],
-        'MIN_PPAL': [min_ppal_2D, ('NX', 'NY', 'NXY')],
-        'MAX_SHEAR': [max_shear_2D, ('NX', 'NY', 'NXY')],
+        'SX': [stress_2D, ('NX', 'THK')],
+        'SY': [stress_2D, ('NY', 'THK')],
+        'SXY': [stress_2D, ('NXY', 'THK')],
+        'VON_MISES': [von_mises_2D, ('NX', 'NY', 'NXY', 'THK')],
+        'MAX_PPAL': [max_ppal_2D, ('NX', 'NY', 'NXY', 'THK')],
+        'MIN_PPAL': [min_ppal_2D, ('NX', 'NY', 'NXY', 'THK')],
+        'MAX_SHEAR': [max_shear_2D, ('NX', 'NY', 'NXY', 'THK')],
     },
     'ELEMENT FORCES - TRIA3': {
-        'VON_MISES': [von_mises_2D, ('NX', 'NY', 'NXY')],
-        'MAX_PPAL': [max_ppal_2D, ('NX', 'NY', 'NXY')],
-        'MIN_PPAL': [min_ppal_2D, ('NX', 'NY', 'NXY')],
-        'MAX_SHEAR': [max_shear_2D, ('NX', 'NY', 'NXY')],
+        'SX': [stress_2D, ('NX', 'THK')],
+        'SY': [stress_2D, ('NY', 'THK')],
+        'SXY': [stress_2D, ('NXY', 'THK')],
+        'VON_MISES': [von_mises_2D, ('NX', 'NY', 'NXY', 'THK')],
+        'MAX_PPAL': [max_ppal_2D, ('NX', 'NY', 'NXY', 'THK')],
+        'MIN_PPAL': [min_ppal_2D, ('NX', 'NY', 'NXY', 'THK')],
+        'MAX_SHEAR': [max_shear_2D, ('NX', 'NY', 'NXY', 'THK')],
     },
 }
