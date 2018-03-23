@@ -36,11 +36,17 @@ def query(file):
     if query['check']:
         database.check()
 
-    return database.query(**query)
+    df = database.query(**query)
+
+    if query['output_path']:
+        df.to_csv(query['output_path'])
+
+    return df
 
 
 def create_database(files, database_path, database_name, database_version,
                     database_project=None, max_chunk_size=1e8, checksum='sha256'):
+    print('Creating database ...')
 
     if not os.path.exists(database_path):
         os.mkdir(database_path)
