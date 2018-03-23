@@ -54,9 +54,24 @@ def create_database(files, database_path, database_name, database_version,
     if isinstance(files, str):
         files = [files]
 
-    tables = dict()
-    ignored_tables = set()
+    tables_info, load_cases_info = _create_tables(database_path, files)
+
+    for table_name, table_info in tables_info.items():
+        _create_table_header(table_info, load_cases_info[table_name], checksum)
+        _create_transpose(table_info, max_chunk_size)
+        _create_checksums(table_info, checksum)
+
+    _create_database_header(database_path, database_name, database_version,
+                            database_project, tables_info)
+
+    print('Database created succesfully!')
+    return DataBase(database_path)
+
+
+def _create_tables(database_path, files):
+    tables_info = dict()
     load_cases_info = dict()
+    ignored_tables = set()
 
     try:
 
@@ -76,159 +91,182 @@ def create_database(files, database_path, database_name, database_version,
                 if len(table.df.index.get_level_values(0).unique()) != 1:
                     raise ValueError("Inconsistent LIDs! ('{}')".format(table_name))
 
-                if table_name not in tables:
-                    tables[table_name] = dict()
-                    load_cases_info[table_name] = dict()
+                if table_name not in tables_info:
                     table_path = os.path.join(database_path, table_name)
-
-                    if not os.path.exists(table_path):
-                        os.mkdir(table_path)
-
-                    tables[table_name]['specs'] = {
-                        'name': table_name,
-                        'columns': tables_specs[table_name]['columns'],
-                        'dtypes': tables_specs[table_name]['dtypes'],
-                    }
-
-                    tables[table_name]['LIDs'] = [table.df.index.get_level_values(0).values[0]]
-                    tables[table_name]['EIDs'] = table.df.index.get_level_values(1).values
-                    tables[table_name]['files'] = dict()
-
-                    for field_name in tables_specs[table_name]['columns'][2:]:
-                        tables[table_name]['files'][field_name] = open(os.path.join(table_path, field_name + '.bin'), 'wb')
-                        table.df[field_name].values.tofile(tables[table_name]['files'][field_name])
-
+                    tables_info[table_name] = _open_table(table_name, table_path, table)
+                    load_cases_info[table_name] = dict()
+                    is_success = True
                 else:
-                    LID = table.df.index.get_level_values(0).values[0]
-                    tables[table_name]['LIDs'].append(LID)
-                    EIDs = table.df.index.get_level_values(1).values
-                    index = None
+                    is_success = _append_to_table(table, tables_info[table_name])
 
-                    if not np.array_equal(tables[table_name]['EIDs'], EIDs):
-                        iEIDs = {EID: i for i, EID in enumerate(EIDs)}
-                        label = tables_specs[table_name]['columns'][1] + 's'
-
-                        try:
-                            index = np.array([iEIDs[EID] for EID in tables[table_name]['EIDs']])
-                        except KeyError:
-                            print(f'WARNING: Missing {label}! The whole subcase will be omitted (LID: {LID})')
-                            continue
-
-                        if len(index) < len(EIDs):
-                            print(f'WARNING: Additional {label} found! These will be ommitted (LID: {LID})')
-
-                    for field_name in tables_specs[table_name]['columns'][2:]:
-
-                        if index is None:
-                            table.df[field_name].values.tofile(tables[table_name]['files'][field_name])
-                        else:
-                            table.df[field_name].values[index].tofile(tables[table_name]['files'][field_name])
-
-                load_cases_info[table_name][table.subcase] = {'TITLE': table.title,
-                                                              'SUBTITLE': table.subtitle,
-                                                              'LABEL': table.label}
+                if is_success:
+                    load_cases_info[table_name][table.subcase] = {'TITLE': table.title,
+                                                                  'SUBTITLE': table.subtitle,
+                                                                  'LABEL': table.label}
     finally:
 
-        for table in tables.values():
+        for table_info in tables_info.values():
+            _close_table(table_info)
 
-            try:
+    return tables_info, load_cases_info
 
-                for file in table['files'].values():
-                    file.close()
 
-            except KeyError:
-                pass
+def _open_table(table_name, table_path, table):
+    table_info = dict()
 
-    for table_name, table in tables.items():
-        table_path = os.path.join(database_path, table_name)
-        table['LIDs'] = np.array(table['LIDs'])
-        table['EIDs'] = np.array(table['EIDs'])
-        n_LIDs = len(table['LIDs'])
-        n_EIDs = len(table['EIDs'])
-        table['LIDs'].tofile(os.path.join(table_path, tables_specs[table_name]['columns'][0] + '.bin'))
-        table['EIDs'].tofile(os.path.join(table_path, tables_specs[table_name]['columns'][1] + '.bin'))
+    if not os.path.exists(table_path):
+        os.mkdir(table_path)
 
-        with open(os.path.join(table_path, '#header.json'), 'w') as f:
-            header = dict()
-            header['name'] = table_name
-            header['columns'] = [(field_name, tables_specs[table_name]['dtypes'][field_name]) for
-                                 field_name in tables_specs[table_name]['columns']]
-            header[get_plural(tables_specs[table_name]['columns'][0])] = n_LIDs
-            header[get_plural(tables_specs[table_name]['columns'][1])] = n_EIDs
-            header['checksum'] = checksum
+    table_info['name'] = table_name
+    table_info['path'] = table_path
+    table_info['specs'] = tables_specs[table_name]
+    table_info['LIDs'] = [table.df.index.get_level_values(0).values[0]]
+    table_info['EIDs'] = table.df.index.get_level_values(1).values
+    table_info['files'] = dict()
 
-            common_items = dict()
+    for field_name in table_info['specs']['columns'][2:]:
+        table_info['files'][field_name] = open(os.path.join(table_path, field_name + '.bin'), 'wb')
+        table.df[field_name].values.tofile(table_info['files'][field_name])
 
-            for item in ['TITLE', 'SUBTITLE', 'LABEL']:
-                common_items[item] = None
-                unique_values = {load_case_info[item] for load_case_info in
-                                 load_cases_info[table_name].values()}
+    return table_info
 
-                if len(unique_values) == 1:
-                    common_items[item] = unique_values.pop()
 
-                    if common_items[item]:
-                        header[item] = common_items[item]
+def _append_to_table(table, table_info):
+    LID = table.df.index.get_level_values(0).values[0]
+    table_info['LIDs'].append(LID)
+    EIDs = table.df.index.get_level_values(1).values
+    index = None
 
-            if not all(item is None for item in common_items.values()):
-                header['LOAD CASES INFO'] = dict()
+    if not np.array_equal(table_info['EIDs'], EIDs):
+        iEIDs = {EID: i for i, EID in enumerate(EIDs)}
+        label = table_info['specs']['columns'][1] + 's'
 
-                for LID in sorted(load_cases_info[table_name]):
+        try:
+            index = np.array([iEIDs[EID] for EID in table_info['EIDs']])
+        except KeyError:
+            print(f'WARNING: Missing {label}! The whole subcase will be omitted (LID: {LID})')
+            return False
 
-                    if any(item for item in load_cases_info[table_name][LID].values()):
-                        header['LOAD CASES INFO'][LID] = dict()
+        if len(index) < len(EIDs):
+            print(f'WARNING: Additional {label} found! These will be ommitted (LID: {LID})')
 
-                        for item in ['TITLE', 'SUBTITLE', 'LABEL']:
+    for field_name in table_info['specs']['columns'][2:]:
 
-                            if load_cases_info[table_name][LID][item] and common_items[item] is None:
-                                header['LOAD CASES INFO'][LID][item] = load_cases_info[table_name][LID][item]
+        if index is None:
+            table.df[field_name].values.tofile(table_info['files'][field_name])
+        else:
+            table.df[field_name].values[index].tofile(table_info['files'][field_name])
 
-            json.dump(header, f, indent=4)
+    return True
 
-        for field_name in tables_specs[table_name]['columns'][2:]:
 
-            with open(os.path.join(table_path, field_name + '#T.bin'), 'wb') as f:
-                dtype = tables_specs[table_name]['dtypes'][field_name]
-                dtype_size = np.dtype(dtype).itemsize
-                field_file = os.path.join(table_path, field_name + '.bin')
-                field_size = os.path.getsize(field_file)
-                field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_EIDs),
-                                        mode='r')
-                n_EIDs_per_chunk = int(max_chunk_size // (n_LIDs * dtype_size))
-                n_chunks = int(n_EIDs // n_EIDs_per_chunk)
-                n_EIDs_last_chunk = int(n_EIDs % n_EIDs_per_chunk)
+def _close_table(table_info):
+    table_info['LIDs'] = np.array(table_info['LIDs'])
+    table_info['EIDs'] = np.array(table_info['EIDs'])
+    table_info['LIDs'].tofile(os.path.join(table_info['path'], table_info['specs']['columns'][0] + '.bin'))
+    table_info['EIDs'].tofile(os.path.join(table_info['path'], table_info['specs']['columns'][1] + '.bin'))
 
-                if n_EIDs != n_EIDs_per_chunk * n_chunks + n_EIDs_last_chunk:
-                    raise ValueError("Inconsistency found! ('{}')".format(table_name))
+    try:
 
-                chunks = list()
+        for file in table_info['files'].values():
+            file.close()
 
-                if n_chunks:
-                    chunk = np.empty((n_EIDs_per_chunk, n_LIDs), dtype)
-                    chunks += [(chunk, n_EIDs_per_chunk)] * n_chunks
+    except KeyError:
+        pass
 
-                if n_EIDs_last_chunk:
-                    last_chunk = np.empty((n_EIDs_last_chunk, n_LIDs), dtype)
-                    chunks.append((last_chunk, n_EIDs_last_chunk))
 
-                i0 = 0
-                i1 = 0
+def _create_table_header(table_info, load_cases_info, checksum):
+    header = dict()
+    header['name'] = table_info['name']
+    header['columns'] = [(field_name, table_info['specs']['dtypes'][field_name]) for
+                         field_name in table_info['specs']['columns']]
+    header[get_plural(table_info['specs']['columns'][0])] = len(table_info['LIDs'])
+    header[get_plural(table_info['specs']['columns'][1])] = len(table_info['EIDs'])
+    header['checksum'] = checksum
 
-                for chunk, n_EIDs_per_chunk in chunks:
-                    i1 += n_EIDs_per_chunk
-                    chunk = field_array[:, i0:i1].T
-                    chunk.tofile(f)
-                    i0 += n_EIDs_per_chunk
+    common_items = dict()
 
-        files = [field for field in tables_specs[table_name]['columns']]
-        files += [field + '#T' for field in tables_specs[table_name]['columns'][2:]]
-        files = [os.path.join(table_path, field + '.bin') for field in files]
-        files.append(os.path.join(table_path, '#header.json'))
+    for item in ['TITLE', 'SUBTITLE', 'LABEL']:
+        common_items[item] = None
+        unique_values = {load_case_info[item] for load_case_info in
+                         load_cases_info.values()}
 
-        for file in files:
+        if len(unique_values) == 1:
+            common_items[item] = unique_values.pop()
 
-            with open(file, 'rb') as f_in, open(os.path.splitext(file)[0] + '.' + checksum, 'wb') as f_out:
-                f_out.write(hash_bytestr(f_in, get_hasher(checksum)))
+            if common_items[item]:
+                header[item] = common_items[item]
+
+    if not all(item is None for item in common_items.values()):
+        header['LOAD CASES INFO'] = dict()
+
+        for LID in sorted(load_cases_info):
+
+            if any(item for item in load_cases_info[LID].values()):
+                header['LOAD CASES INFO'][LID] = dict()
+
+                for item in ['TITLE', 'SUBTITLE', 'LABEL']:
+
+                    if load_cases_info[LID][item] and common_items[item] is None:
+                        header['LOAD CASES INFO'][LID][item] = load_cases_info[LID][item]
+
+    with open(os.path.join(table_info['path'], '#header.json'), 'w') as f:
+        json.dump(header, f, indent=4)
+
+
+def _create_transpose(table_info, max_chunk_size):
+
+    for field_name in table_info['specs']['columns'][2:]:
+
+        with open(os.path.join(table_info['path'], field_name + '#T.bin'), 'wb') as f:
+            n_LIDs = len(table_info['LIDs'])
+            n_EIDs = len(table_info['EIDs'])
+            dtype = table_info['specs']['dtypes'][field_name]
+            dtype_size = np.dtype(dtype).itemsize
+            field_file = os.path.join(table_info['path'], field_name + '.bin')
+            field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_EIDs),
+                                    mode='r')
+            n_EIDs_per_chunk = int(max_chunk_size // (n_LIDs * dtype_size))
+            n_chunks = int(n_EIDs // n_EIDs_per_chunk)
+            n_EIDs_last_chunk = int(n_EIDs % n_EIDs_per_chunk)
+
+            if n_EIDs != n_EIDs_per_chunk * n_chunks + n_EIDs_last_chunk:
+                raise ValueError("Inconsistency found! ('{}')".format(table_name))
+
+            chunks = list()
+
+            if n_chunks:
+                chunk = np.empty((n_EIDs_per_chunk, n_LIDs), dtype)
+                chunks += [(chunk, n_EIDs_per_chunk)] * n_chunks
+
+            if n_EIDs_last_chunk:
+                last_chunk = np.empty((n_EIDs_last_chunk, n_LIDs), dtype)
+                chunks.append((last_chunk, n_EIDs_last_chunk))
+
+            i0 = 0
+            i1 = 0
+
+            for chunk, n_EIDs_per_chunk in chunks:
+                i1 += n_EIDs_per_chunk
+                chunk = field_array[:, i0:i1].T
+                chunk.tofile(f)
+                i0 += n_EIDs_per_chunk
+
+
+def _create_checksums(table_info, checksum):
+    files = [field for field in table_info['specs']['columns']]
+    files += [field + '#T' for field in table_info['specs']['columns'][2:]]
+    files = [os.path.join(table_info['path'], field + '.bin') for field in files]
+    files.append(os.path.join(table_info['path'], '#header.json'))
+
+    for file in files:
+
+        with open(file, 'rb') as f_in, open(os.path.splitext(file)[0] + '.' + checksum, 'wb') as f_out:
+            f_out.write(hash_bytestr(f_in, get_hasher(checksum)))
+
+
+def _create_database_header(database_path, database_name, database_version,
+                            database_project, tables_info):
 
     with open(os.path.join(database_path, '#header.json'), 'w') as f:
 
@@ -239,7 +277,4 @@ def create_database(files, database_path, database_name, database_version,
                    'name': database_name,
                    'version': database_version,
                    'date': str(datetime.date.today()),
-                   'tables': [table for table in tables]}, f, indent=4)
-
-    print('Database created succesfully!')
-    return DataBase(database_path)
+                   'tables': [table for table in tables_info]}, f, indent=4)
