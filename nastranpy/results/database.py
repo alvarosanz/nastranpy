@@ -7,7 +7,9 @@ import pandas as pd
 from nastranpy.results.field_data import FieldData
 from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
-from nastranpy.bdf.misc import get_plural, humansize, indent, get_hasher, hash_bytestr
+from nastranpy.results.tables_specs import get_tables_specs
+from nastranpy.results.database_creation import create_tables, finalize_database, open_table
+from nastranpy.bdf.misc import humansize, indent, get_hasher, hash_bytestr
 
 
 class DataBase(object):
@@ -20,12 +22,12 @@ class DataBase(object):
 
     def clear(self):
         self.tables = None
-        self._nbytes = 0
-        self._table_headers = None
+        self._headers = None
         self._project = None
         self._name = None
         self._version = None
         self._date = None
+        self._nbytes = 0
 
     @property
     def project(self):
@@ -43,23 +45,23 @@ class DataBase(object):
     def date(self):
         return self._date
 
-    def _walk_header(self):
+    def _set_headers(self):
 
-        if self._table_headers is None:
-            self._table_headers = list()
+        if self._headers is None:
+            self._headers = dict()
 
             with open(os.path.join(self.path, '#header.json')) as f:
                 database_header = json.load(f)
 
-            for table_name in database_header['tables']:
-                table_path = os.path.join(self.path, table_name)
+            for name in database_header['tables']:
+                table_path = os.path.join(self.path, name)
 
                 with open(os.path.join(table_path, '#header.json')) as f:
-                    table_header = json.load(f)
+                    header = json.load(f)
 
-                self._table_headers.append((table_name, table_path, table_header))
-
-        yield from self._table_headers
+                header['path'] = table_path
+                header['files'] = dict()
+                self._headers[name] = header
 
     def info(self, print_to_screen=True):
         info = list()
@@ -71,17 +73,17 @@ class DataBase(object):
         info.append(f'Number of tables: {len(self.tables)}'.format())
         info.append('')
 
-        for table_name, table_path, table_header in self._walk_header():
-            LIDs_name = get_plural(table_header['columns'][0][0])
-            EIDs_name = get_plural(table_header['columns'][1][0])
-            info.append(f"Table name: '{table_name}' ({LIDs_name}: {table_header[LIDs_name]}, {EIDs_name}: {table_header[EIDs_name]})")
-            info.append('   ' + ' '.join(['_' * 6 for _, _ in table_header['columns']]))
-            info.append('  |' + '|'.join([' ' * 6 for _, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join([name.center(6) for name, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join(['_' * 6 for _, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join([' ' * 6 for _, _ in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table_header['columns']]) + '|')
-            info.append('  |' + '|'.join(['_' * 6 for _, _ in table_header['columns']]) + '|')
+        for table, header in zip(self.tables.values(), self._headers.values()):
+            LIDs_name, EIDs_name = table.index_labels
+            ncols = len(header['columns'])
+            info.append(f"Table name: '{header['name']}' ({LIDs_name}: {len(table.LIDs)}, {EIDs_name}: {len(table.EIDs)})")
+            info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
+            info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
+            info.append('  |' + '|'.join([field.center(6) for field, _ in header['columns']]) + '|')
+            info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
+            info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
+            info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in header['columns']]) + '|')
+            info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
             info.append('')
 
         info = '\n'.join(info)
@@ -103,45 +105,47 @@ class DataBase(object):
                 self._date = database_header['date']
 
             self.tables = dict()
+            self._set_headers()
 
-            for table_name, table_path, table_header in self._walk_header():
-                LID_name, LID_dtype = table_header['columns'][0]
-                EID_name, EID_dtype = table_header['columns'][1]
-                n_LIDs = table_header[get_plural(LID_name)]
-                n_EIDs = table_header[get_plural(EID_name)]
-                LIDs_file = os.path.join(table_path, LID_name + '.bin')
-                EIDs_file = os.path.join(table_path, EID_name + '.bin')
+            for name, header in self._headers.items():
+                LID_name, LID_dtype = header['columns'][0]
+                EID_name, EID_dtype = header['columns'][1]
+                n_LIDs = header['LIDs']
+                n_EIDs = header['EIDs']
+                LIDs_file = os.path.join(header['path'], LID_name + '.bin')
+                EIDs_file = os.path.join(header['path'], EID_name + '.bin')
                 self._nbytes += os.path.getsize(LIDs_file)
                 self._nbytes += os.path.getsize(EIDs_file)
 
                 if (n_LIDs * np.dtype(LID_dtype).itemsize != os.path.getsize(LIDs_file) or
                     n_EIDs * np.dtype(EID_dtype).itemsize != os.path.getsize(EIDs_file)):
-                    raise ValueError("Inconsistency found! ('{}')".format(table_name))
+                    raise ValueError("Inconsistency found! ('{}')".format(name))
 
                 LIDs = np.fromfile(LIDs_file, dtype=LID_dtype)
                 EIDs = np.fromfile(EIDs_file, dtype=EID_dtype)
+                header['LIDs'] = list(LIDs)
+                header['EIDs'] = EIDs
                 fields = list()
 
-                for field_name, dtype in table_header['columns'][2:]:
-                    file_by_LID = os.path.join(table_path, field_name + '.bin')
-                    file_by_EID = os.path.join(table_path, field_name + '#T.bin')
+                for field_name, dtype in header['columns'][2:]:
+                    file_by_LID = os.path.join(header['path'], field_name + '.bin')
+                    file_by_EID = os.path.join(header['path'], field_name + '#T.bin')
                     self._nbytes += os.path.getsize(file_by_LID)
                     self._nbytes += os.path.getsize(file_by_EID)
 
                     if ((n_LIDs * n_EIDs) * np.dtype(dtype).itemsize != os.path.getsize(file_by_LID) or
                         (n_LIDs * n_EIDs) * np.dtype(dtype).itemsize != os.path.getsize(file_by_EID)):
-                        raise ValueError("Inconsistency found! ('{}')".format(table_name))
+                        raise ValueError("Inconsistency found! ('{}')".format(name))
 
                     array_by_LID = np.memmap(file_by_LID, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r')
                     array_by_EID = np.memmap(file_by_EID, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r')
                     fields.append(FieldData(field_name, array_by_LID, array_by_EID, LIDs, EIDs,
-                                            LID_name=table_header['columns'][0][0],
-                                            EID_name=table_header['columns'][1][0]))
+                                            LID_name=header['columns'][0][0],
+                                            EID_name=header['columns'][1][0]))
 
-                self.tables[table_name] = TableData(fields, LIDs, EIDs,
-                                                     LID_name=table_header['columns'][0][0],
-                                                     EID_name=table_header['columns'][1][0])
-
+                self.tables[name] = TableData(fields, LIDs, EIDs,
+                                              LID_name=header['columns'][0][0],
+                                              EID_name=header['columns'][1][0])
         else:
             print('Database already loaded!')
 
@@ -149,18 +153,17 @@ class DataBase(object):
         print('Checking data integrity ...')
         files_corrupted = list()
 
-        for table_name, table_path, table_header in self._walk_header():
-
-            files = [field for field, _ in table_header['columns']]
-            files += [field + '#T' for field, _ in table_header['columns'][2:]]
-            files = [os.path.join(table_path, field + '.bin') for field in files]
-            files.append(os.path.join(table_path, '#header.json'))
+        for header in self._headers.values():
+            files = [field for field, _ in header['columns']]
+            files += [field + '#T' for field, _ in header['columns'][2:]]
+            files = [os.path.join(header['path'], field + '.bin') for field in files]
+            files.append(os.path.join(header['path'], '#header.json'))
 
             for file in files:
 
-                with open(file, 'rb') as f, open(os.path.splitext(file)[0] + '.' + table_header['checksum'], 'rb') as f_checksum:
+                with open(file, 'rb') as f, open(os.path.splitext(file)[0] + '.' + header['checksum'], 'rb') as f_checksum:
 
-                    if f_checksum.read() != hash_bytestr(f, get_hasher(table_header['checksum'])):
+                    if f_checksum.read() != hash_bytestr(f, get_hasher(header['checksum'])):
                         files_corrupted.append(file)
 
         if files_corrupted:
@@ -169,6 +172,34 @@ class DataBase(object):
                 print(f"'{file}' is corrupted!")
         else:
             print('Everything is OK!')
+
+    def append(self, files, max_chunk_size=1e8):
+        print('Appending to database ...')
+
+        if isinstance(files, str):
+            files = [files]
+
+        tables_specs = get_tables_specs()
+
+        for name, header in self._headers.items():
+            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
+            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
+            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
+                                                  field in tables_specs[name]['dtypes'] else
+                                                  dtype) for field, dtype in row] for row in
+                                                tables_specs[name]['pch_format']]
+            checksum = header['checksum']
+            open_table(header, new_table=False)
+
+        _, load_cases_info = create_tables(self.path, files, tables_specs,
+                                           headers=self._headers,
+                                           load_cases_info={name: dict() for name in self.tables})
+        finalize_database(self.path, self.name, self.version, self.project,
+                          self._headers, load_cases_info, checksum, max_chunk_size)
+        self.clear()
+        self.load()
+
+        print('Database updated succesfully!')
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
               geometry=None, weights=None, file=None, custom_functions=None, **kwargs):

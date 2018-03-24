@@ -26,7 +26,7 @@ class TableData(object):
 
     @property
     def index_labels(self):
-        return tuple(self._names[:2])
+        return (self._LID_name, self._EID_name)
 
     @property
     def LIDs(self):

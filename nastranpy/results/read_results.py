@@ -1,6 +1,5 @@
 from io import StringIO
 import pandas as pd
-from nastranpy.results.tables_specs import tables_specs
 
 
 class ResultsTable(object):
