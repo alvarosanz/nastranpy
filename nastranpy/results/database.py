@@ -2,6 +2,7 @@ import os
 import json
 import re
 import csv
+import shutil
 import numpy as np
 import pandas as pd
 from nastranpy.results.field_data import FieldData
@@ -14,9 +15,10 @@ from nastranpy.bdf.misc import humansize, indent, get_hasher, hash_bytestr
 
 class DataBase(object):
 
-    def __init__(self, path, model=None):
+    def __init__(self, path, model=None, max_chunk_size=1e8):
         self.path = path
         self.model = model
+        self._max_chunk_size = max_chunk_size
         self.clear()
         self.load()
 
@@ -27,6 +29,7 @@ class DataBase(object):
         self._name = None
         self._version = None
         self._date = None
+        self._batches = None
         self._nbytes = 0
 
     @property
@@ -45,6 +48,10 @@ class DataBase(object):
     def date(self):
         return self._date
 
+    @property
+    def restore_points(self):
+        return [batch_name for batch_name, _, _ in self._batches]
+
     def _set_headers(self):
 
         if self._headers is None:
@@ -52,6 +59,12 @@ class DataBase(object):
 
             with open(os.path.join(self.path, '#header.json')) as f:
                 database_header = json.load(f)
+
+            self._project = database_header['project']
+            self._name = database_header['name']
+            self._version = database_header['version']
+            self._date = database_header['date']
+            self._batches = database_header['batches']
 
             for name in database_header['tables']:
                 table_path = os.path.join(self.path, name)
@@ -63,7 +76,7 @@ class DataBase(object):
                 header['files'] = dict()
                 self._headers[name] = header
 
-    def info(self, print_to_screen=True):
+    def info(self, print_to_screen=True, detailed=False):
         info = list()
         info.append(f'Project: {self.project}')
         info.append(f'Name: {self.name}')
@@ -86,6 +99,16 @@ class DataBase(object):
             info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
             info.append('')
 
+        if detailed:
+            info.append('Batches:')
+
+            for i, (batch_name, batch_files, batch_date) in enumerate(self._batches):
+                info.append('')
+                info.append(f"  {i} - '{batch_name}': {batch_date}")
+
+                for file in batch_files:
+                    info.append(f'        {file}')
+
         info = '\n'.join(info)
 
         if print_to_screen:
@@ -96,16 +119,8 @@ class DataBase(object):
     def load(self):
 
         if self.tables is None:
-
-            with open(os.path.join(self.path, '#header.json')) as f:
-                database_header = json.load(f)
-                self._project = database_header['project']
-                self._name = database_header['name']
-                self._version = database_header['version']
-                self._date = database_header['date']
-
-            self.tables = dict()
             self._set_headers()
+            self.tables = dict()
 
             for name, header in self._headers.items():
                 LID_name, LID_dtype = header['columns'][0]
@@ -128,17 +143,15 @@ class DataBase(object):
                 fields = list()
 
                 for field_name, dtype in header['columns'][2:]:
-                    file_by_LID = os.path.join(header['path'], field_name + '.bin')
-                    file_by_EID = os.path.join(header['path'], field_name + '#T.bin')
-                    self._nbytes += os.path.getsize(file_by_LID)
-                    self._nbytes += os.path.getsize(file_by_EID)
+                    file = os.path.join(header['path'], field_name + '.bin')
+                    self._nbytes += os.path.getsize(file)
+                    offset = n_LIDs * n_EIDs * np.dtype(dtype).itemsize
 
-                    if ((n_LIDs * n_EIDs) * np.dtype(dtype).itemsize != os.path.getsize(file_by_LID) or
-                        (n_LIDs * n_EIDs) * np.dtype(dtype).itemsize != os.path.getsize(file_by_EID)):
-                        raise ValueError("Inconsistency found! ('{}')".format(name))
+                    if 2 * offset != os.path.getsize(file):
+                        raise ValueError("Inconsistency found! ('{}')".format(file))
 
-                    array_by_LID = np.memmap(file_by_LID, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r')
-                    array_by_EID = np.memmap(file_by_EID, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r')
+                    array_by_LID = np.memmap(file, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r')
+                    array_by_EID = np.memmap(file, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r', offset=offset)
                     fields.append(FieldData(field_name, array_by_LID, array_by_EID, LIDs, EIDs,
                                             LID_name=header['columns'][0][0],
                                             EID_name=header['columns'][1][0]))
@@ -157,14 +170,20 @@ class DataBase(object):
             files = [field for field, _ in header['columns']]
             files += [field + '#T' for field, _ in header['columns'][2:]]
             files = [os.path.join(header['path'], field + '.bin') for field in files]
-            files.append(os.path.join(header['path'], '#header.json'))
 
-            for file in files:
+            for file, checksums in header['checksums'].items():
 
-                with open(file, 'rb') as f, open(os.path.splitext(file)[0] + '.' + header['checksum'], 'rb') as f_checksum:
+                with open(os.path.join(header['path'], file), 'rb') as f:
 
-                    if f_checksum.read() != hash_bytestr(f, get_hasher(header['checksum'])):
+                    if checksums[-1][2] != hash_bytestr(f, get_hasher(header['checksum']), ashexstr=True):
                         files_corrupted.append(file)
+
+            header_file = os.path.join(header['path'], '#header.json')
+
+            with open(header_file, 'rb') as f, open(os.path.splitext(header_file)[0] + '.' + header['checksum'], 'rb') as f_checksum:
+
+                if f_checksum.read() != hash_bytestr(f, get_hasher(header['checksum'])):
+                    files_corrupted.append(header_file)
 
         if files_corrupted:
 
@@ -173,7 +192,11 @@ class DataBase(object):
         else:
             print('Everything is OK!')
 
-    def append(self, files, max_chunk_size=1e8):
+    def append(self, files, batch_name):
+
+        if batch_name in {batch_name for batch_name, _, _ in self._batches}:
+            raise ValueError(f"'{batch_name}' already exists!")
+
         print('Appending to database ...')
 
         if isinstance(files, str):
@@ -182,24 +205,69 @@ class DataBase(object):
         tables_specs = get_tables_specs()
 
         for name, header in self._headers.items():
+            checksum = header['checksum']
             tables_specs[name]['columns'] = [field for field, _ in header['columns']]
             tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
             tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
                                                   field in tables_specs[name]['dtypes'] else
                                                   dtype) for field, dtype in row] for row in
                                                 tables_specs[name]['pch_format']]
-            checksum = header['checksum']
             open_table(header, new_table=False)
 
-        _, load_cases_info = create_tables(self.path, files, tables_specs,
+        _, load_cases_info = create_tables(self.path, files, tables_specs, checksum,
                                            headers=self._headers,
                                            load_cases_info={name: dict() for name in self.tables})
+        self._batches.append([batch_name, [os.path.basename(file) for file in files], None])
         finalize_database(self.path, self.name, self.version, self.project,
-                          self._headers, load_cases_info, checksum, max_chunk_size)
+                          self._headers, load_cases_info, self._batches, self._max_chunk_size)
         self.clear()
         self.load()
 
         print('Database updated succesfully!')
+
+    def restore(self, batch_name=None):
+
+        if not batch_name:
+            batch_name = 'Initial batch'
+
+        print(f"Restoring database to '{batch_name}' state ...")
+
+        for name, header in self._headers.items():
+
+            if batch_name in {batch_name for batch_name, _, _ in header['checksums']['LID.bin']}:
+                index = [batch_name for batch_name, _, _ in header['checksums']['LID.bin']].index(batch_name)
+                position = header['checksums']['LID.bin'][index][1]
+                header['LIDs'] = header['LIDs'][:position]
+
+                for LID in header['LIDs'][position:]:
+                    header['LOAD CASES INFO'].pop(LID, None)
+
+                for field, dtype in header['columns']:
+
+                    if field != self.tables[name].index_labels[1]:
+                        header['checksums'][field + '.bin'] = header['checksums'][field + '.bin'][:index + 1]
+                        offset = position * np.dtype(dtype).itemsize
+
+                        if field not in self.tables[name].index_labels:
+                            offset *= len(header['EIDs'])
+
+                        with open(os.path.join(header['path'], field + '.bin'), 'rb+') as f:
+                            f.seek(offset)
+                            f.truncate()
+
+            else:
+                del self.tables[name]
+                shutil.rmtree(header['path'])
+
+
+        batch_index = [batch_name for batch_name, _, _ in self._batches].index(batch_name)
+        finalize_database(self.path, self.name, self.version, self.project,
+                          {name: self._headers[name] for name in self.tables},
+                          {name: dict() for name in self.tables},
+                          self._batches[:batch_index + 1], self._max_chunk_size)
+        self.clear()
+        self.load()
+        print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
               geometry=None, weights=None, file=None, custom_functions=None, **kwargs):

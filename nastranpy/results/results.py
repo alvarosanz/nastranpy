@@ -55,9 +55,10 @@ def create_database(files, database_path, database_name, database_version,
     if not tables_specs:
         tables_specs = get_tables_specs()
 
-    headers, load_cases_info = create_tables(database_path, files, tables_specs)
+    batches = [['Initial batch', [os.path.basename(file) for file in files], None]]
+    headers, load_cases_info = create_tables(database_path, files, tables_specs, checksum)
     finalize_database(database_path, database_name, database_version, database_project,
-                       headers, load_cases_info, checksum, max_chunk_size)
+                      headers, load_cases_info, batches, max_chunk_size)
 
     print('Database created succesfully!')
     return DataBase(database_path)

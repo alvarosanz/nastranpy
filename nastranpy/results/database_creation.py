@@ -7,7 +7,7 @@ from nastranpy.results.read_results import tables_in_pch
 from nastranpy.bdf.misc import get_hasher, hash_bytestr
 
 
-def create_tables(database_path, files, tables_specs,
+def create_tables(database_path, files, tables_specs, checksum,
                   headers=None, load_cases_info=None):
 
     if headers is None:
@@ -43,7 +43,10 @@ def create_tables(database_path, files, tables_specs,
                         'LIDs': list(),
                         'EIDs': None,
                         'files': dict(),
+                        'checksum': checksum,
+                        'checksums': {field + '.bin': list() for field in tables_specs[name]['columns']}
                     }
+
                     open_table(headers[name], new_table=True)
 
                 if append_to_table(table, headers[name]):
@@ -63,12 +66,15 @@ def open_table(header, new_table=False):
     if not os.path.exists(header['path']):
         os.mkdir(header['path'])
 
-    for field, _ in header['columns'][2:]:
+    for field, dtype in header['columns'][2:]:
 
         if new_table:
-            header['files'][field] = open(os.path.join(header['path'], field + '.bin'), 'wb')
+            f = open(os.path.join(header['path'], field + '.bin'), 'wb')
         else:
-            header['files'][field] = open(os.path.join(header['path'], field + '.bin'), 'ab')
+            f = open(os.path.join(header['path'], field + '.bin'), 'rb+')
+            f.seek(len(header['LIDs']) * len(header['EIDs']) * np.dtype(dtype).itemsize)
+
+        header['files'][field] = f
 
 
 def append_to_table(table, header):
@@ -123,24 +129,62 @@ def close_table(header):
 
 
 def finalize_database(database_path, database_name, database_version, database_project,
-                       headers, load_cases_info, checksum, max_chunk_size):
+                       headers, load_cases_info, batches, max_chunk_size):
 
     for name, header in headers.items():
-        create_table_header(header, load_cases_info[name], checksum)
         create_transpose(header, max_chunk_size)
-        create_checksums(header, checksum)
+        create_table_header(header, load_cases_info[name], batches[-1][0])
 
     create_database_header(database_path, database_name, database_version,
-                           database_project, headers)
+                           database_project, headers, batches)
 
 
-def create_table_header(header, load_cases_info, checksum):
+def create_transpose(header, max_chunk_size):
+
+    for field, dtype in header['columns'][2:]:
+        field_file = os.path.join(header['path'], field + '.bin')
+        n_LIDs = len(header['LIDs'])
+        n_EIDs = len(header['EIDs'])
+        dtype_size = np.dtype(dtype).itemsize
+        field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_EIDs),
+                                mode='r')
+        n_EIDs_per_chunk = int(max_chunk_size // (n_LIDs * dtype_size))
+        n_chunks = int(n_EIDs // n_EIDs_per_chunk)
+        n_EIDs_last_chunk = int(n_EIDs % n_EIDs_per_chunk)
+
+        if n_EIDs != n_EIDs_per_chunk * n_chunks + n_EIDs_last_chunk:
+            raise ValueError(f"Inconsistency found! (table: '{header['name']}', field: '{field}')")
+
+        chunks = list()
+
+        if n_chunks:
+            chunk = np.empty((n_EIDs_per_chunk, n_LIDs), dtype)
+            chunks += [(chunk, n_EIDs_per_chunk)] * n_chunks
+
+        if n_EIDs_last_chunk:
+            last_chunk = np.empty((n_EIDs_last_chunk, n_LIDs), dtype)
+            chunks.append((last_chunk, n_EIDs_last_chunk))
+
+        with open(field_file, 'ab') as f:
+            i0 = 0
+            i1 = 0
+
+            for chunk, n_EIDs_per_chunk in chunks:
+                i1 += n_EIDs_per_chunk
+                chunk = field_array[:, i0:i1].T
+                chunk.tofile(f)
+                i0 += n_EIDs_per_chunk
+
+
+def create_table_header(header, load_cases_info, batch_name):
     table_header = dict()
     table_header['name'] = header['name']
     table_header['columns'] = header['columns']
     table_header[header['columns'][0][0] + 's'] = len(header['LIDs'])
     table_header[header['columns'][1][0] + 's'] = len(header['EIDs'])
-    table_header['checksum'] = checksum
+    table_header['checksum'] = header['checksum']
+    set_checksums(header, batch_name)
+    table_header['checksums'] = header['checksums']
 
     common_items = dict()
 
@@ -171,70 +215,45 @@ def create_table_header(header, load_cases_info, checksum):
                 if load_cases_info[LID][item] and load_cases_info[LID][item] != common_items[item]:
                     table_header['LOAD CASES INFO'][LID][item] = load_cases_info[LID][item]
 
-    with open(os.path.join(header['path'], '#header.json'), 'w') as f:
+    header_file = os.path.join(header['path'], '#header.json')
+
+    with open(header_file, 'w') as f:
         json.dump(table_header, f, indent=4)
 
-
-def create_transpose(header, max_chunk_size):
-
-    for field, dtype in header['columns'][2:]:
-
-        with open(os.path.join(header['path'], field + '#T.bin'), 'wb') as f:
-            n_LIDs = len(header['LIDs'])
-            n_EIDs = len(header['EIDs'])
-            dtype_size = np.dtype(dtype).itemsize
-            field_file = os.path.join(header['path'], field + '.bin')
-            field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_EIDs),
-                                    mode='r')
-            n_EIDs_per_chunk = int(max_chunk_size // (n_LIDs * dtype_size))
-            n_chunks = int(n_EIDs // n_EIDs_per_chunk)
-            n_EIDs_last_chunk = int(n_EIDs % n_EIDs_per_chunk)
-
-            if n_EIDs != n_EIDs_per_chunk * n_chunks + n_EIDs_last_chunk:
-                raise ValueError(f"Inconsistency found! (table: '{header['name']}', field: '{field}')")
-
-            chunks = list()
-
-            if n_chunks:
-                chunk = np.empty((n_EIDs_per_chunk, n_LIDs), dtype)
-                chunks += [(chunk, n_EIDs_per_chunk)] * n_chunks
-
-            if n_EIDs_last_chunk:
-                last_chunk = np.empty((n_EIDs_last_chunk, n_LIDs), dtype)
-                chunks.append((last_chunk, n_EIDs_last_chunk))
-
-            i0 = 0
-            i1 = 0
-
-            for chunk, n_EIDs_per_chunk in chunks:
-                i1 += n_EIDs_per_chunk
-                chunk = field_array[:, i0:i1].T
-                chunk.tofile(f)
-                i0 += n_EIDs_per_chunk
+    with open(header_file, 'rb') as f_in, open(os.path.splitext(header_file)[0] + '.' + header['checksum'], 'wb') as f_out:
+        f_out.write(hash_bytestr(f_in, get_hasher(header['checksum'])))
 
 
-def create_checksums(header, checksum):
-    files = [field for field, _ in header['columns']]
-    files += [field + '#T' for field, _ in header['columns'][2:]]
-    files = [os.path.join(header['path'], field + '.bin') for field in files]
-    files.append(os.path.join(header['path'], '#header.json'))
+def set_checksums(header, batch_name):
 
-    for file in files:
+    for field, _ in header['columns']:
 
-        with open(file, 'rb') as f_in, open(os.path.splitext(file)[0] + '.' + checksum, 'wb') as f_out:
-            f_out.write(hash_bytestr(f_in, get_hasher(checksum)))
+        with open(os.path.join(header['path'], field + '.bin'), 'rb') as f:
 
+            if (header['checksums'][field + '.bin'] and
+                header['checksums'][field + '.bin'][-1][0] == batch_name):
+
+                if header['checksums'][field + '.bin'][-1][2] != hash_bytestr(f, get_hasher(header['checksum']), ashexstr=True):
+                    print(f"ERROR: '{os.path.join(header['path'], field + '.bin')} is corrupted!'")
+
+            else:
+                header['checksums'][field + '.bin'].append((batch_name, len(header['LIDs']),
+                                                            hash_bytestr(f, get_hasher(header['checksum']), ashexstr=True)))
 
 def create_database_header(database_path, database_name, database_version,
-                           database_project, headers):
+                           database_project, headers, batches):
 
     with open(os.path.join(database_path, '#header.json'), 'w') as f:
 
         if database_project is None:
             database_project = ''
 
+        if batches[-1][2] is None:
+            batches[-1][2] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
         json.dump({'project': database_project,
                    'name': database_name,
                    'version': database_version,
                    'date': str(datetime.date.today()),
-                   'tables': [table for table in headers]}, f, indent=4)
+                   'tables': [table for table in headers],
+                   'batches': batches}, f, indent=4)
