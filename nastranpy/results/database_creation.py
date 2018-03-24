@@ -7,8 +7,8 @@ from nastranpy.results.read_results import tables_in_pch
 from nastranpy.bdf.misc import get_hasher, hash_bytestr
 
 
-def create_tables(database_path, files, tables_specs, checksum,
-                  headers=None, load_cases_info=None):
+def create_tables(database_path, files, tables_specs,
+                  headers=None, load_cases_info=None, checksum='sha256'):
 
     if headers is None:
         headers = dict()
@@ -67,11 +67,12 @@ def open_table(header, new_table=False):
         os.mkdir(header['path'])
 
     for field, dtype in header['columns'][2:]:
+        file = os.path.join(header['path'], field + '.bin')
 
         if new_table:
-            f = open(os.path.join(header['path'], field + '.bin'), 'wb')
+            f = open(file, 'wb')
         else:
-            f = open(os.path.join(header['path'], field + '.bin'), 'rb+')
+            f = open(file, 'rb+')
             f.seek(len(header['LIDs']) * len(header['EIDs']) * np.dtype(dtype).itemsize)
 
         header['files'][field] = f
@@ -248,8 +249,8 @@ def create_database_header(database_path, database_name, database_version,
         if database_project is None:
             database_project = ''
 
-        if batches[-1][2] is None:
-            batches[-1][2] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        if batches[-1][1] is None:
+            batches[-1][1] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         json.dump({'project': database_project,
                    'name': database_name,

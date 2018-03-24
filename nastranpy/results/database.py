@@ -19,6 +19,9 @@ class DataBase(object):
         self.path = path
         self.model = model
         self._max_chunk_size = max_chunk_size
+        self.reload()
+
+    def reload(self):
         self.clear()
         self.load()
 
@@ -28,7 +31,6 @@ class DataBase(object):
         self._project = None
         self._name = None
         self._version = None
-        self._date = None
         self._batches = None
         self._nbytes = 0
 
@@ -45,43 +47,35 @@ class DataBase(object):
         return self._version
 
     @property
-    def date(self):
-        return self._date
-
-    @property
     def restore_points(self):
         return [batch_name for batch_name, _, _ in self._batches]
 
     def _set_headers(self):
 
-        if self._headers is None:
-            self._headers = dict()
+        with open(os.path.join(self.path, '#header.json')) as f:
+            database_header = json.load(f)
 
-            with open(os.path.join(self.path, '#header.json')) as f:
-                database_header = json.load(f)
+        self._project = database_header['project']
+        self._name = database_header['name']
+        self._version = database_header['version']
+        self._batches = database_header['batches']
+        self._headers = dict()
 
-            self._project = database_header['project']
-            self._name = database_header['name']
-            self._version = database_header['version']
-            self._date = database_header['date']
-            self._batches = database_header['batches']
+        for name in database_header['tables']:
+            table_path = os.path.join(self.path, name)
 
-            for name in database_header['tables']:
-                table_path = os.path.join(self.path, name)
+            with open(os.path.join(table_path, '#header.json')) as f:
+                header = json.load(f)
 
-                with open(os.path.join(table_path, '#header.json')) as f:
-                    header = json.load(f)
-
-                header['path'] = table_path
-                header['files'] = dict()
-                self._headers[name] = header
+            header['path'] = table_path
+            header['files'] = dict()
+            self._headers[name] = header
 
     def info(self, print_to_screen=True, detailed=False):
         info = list()
         info.append(f'Project: {self.project}')
         info.append(f'Name: {self.name}')
         info.append(f'Version: {self.version}')
-        info.append(f'Date: {self.date}')
         info.append(f'Total size: {humansize(self._nbytes)}'.format())
         info.append(f'Number of tables: {len(self.tables)}'.format())
         info.append('')
@@ -99,15 +93,17 @@ class DataBase(object):
             info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
             info.append('')
 
-        if detailed:
-            info.append('Batches:')
+        info.append('Restore points:')
 
-            for i, (batch_name, batch_files, batch_date) in enumerate(self._batches):
-                info.append('')
-                info.append(f"  {i} - '{batch_name}': {batch_date}")
+        for i, (batch_name, batch_date, batch_files) in enumerate(self._batches):
+            info.append(f"  {i} - '{batch_name}': {batch_date}")
+
+            if detailed:
 
                 for file in batch_files:
                     info.append(f'        {file}')
+
+                info.append('')
 
         info = '\n'.join(info)
 
@@ -136,10 +132,8 @@ class DataBase(object):
                     n_EIDs * np.dtype(EID_dtype).itemsize != os.path.getsize(EIDs_file)):
                     raise ValueError("Inconsistency found! ('{}')".format(name))
 
-                LIDs = np.fromfile(LIDs_file, dtype=LID_dtype)
-                EIDs = np.fromfile(EIDs_file, dtype=EID_dtype)
-                header['LIDs'] = list(LIDs)
-                header['EIDs'] = EIDs
+                header['LIDs'] = list(np.fromfile(LIDs_file, dtype=LID_dtype))
+                header['EIDs'] = np.fromfile(EIDs_file, dtype=EID_dtype)
                 fields = list()
 
                 for field_name, dtype in header['columns'][2:]:
@@ -150,15 +144,15 @@ class DataBase(object):
                     if 2 * offset != os.path.getsize(file):
                         raise ValueError("Inconsistency found! ('{}')".format(file))
 
-                    array_by_LID = np.memmap(file, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r')
-                    array_by_EID = np.memmap(file, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r', offset=offset)
-                    fields.append(FieldData(field_name, array_by_LID, array_by_EID, LIDs, EIDs,
-                                            LID_name=header['columns'][0][0],
-                                            EID_name=header['columns'][1][0]))
+                    fields.append(FieldData(field_name,
+                                            np.memmap(file, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r'),
+                                            np.memmap(file, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r', offset=offset),
+                                            header['LIDs'], header['EIDs'],
+                                            LID_name, EID_name))
 
-                self.tables[name] = TableData(fields, LIDs, EIDs,
-                                              LID_name=header['columns'][0][0],
-                                              EID_name=header['columns'][1][0])
+                self.tables[name] = TableData(fields,
+                                              header['LIDs'], header['EIDs'],
+                                              LID_name, EID_name)
         else:
             print('Database already loaded!')
 
@@ -167,9 +161,6 @@ class DataBase(object):
         files_corrupted = list()
 
         for header in self._headers.values():
-            files = [field for field, _ in header['columns']]
-            files += [field + '#T' for field, _ in header['columns'][2:]]
-            files = [os.path.join(header['path'], field + '.bin') for field in files]
 
             for file, checksums in header['checksums'].items():
 
@@ -205,7 +196,6 @@ class DataBase(object):
         tables_specs = get_tables_specs()
 
         for name, header in self._headers.items():
-            checksum = header['checksum']
             tables_specs[name]['columns'] = [field for field, _ in header['columns']]
             tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
             tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
@@ -214,14 +204,12 @@ class DataBase(object):
                                                 tables_specs[name]['pch_format']]
             open_table(header, new_table=False)
 
-        _, load_cases_info = create_tables(self.path, files, tables_specs, checksum,
-                                           headers=self._headers,
+        _, load_cases_info = create_tables(self.path, files, tables_specs, self._headers,
                                            load_cases_info={name: dict() for name in self.tables})
-        self._batches.append([batch_name, [os.path.basename(file) for file in files], None])
+        self._batches.append([batch_name, None, [os.path.basename(file) for file in files]])
         finalize_database(self.path, self.name, self.version, self.project,
                           self._headers, load_cases_info, self._batches, self._max_chunk_size)
-        self.clear()
-        self.load()
+        self.reload()
 
         print('Database updated succesfully!')
 
@@ -259,14 +247,12 @@ class DataBase(object):
                 del self.tables[name]
                 shutil.rmtree(header['path'])
 
-
         batch_index = [batch_name for batch_name, _, _ in self._batches].index(batch_name)
         finalize_database(self.path, self.name, self.version, self.project,
                           {name: self._headers[name] for name in self.tables},
                           {name: dict() for name in self.tables},
                           self._batches[:batch_index + 1], self._max_chunk_size)
-        self.clear()
-        self.load()
+        self.reload()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
