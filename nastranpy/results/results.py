@@ -43,11 +43,13 @@ def query(query=None, file=None):
 
 def create_database(files, database_path, database_name, database_version,
                     database_project=None, tables_specs=None,
-                    max_chunk_size=1e8, checksum='sha256'):
+                    max_chunk_size=1e8, checksum='sha256', overwrite=False):
     print('Creating database ...')
 
     if not os.path.exists(database_path):
         os.mkdir(database_path)
+    elif not overwrite:
+        raise FileExistsError(f"Database already exists at '{database_path}'!")
 
     if isinstance(files, str):
         files = [files]
