@@ -13,26 +13,19 @@ from nastranpy.results.database_creation import create_tables, finalize_database
 from nastranpy.bdf.misc import humansize, indent, get_hasher, hash_bytestr
 
 
-class DataBase(object):
+def is_loaded(func):
 
-    def __init__(self, path, model=None, max_chunk_size=1e8):
-        self.path = path
-        self.model = model
-        self._max_chunk_size = max_chunk_size
-        self.reload()
+    def wrapped(self, *args, **kwargs):
 
-    def reload(self):
-        self.clear()
-        self.load()
+        if self._headers is None:
+            print('You must load a database first!')
+        else:
+            return func(self, *args, **kwargs)
 
-    def clear(self):
-        self.tables = None
-        self._headers = None
-        self._project = None
-        self._name = None
-        self._version = None
-        self._batches = None
-        self._nbytes = 0
+    return wrapped
+
+
+class ParentDatabase(object):
 
     @property
     def project(self):
@@ -50,40 +43,19 @@ class DataBase(object):
     def restore_points(self):
         return [batch_name for batch_name, _, _ in self._batches]
 
-    def _set_headers(self):
-
-        with open(os.path.join(self.path, '#header.json')) as f:
-            database_header = json.load(f)
-
-        self._project = database_header['project']
-        self._name = database_header['name']
-        self._version = database_header['version']
-        self._batches = database_header['batches']
-        self._headers = dict()
-
-        for name in database_header['tables']:
-            table_path = os.path.join(self.path, name)
-
-            with open(os.path.join(table_path, '#header.json')) as f:
-                header = json.load(f)
-
-            header['path'] = table_path
-            header['files'] = dict()
-            self._headers[name] = header
-
+    @is_loaded
     def info(self, print_to_screen=True, detailed=False):
         info = list()
         info.append(f'Project: {self.project}')
         info.append(f'Name: {self.name}')
         info.append(f'Version: {self.version}')
         info.append(f'Total size: {humansize(self._nbytes)}'.format())
-        info.append(f'Number of tables: {len(self.tables)}'.format())
+        info.append(f'Number of tables: {len(self._headers)}'.format())
         info.append('')
 
-        for table, header in zip(self.tables.values(), self._headers.values()):
-            LIDs_name, EIDs_name = table.index_labels
+        for header in self._headers.values():
             ncols = len(header['columns'])
-            info.append(f"Table name: '{header['name']}' ({LIDs_name}: {len(table.LIDs)}, {EIDs_name}: {len(table.EIDs)})")
+            info.append(f"Table name: '{header['name']}' ({header['columns'][0][0]}: {len(header['LIDs'])}, {header['columns'][1][0]}: {len(header['EIDs'])})")
             info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
             info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
             info.append('  |' + '|'.join([field.center(6) for field, _ in header['columns']]) + '|')
@@ -111,6 +83,63 @@ class DataBase(object):
             print(info)
         else:
             return info
+
+
+class Database(ParentDatabase):
+
+    def __init__(self, path, model=None, max_chunk_size=1e8):
+        self.path = path
+        self.model = model
+        self._max_chunk_size = max_chunk_size
+        self.reload()
+
+    def reload(self):
+        self.clear()
+        self.load()
+
+    def clear(self):
+        self.tables = None
+        self._headers = None
+        self._project = None
+        self._name = None
+        self._version = None
+        self._batches = None
+        self._nbytes = 0
+
+    def _set_headers(self):
+
+        with open(os.path.join(self.path, '#header.json')) as f:
+            database_header = json.load(f)
+
+        self._project = database_header['project']
+        self._name = database_header['name']
+        self._version = database_header['version']
+        self._batches = database_header['batches']
+        self._headers = dict()
+
+        for name in database_header['tables']:
+            table_path = os.path.join(self.path, name)
+
+            with open(os.path.join(table_path, '#header.json')) as f:
+                header = json.load(f)
+
+            header['path'] = table_path
+            header['files'] = dict()
+            self._headers[name] = header
+
+    def _export_header(self):
+        header = {'project': self._project,
+                  'name': self._name,
+                  'version': self._version,
+                  'batches': self._batches,
+                  'nbytes': self._nbytes,
+                  'headers': {name: self._headers[name] for name in self._headers}}
+
+        for table in header['headers']:
+            header['headers'][table]['LIDs'] = [int(x) for x in header['headers'][table]['LIDs']]
+            header['headers'][table]['EIDs'] = [int(x) for x in header['headers'][table]['EIDs']]
+
+        return header
 
     def load(self):
 
@@ -183,7 +212,7 @@ class DataBase(object):
         else:
             print('Everything is OK!')
 
-    def append(self, files, batch_name):
+    def append(self, files, batch_name, **kwargs):
 
         if batch_name in {batch_name for batch_name, _, _ in self._batches}:
             raise ValueError(f"'{batch_name}' already exists!")
@@ -206,7 +235,13 @@ class DataBase(object):
 
         _, load_cases_info = create_tables(self.path, files, tables_specs, self._headers,
                                            load_cases_info={name: dict() for name in self.tables})
-        self._batches.append([batch_name, None, [os.path.basename(file) for file in files]])
+
+        if not 'filenames' in kwargs:
+            filenames = [os.path.basename(file) for file in files]
+        else:
+            filenames = kwargs['filenames']
+
+        self._batches.append([batch_name, None, filenames])
         finalize_database(self.path, self.name, self.version, self.project,
                           self._headers, load_cases_info, self._batches, self._max_chunk_size)
         self.reload()
@@ -217,6 +252,8 @@ class DataBase(object):
 
         if not batch_name:
             batch_name = 'Initial batch'
+        elif batch_name not in {batch_name for batch_name, _, _ in self._batches}:
+            raise ValueError(f"'{batch_name}' is not a valid restore point")
 
         print(f"Restoring database to '{batch_name}' state ...")
 

@@ -5,7 +5,10 @@
     "project": "",
     "name": "",
     "version": "",
-    "path": "/Users/Alvaro/Desktop/nastran_model_input/nastranpy_inputs/sandbox/foo",
+    "path": "/Users/Alvaro/Desktop/nastran_model_input/nastranpy_inputs/sandbox/foo1",
+    "files": [
+        "/Users/Alvaro/Desktop/nastran_model_input/nastranpy_inputs/pch/0_KC390_rf_global_Close_Ramp_H1A_ENV_11_F06.pch"
+    ],
     "output_path": "",
     "check": false,
     "table": "ELEMENT FORCES - QUAD4",

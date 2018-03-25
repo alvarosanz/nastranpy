@@ -1,7 +1,7 @@
 import os
 from nastranpy.results.read_results import tables_in_pch
 from nastranpy.results.database_creation import create_tables, finalize_database
-from nastranpy.results.database import DataBase, get_query_from_file
+from nastranpy.results.database import Database, get_query_from_file
 from nastranpy.results.tables_specs import get_tables_specs
 
 
@@ -31,7 +31,7 @@ def query(query=None, file=None):
     if not query:
         query = get_query_from_file(file)
 
-    database = DataBase(query['path'])
+    database = Database(query['path'])
 
     if query['check']:
         database.check()
@@ -43,7 +43,7 @@ def query(query=None, file=None):
 
 def create_database(files, database_path, database_name, database_version,
                     database_project=None, tables_specs=None,
-                    max_chunk_size=1e8, checksum='sha256', overwrite=False):
+                    max_chunk_size=1e8, checksum='sha256', overwrite=False, **kwargs):
     print('Creating database ...')
 
     if not os.path.exists(database_path):
@@ -57,10 +57,15 @@ def create_database(files, database_path, database_name, database_version,
     if not tables_specs:
         tables_specs = get_tables_specs()
 
-    batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
+    if not 'filenames' in kwargs:
+        filenames = [os.path.basename(file) for file in files]
+    else:
+        filenames = kwargs['filenames']
+
+    batches = [['Initial batch', None, filenames]]
     headers, load_cases_info = create_tables(database_path, files, tables_specs, checksum=checksum)
     finalize_database(database_path, database_name, database_version, database_project,
                       headers, load_cases_info, batches, max_chunk_size)
 
     print('Database created succesfully!')
-    return DataBase(database_path)
+    return Database(database_path)
