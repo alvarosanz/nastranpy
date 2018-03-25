@@ -26,8 +26,11 @@ def get_tables(files):
     return {table_name: pd.concat(tables[table_name]) for table_name in tables}
 
 
-def query(file):
-    query = get_query_from_file(file)
+def query(query=None, file=None):
+
+    if not query:
+        query = get_query_from_file(file)
+
     database = DataBase(query['path'])
 
     if query['check']:

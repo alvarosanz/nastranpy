@@ -446,6 +446,10 @@ def get_query_from_file(file):
     except TypeError:
         query = json.load(file)
 
+    return process_query(query)
+
+
+def process_query(query):
     query = {key: value if value else None for key, value in query.items()}
 
     for field in ('LIDs', 'geometry', 'weights'):

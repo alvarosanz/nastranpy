@@ -1,4 +1,7 @@
 {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "request_type": "query",
     "project": "",
     "name": "",
     "version": "",
@@ -17,7 +20,9 @@
         "VON_MISES"
     ],
     "EIDs": [
-
+        8799853,
+        8799854,
+        8799855
     ],
     "LIDs": {
         "1": [],
