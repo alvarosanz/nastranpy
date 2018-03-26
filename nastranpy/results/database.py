@@ -244,7 +244,7 @@ class Database(ParentDatabase):
         if not 'filenames' in kwargs:
             filenames = [os.path.basename(file) for file in files]
         else:
-            filenames = kwargs['filenames']
+            filenames = [os.path.basename(file) for file in kwargs['filenames']]
 
         self._batches.append([batch_name, None, filenames])
         finalize_database(self.path, self.name, self.version, self.project,

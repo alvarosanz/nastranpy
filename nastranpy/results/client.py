@@ -77,7 +77,8 @@ class DatabaseClient(ParentDatabase):
             elif msg['request_type'] == 'query':
 
                 if msg['output_path']:
-                    data.csv(msg['output_path'])
+                    print(f"Writing '{os.path.basename(msg['output_path'])}' ...")
+                    data.to_csv(msg['output_path'])
 
                 return data
 

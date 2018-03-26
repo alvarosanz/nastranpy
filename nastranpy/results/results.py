@@ -38,6 +38,10 @@ def query(query=None, file=None):
 
     df = database.query(**query)
 
+    if query['output_path']:
+        print(f"Writing '{os.path.basename(query['output_path'])}' ...")
+        df.to_csv(query['output_path'])
+
     return df
 
 
@@ -60,7 +64,7 @@ def create_database(files, database_path, database_name, database_version,
     if not 'filenames' in kwargs:
         filenames = [os.path.basename(file) for file in files]
     else:
-        filenames = kwargs['filenames']
+        filenames = [os.path.basename(file) for file in kwargs['filenames']]
 
     batches = [['Initial batch', None, filenames]]
     headers, load_cases_info = create_tables(database_path, files, tables_specs, checksum=checksum)
