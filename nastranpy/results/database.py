@@ -389,9 +389,9 @@ class Database(ParentDatabase):
                 LIDs_agg = np.empty((len(EID_groups), n), dtype=self.tables[table].LIDs.dtype)
 
                 for i, EID_group in enumerate(EID_groups):
-                    EIDs = np.array(EID_groups[EID_group])
-                    weights = np.array([weights[EID] for EID in EIDs]) if weights else None
-                    array_agg[i, :], LIDs_agg[i, :] = self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EIDs])],
+                    group_EIDs = np.array(EID_groups[EID_group])
+                    weights = np.array([weights[EID] for EID in group_EIDs]) if weights else None
+                    array_agg[i, :], LIDs_agg[i, :] = self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in group_EIDs])],
                                                                       aggregations, LIDs, weights)
 
                 query[f'{output_field} ({aggregations})'] = array_agg
@@ -450,6 +450,7 @@ class Database(ParentDatabase):
 
     @classmethod
     def _aggregate(cls, output_array, aggregations, LIDs, weights):
+        LIDs = np.array(list(LIDs))
 
         for i, aggregation in enumerate(aggregations.strip().split('-')):
             axis = 1 - i
