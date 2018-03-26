@@ -92,7 +92,7 @@ class FieldData(object):
             else:
                 array[:n_LIDs, :] = np.array(self._data_by_EID)[:, iLIDs].T
 
-        elif LIDs_queried is None:
+        elif LIDs is None:
             LIDs = np.array(self._LIDs)
             iEIDs = np.array(sorted(self._iEIDs[EID] for EID in EIDs))
 

@@ -1,5 +1,5 @@
 import json
-from nastranpy.results.database import ParentDatabase, is_loaded
+from nastranpy.results.database import ParentDatabase, is_loaded, get_query_from_file
 from nastranpy.results.server import Connection
 
 
@@ -104,10 +104,7 @@ class DatabaseClient(ParentDatabase):
                      'files': files}
 
         else:
-
-            with open(request_file) as f:
-                query = json.load(f)
-
+            query = get_query_from_file(request_file)
             query['request_type'] = request_type
 
         for key, value in kwargs.items():
