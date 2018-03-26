@@ -46,11 +46,15 @@ class ParentDatabase(object):
     @is_loaded
     def info(self, print_to_screen=True, detailed=False):
         info = list()
-        info.append(f'Project: {self.project}')
+        info.append(f'Path: {self.path}')
+        info.append('')
+
+        if self.project:
+            info.append(f'Project: {self.project}')
+
         info.append(f'Name: {self.name}')
         info.append(f'Version: {self.version}')
-        info.append(f'Total size: {humansize(self._nbytes)}'.format())
-        info.append(f'Number of tables: {len(self._headers)}'.format())
+        info.append(f'Size: {humansize(self._nbytes)}'.format())
         info.append('')
 
         for header in self._headers.values():
@@ -223,6 +227,7 @@ class Database(ParentDatabase):
             files = [files]
 
         tables_specs = get_tables_specs()
+        self._close()
 
         for name, header in self._headers.items():
             tables_specs[name]['columns'] = [field for field, _ in header['columns']]
@@ -252,10 +257,11 @@ class Database(ParentDatabase):
 
         if not batch_name:
             batch_name = 'Initial batch'
-        elif batch_name not in {batch_name for batch_name, _, _ in self._batches}:
+        elif batch_name not in self.restore_points or batch_name == self.restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
         print(f"Restoring database to '{batch_name}' state ...")
+        self._close()
 
         for name, header in self._headers.items():
 
@@ -419,6 +425,11 @@ class Database(ParentDatabase):
             index = pd.MultiIndex.from_product([index0, index1], names=index_names)
 
         return pd.DataFrame(data, columns=columns, index=index)
+
+    def _close(self):
+
+        for table in self.tables.values():
+            table.close()
 
     @staticmethod
     def _is_abs(field_str):

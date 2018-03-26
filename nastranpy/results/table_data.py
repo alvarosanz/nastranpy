@@ -41,3 +41,8 @@ class TableData(object):
 
     def __contains__(self, value):
         return value in self._fields
+
+    def close(self):
+
+        for field in self._fields.values():
+            field.close()

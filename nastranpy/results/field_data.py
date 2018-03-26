@@ -48,6 +48,10 @@ class FieldData(object):
     def size(self):
         return self._data_by_LID.size
 
+    def close(self):
+        self._data_by_LID = None
+        self._data_by_EID = None
+
     def get_array(self, LIDs=None, EIDs=None, max_size=2e9):
 
         try:
