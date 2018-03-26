@@ -13,18 +13,6 @@ from nastranpy.results.database_creation import create_tables, finalize_database
 from nastranpy.bdf.misc import humansize, indent, get_hasher, hash_bytestr
 
 
-def is_loaded(func):
-
-    def wrapped(self, *args, **kwargs):
-
-        if self._headers is None:
-            print('You must load a database first!')
-        else:
-            return func(self, *args, **kwargs)
-
-    return wrapped
-
-
 class ParentDatabase(object):
 
     @property
@@ -43,7 +31,6 @@ class ParentDatabase(object):
     def restore_points(self):
         return [batch_name for batch_name, _, _ in self._batches]
 
-    @is_loaded
     def info(self, print_to_screen=True, detailed=False):
         info = list()
         info.append(f'Path: {self.path}')

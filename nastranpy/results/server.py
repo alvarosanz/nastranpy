@@ -10,7 +10,6 @@ from nastranpy.results.database import Database, process_query
 
 class QueryHandler(socketserver.BaseRequestHandler):
     header_size = 12
-    answer_size = 80
 
     def handle(self):
         msg = self.get_request()
@@ -75,12 +74,12 @@ class QueryHandler(socketserver.BaseRequestHandler):
     def answer(self, answer='', is_OK=True, data_type='', data=None):
 
         if is_OK:
-            answer = 'OK' + data_type.ljust(8) + answer
+            answer = 'OK' + data_type.ljust(8) + answer.strip()
         else:
-            answer = 'KO' + data_type.ljust(8) + answer
+            answer = 'KO' + data_type.ljust(8) + answer.strip()
 
         buffer = BytesIO()
-        buffer.seek(self.header_size + self.answer_size)
+        buffer.seek(2 * self.header_size + len(answer))
 
         if not data is None:
 
@@ -91,9 +90,11 @@ class QueryHandler(socketserver.BaseRequestHandler):
             elif data_type == 'pandas':
                 data.to_msgpack(buffer)
 
-        size = str(buffer.tell()).zfill(self.header_size).encode()
+        size = buffer.tell()
         buffer.seek(0)
-        buffer.write(size + answer.ljust(self.answer_size).encode())
+        buffer.write(str(size).zfill(self.header_size).encode() +
+                     str(len(answer)).zfill(self.header_size).encode() +
+                     answer.encode())
         self.request.sendall(buffer.getvalue())
 
     def readlines(self, delimiter='\n', buffer_size=4096):
@@ -112,7 +113,7 @@ class QueryHandler(socketserver.BaseRequestHandler):
                 yield line
 
 
-class DatabaseServer(socketserver.TCPServer):
+class DatabaseServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
 
     def __init__(self, server_address):
@@ -121,11 +122,10 @@ class DatabaseServer(socketserver.TCPServer):
 
 class Connection(object):
 
-    def __init__(self, server_address, header_size=12, answer_size=80, buffer_size=4096):
+    def __init__(self, server_address, header_size=12, buffer_size=4096):
         self.server_address = server_address
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.header_size = header_size
-        self.answer_size = answer_size
         self.buffer_size = buffer_size
         self.socket.connect(self.server_address)
 
@@ -164,12 +164,13 @@ class Connection(object):
             data = self.socket.recv(self.buffer_size)
 
             if size is None:
-                size = int(data[:self.header_size].decode()) - self.header_size - self.answer_size
-                answer = data[self.header_size:self.header_size + self.answer_size].decode()
+                answer_size = int(data[self.header_size:2*self.header_size].decode())
+                size = int(data[:self.header_size].decode()) - 2 * self.header_size - answer_size
+                answer = data[2*self.header_size:2*self.header_size + answer_size].decode()
                 status = answer[:2]
                 data_type = answer[2:10].strip()
                 answer = answer[10:].strip()
-                data = data[self.header_size + self.answer_size:]
+                data = data[2*self.header_size + answer_size:]
 
                 if status == 'KO':
                     raise ConnectionError(answer)
