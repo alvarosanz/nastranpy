@@ -118,7 +118,8 @@ class Database(ParentDatabase):
             self._headers[name] = header
 
     def _export_header(self):
-        header = {'project': self._project,
+        header = {'path': self.path,
+                  'project': self._project,
                   'name': self._name,
                   'version': self._version,
                   'batches': self._batches,
