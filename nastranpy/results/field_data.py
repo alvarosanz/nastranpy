@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 
 
 class FieldData(object):
@@ -53,8 +52,9 @@ class FieldData(object):
         self._data_by_EID = None
 
     def get_array(self, LIDs=None, EIDs=None, max_size=2e9):
+        is_combination = isinstance(LIDs, dict)
 
-        try:
+        if is_combination:
             LIDs_queried = [LID for LID, seq in LIDs.items() if not seq]
             LIDs_requested = set(LIDs_queried)
             LIDs_queried += list({LID for seq in LIDs.values() for _, LID in seq if
@@ -64,7 +64,7 @@ class FieldData(object):
             LIDs_index = {LID: i for i, LID in enumerate(LIDs)}
             LIDs_queried_index = {LID: i for i, LID in enumerate(LIDs_queried + LIDs_combined_used)}
 
-        except AttributeError:
+        else:
             LIDs_queried = self._LIDs if LIDs is None else LIDs
             LIDs_combined_used = list()
 
@@ -72,10 +72,11 @@ class FieldData(object):
         n_EIDs = self._n_EIDs if EIDs is None else len(EIDs)
         memory_used_by_LID = n_LIDs * self._n_EIDs * self._item_size
         memory_used_by_EID = n_EIDs * self._n_LIDs * self._item_size
-        by_LID = ((n_LIDs <= n_EIDs and (memory_used_by_LID < max_size or
-                                         memory_used_by_LID < memory_used_by_EID)) or
-                  (n_LIDs > n_EIDs and (memory_used_by_LID < max_size and
-                                        memory_used_by_EID > max_size)))
+        by_LID = (n_LIDs <= n_EIDs and memory_used_by_LID < max_size or
+                  n_LIDs > n_EIDs and memory_used_by_EID > max_size)
+
+        if by_LID and memory_used_by_LID > max_size or not by_LID and memory_used_by_EID > max_size:
+            raise MemoryError('The requested data is too large to fit into memory!')
 
         array = np.empty((n_LIDs + len(LIDs_combined_used), n_EIDs), dtype=self._dtype)
 
@@ -110,7 +111,7 @@ class FieldData(object):
             else:
                 array[:n_LIDs, :] = self._data_by_EID[iEIDs, :][:, iLIDs].T
 
-        if n_LIDs < len(LIDs):
+        if is_combination:
             array0 = array
             array = np.empty((len(LIDs), n_EIDs), dtype=self._dtype)
 

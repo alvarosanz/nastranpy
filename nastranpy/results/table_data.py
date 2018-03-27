@@ -1,6 +1,4 @@
 import numpy as np
-import pandas as pd
-from nastranpy.results.queries import query_functions
 
 
 class TableData(object):

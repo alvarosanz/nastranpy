@@ -1,7 +1,6 @@
 import os
 import json
 import re
-import csv
 import shutil
 import numpy as np
 import pandas as pd
@@ -10,7 +9,7 @@ from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
 from nastranpy.results.tables_specs import get_tables_specs
 from nastranpy.results.database_creation import create_tables, finalize_database, open_table
-from nastranpy.bdf.misc import humansize, indent, get_hasher, hash_bytestr
+from nastranpy.bdf.misc import humansize, get_hasher, hash_bytestr
 
 
 class ParentDatabase(object):
