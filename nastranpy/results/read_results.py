@@ -4,8 +4,8 @@ import pandas as pd
 
 class ResultsTable(object):
 
-    def __init__(self, dataframe=None, name=None, element_type=None, header=None, title=None, subtitle=None, label=None, subcase=None, element_id=None):
-        self.df = dataframe
+    def __init__(self, df=None, name=None, element_type=None, header=None, title=None, subtitle=None, label=None, subcase=None, element_id=None):
+        self.df = df
         self.name = name
         self.element_type = element_type
         self.header = header

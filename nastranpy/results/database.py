@@ -203,7 +203,7 @@ class Database(ParentDatabase):
         else:
             print('Everything is OK!')
 
-    def append(self, files, batch_name, **kwargs):
+    def append(self, files, batch_name, table_generator=None, **kwargs):
 
         if batch_name in {batch_name for batch_name, _, _ in self._batches}:
             raise ValueError(f"'{batch_name}' already exists!")
@@ -213,20 +213,14 @@ class Database(ParentDatabase):
         if isinstance(files, str):
             files = [files]
 
-        tables_specs = get_tables_specs()
         self._close()
 
-        for name, header in self._headers.items():
-            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
-            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
-            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
-                                                  field in tables_specs[name]['dtypes'] else
-                                                  dtype) for field, dtype in row] for row in
-                                                tables_specs[name]['pch_format']]
+        for header in self._headers.values():
             open_table(header, new_table=False)
 
-        _, load_cases_info = create_tables(self.path, files, tables_specs, self._headers,
-                                           load_cases_info={name: dict() for name in self.tables})
+        _, load_cases_info = create_tables(self.path, files, self._get_tables_specs(), self._headers,
+                                           load_cases_info={name: dict() for name in self.tables},
+                                           table_generator=table_generator)
 
         if not 'filenames' in kwargs:
             filenames = [os.path.basename(file) for file in files]
@@ -417,6 +411,19 @@ class Database(ParentDatabase):
 
         for table in self.tables.values():
             table.close()
+
+    def _get_tables_specs(self):
+        tables_specs = get_tables_specs()
+
+        for name, header in self._headers.items():
+            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
+            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
+            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
+                                                  field in tables_specs[name]['dtypes'] else
+                                                  dtype) for field, dtype in row] for row in
+                                                tables_specs[name]['pch_format']]
+
+        return tables_specs
 
     @staticmethod
     def _is_abs(field_str):

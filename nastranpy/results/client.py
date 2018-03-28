@@ -78,13 +78,13 @@ class DatabaseClient(ParentDatabase):
         try:
             connection = Connection(self.server_address)
             connection.send(data=kwargs)
-            msg, data, dataframe = connection.recv()
+            msg, data, df = connection.recv()
 
             if msg:
                 print(msg)
 
             if kwargs['request_type'] in ('create_database', 'append_to_database'):
-                connection.send_files(kwargs['files'])
+                connection.send_tables(kwargs['files'], tables_specs=data)
                 msg, data, _ = connection.recv()
                 print(msg)
 
@@ -97,9 +97,9 @@ class DatabaseClient(ParentDatabase):
 
             if kwargs['output_path']:
                 print(f"Writing '{os.path.basename(kwargs['output_path'])}' ...")
-                dataframe.to_csv(kwargs['output_path'])
+                df.to_csv(kwargs['output_path'])
 
-            return dataframe
+            return df
 
 
 def query_server(file):

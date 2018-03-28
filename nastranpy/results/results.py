@@ -47,7 +47,8 @@ def query(query=None, file=None):
 
 def create_database(files, database_path, database_name, database_version,
                     database_project=None, tables_specs=None,
-                    max_chunk_size=1e8, checksum='sha256', overwrite=False, **kwargs):
+                    max_chunk_size=1e8, checksum='sha256', table_generator=None,
+                    overwrite=False, **kwargs):
     print('Creating database ...')
 
     if not os.path.exists(database_path):
@@ -67,7 +68,8 @@ def create_database(files, database_path, database_name, database_version,
         filenames = [os.path.basename(file) for file in kwargs['filenames']]
 
     batches = [['Initial batch', None, filenames]]
-    headers, load_cases_info = create_tables(database_path, files, tables_specs, checksum=checksum)
+    headers, load_cases_info = create_tables(database_path, files, tables_specs,
+                                             checksum=checksum, table_generator=table_generator)
     finalize_database(database_path, database_name, database_version, database_project,
                       headers, load_cases_info, batches, max_chunk_size)
 

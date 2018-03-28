@@ -8,7 +8,8 @@ from nastranpy.bdf.misc import get_hasher, hash_bytestr
 
 
 def create_tables(database_path, files, tables_specs,
-                  headers=None, load_cases_info=None, checksum='sha256'):
+                  headers=None, load_cases_info=None, checksum='sha256',
+                  table_generator=None):
 
     if headers is None:
         headers = dict()
@@ -16,43 +17,45 @@ def create_tables(database_path, files, tables_specs,
     if load_cases_info is None:
         load_cases_info = dict()
 
+    if not table_generator:
+        table_generator = (table for file in files for table in
+                           tables_in_pch(file, tables_specs))
+
     ignored_tables = set()
 
     try:
 
-        for file in files:
+        for table in table_generator:
+            name = '{} - {}'.format(table.name, table.element_type)
 
-            for table in tables_in_pch(file, tables_specs=tables_specs):
-                name = '{} - {}'.format(table.name, table.element_type)
+            if name not in tables_specs:
 
-                if name not in tables_specs:
+                if name not in ignored_tables:
+                    print("WARNING: '{}' is not supported!".format(name))
+                    ignored_tables.add(name)
 
-                    if name not in ignored_tables:
-                        print("WARNING: '{}' is not supported!".format(name))
-                        ignored_tables.add(name)
+                continue
 
-                    continue
+            if name not in headers:
+                load_cases_info[name] = dict()
+                headers[name] = {
+                    'name': name,
+                    'path': os.path.join(database_path, name),
+                    'columns': [(field, tables_specs[name]['dtypes'][field]) for field in
+                                tables_specs[name]['columns']],
+                    'LIDs': list(),
+                    'EIDs': None,
+                    'files': dict(),
+                    'checksum': checksum,
+                    'checksums': {field + '.bin': list() for field in tables_specs[name]['columns']}
+                }
 
-                if name not in headers:
-                    load_cases_info[name] = dict()
-                    headers[name] = {
-                        'name': name,
-                        'path': os.path.join(database_path, name),
-                        'columns': [(field, tables_specs[name]['dtypes'][field]) for field in
-                                    tables_specs[name]['columns']],
-                        'LIDs': list(),
-                        'EIDs': None,
-                        'files': dict(),
-                        'checksum': checksum,
-                        'checksums': {field + '.bin': list() for field in tables_specs[name]['columns']}
-                    }
+                open_table(headers[name], new_table=True)
 
-                    open_table(headers[name], new_table=True)
-
-                if append_to_table(table, headers[name]):
-                    load_cases_info[name][table.subcase] = {'TITLE': table.title,
-                                                            'SUBTITLE': table.subtitle,
-                                                            'LABEL': table.label}
+            if append_to_table(table, headers[name]):
+                load_cases_info[name][table.subcase] = {'TITLE': table.title,
+                                                        'SUBTITLE': table.subtitle,
+                                                        'LABEL': table.label}
     finally:
 
         for header in headers.values():
