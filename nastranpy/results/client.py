@@ -71,20 +71,19 @@ class DatabaseClient(ParentDatabase):
 
         try:
             connection = Connection(self.server_address)
-            connection.send(data_type='json', data=kwargs)
-            msg, data = connection.recv()
+            connection.send(data=kwargs)
+            msg, data, dataframe = connection.recv()
 
             if msg:
                 print(msg)
 
             if kwargs['request_type'] in ('create_database', 'append_to_database'):
                 connection.send_files(kwargs['files'])
-                msg, data = connection.recv()
+                msg, data, _ = connection.recv()
                 print(msg)
             elif kwargs['request_type'] == 'query':
-                df = data
                 connection.send()
-                _, data = connection.recv()
+                _, data, _ = connection.recv()
 
         finally:
             connection.kill()
@@ -95,9 +94,9 @@ class DatabaseClient(ParentDatabase):
 
             if kwargs['output_path']:
                 print(f"Writing '{os.path.basename(kwargs['output_path'])}' ...")
-                df.to_csv(kwargs['output_path'])
+                dataframe.to_csv(kwargs['output_path'])
 
-            return df
+            return dataframe
 
 
 def query_server(file):

@@ -16,7 +16,7 @@ class QueryHandler(socketserver.BaseRequestHandler):
 
         try:
             connection = Connection(connection_socket=self.request)
-            _, query = connection.recv()
+            _, query, _ = connection.recv()
             msg = ''
             path = Path(query['path'])
 
@@ -36,7 +36,7 @@ class QueryHandler(socketserver.BaseRequestHandler):
             if query['request_type'] == 'check':
                 msg = db.check(print_to_screen=False)
             elif query['request_type'] == 'query':
-                connection.send(data_type='pandas', data=db.query(**process_query(query)))
+                connection.send(dataframe=db.query(**process_query(query)))
                 connection.recv()
             elif query['request_type'] == 'append_to_database':
                 connection.send('Appending to database ...')
@@ -46,7 +46,7 @@ class QueryHandler(socketserver.BaseRequestHandler):
                 db.restore(query['batch'])
                 msg = f"Database restored to '{query['batch']}' state succesfully!"
 
-            connection.send(msg, data_type='json', data=db._export_header())
+            connection.send(msg, data=db._export_header())
 
         except Exception as e:
             connection.send('#' + str(e))
@@ -70,29 +70,27 @@ class Connection(object):
     def kill(self):
         self.socket.close()
 
-    def send(self, msg='', data_type='', data=None):
+    def send(self, msg='', data=None, dataframe=None):
         msg = msg.strip()
         buffer = BytesIO()
-        position = 0
+        buffer.seek(3 * self.header_size + len(msg))
 
-        if not data is None:
-            buffer.seek(2 * self.header_size + 8 + len(msg))
+        if data is None:
+            data = b''
+        else:
+            data = json.dumps(data).encode()
+            buffer.write(data)
 
-            if data_type == 'json':
-                buffer.write(json.dumps(data).encode())
-            elif data_type == 'text':
-                buffer.write(data.encode())
-            elif data_type == 'pandas':
-                data.to_msgpack(buffer)
+        if not dataframe is None:
+            dataframe.to_msgpack(buffer)
 
-            position = buffer.tell()
-            buffer.seek(0)
-
+        position = buffer.tell()
+        buffer.seek(0)
         buffer.write((str(position).zfill(self.header_size) +
                       str(len(msg)).zfill(self.header_size) +
-                      data_type.ljust(8) +
+                      str(len(data)).zfill(self.header_size) +
                       msg).encode())
-        self.socket.sendall(buffer.getvalue())
+        self.socket.sendall(buffer.getbuffer())
 
     def recv(self):
         buffer = BytesIO()
@@ -104,30 +102,33 @@ class Connection(object):
 
             if size == 1:
                 msg_size = int(data[self.header_size : 2 * self.header_size].decode())
-                data_type = data[2 * self.header_size : 2 * self.header_size + 8].decode().strip()
-                size = int(data[:self.header_size].decode()) - 2 * self.header_size - 8 - msg_size
-                msg = data[2 * self.header_size + 8 : 2 * self.header_size + 8 + msg_size].decode()
-                data = data[2 * self.header_size + 8 + msg_size:]
-
-                if msg and msg[0] == '#':
-                    raise ConnectionError(msg[1:])
+                data_size = int(data[2 * self.header_size : 3 * self.header_size].decode())
+                size = int(data[:self.header_size].decode()) - 3 * self.header_size
+                data = data[3 * self.header_size:]
 
             buffer.write(data)
 
         buffer.seek(0)
+        msg = buffer.read(msg_size).decode()
 
-        if data_type == 'json':
-            return msg, json.loads(buffer.read().decode())
-        elif data_type == 'text':
-            return msg, buffer.read().decode()
-        elif data_type == 'pandas':
-            return msg, pd.read_msgpack(buffer)
-        elif not data_type:
-            return msg, None
+        if msg and msg[0] == '#':
+            raise ConnectionError(msg[1:])
+
+        if data_size:
+            data = json.loads(buffer.read(data_size).decode())
+        else:
+            data = None
+
+        if size > 3 * self.header_size + msg_size + data_size:
+            dataframe = pd.read_msgpack(buffer)
+        else:
+            dataframe = None
+
+        return msg, data, dataframe
 
     def send_files(self, files):
         nbytes = sum(os.path.getsize(file) for file in files)
-        print(f"Transferring {len(files)} file/s ({humansize(bytes)})")
+        print(f"Transferring {len(files)} file/s ({humansize(nbytes)}) ...")
         self.socket.sendall(str(nbytes).encode())
         answer = self.socket.recv(self.buffer_size)
 
