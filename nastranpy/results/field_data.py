@@ -70,12 +70,8 @@ class FieldData(object):
 
         n_LIDs = len(LIDs_queried)
         n_EIDs = self._n_EIDs if EIDs is None else len(EIDs)
-        memory_used_by_LID = n_LIDs * self._n_EIDs * self._item_size
-        memory_used_by_EID = n_EIDs * self._n_LIDs * self._item_size
-        by_LID = (n_LIDs <= n_EIDs and memory_used_by_LID < max_size or
-                  n_LIDs > n_EIDs and memory_used_by_EID > max_size)
 
-        if by_LID and memory_used_by_LID > max_size or not by_LID and memory_used_by_EID > max_size:
+        if n_LIDs * n_EIDs * self._item_size > max_size:
             raise MemoryError('The requested data is too large to fit into memory!')
 
         array = np.empty((n_LIDs + len(LIDs_combined_used), n_EIDs), dtype=self._dtype)
@@ -88,17 +84,22 @@ class FieldData(object):
             EIDs = np.array(self._EIDs)
             iLIDs = np.array(sorted(self._iLIDs[LID] for LID in LIDs_queried))
 
-            if by_LID:
+            if n_LIDs < n_EIDs:
                 array[:n_LIDs, :] = self._data_by_LID[iLIDs, :]
             else:
-                array[:n_LIDs, :] = np.array(self._data_by_EID)[:, iLIDs].T
+
+                for i in range(n_EIDs):
+                    array[:n_LIDs, i] = self._data_by_EID[i, :][iLIDs].T
 
         elif LIDs is None:
             LIDs = np.array(self._LIDs)
             iEIDs = np.array(sorted(self._iEIDs[EID] for EID in EIDs))
 
-            if by_LID:
-                array[:n_LIDs, :] = np.array(self._data_by_LID)[:, iEIDs]
+            if n_LIDs < n_EIDs:
+
+                for i in range(n_LIDs):
+                    array[i, :] = self._data_by_LID[i, :][iEIDs]
+
             else:
                 array[:n_LIDs, :] = self._data_by_EID[iEIDs, :].T
 
@@ -106,10 +107,15 @@ class FieldData(object):
             iLIDs = np.array(sorted(self._iLIDs[LID] for LID in LIDs_queried))
             iEIDs = np.array(sorted(self._iEIDs[EID] for EID in EIDs))
 
-            if by_LID:
-                array[:n_LIDs, :] = self._data_by_LID[iLIDs, :][:, iEIDs]
+            if n_LIDs < n_EIDs:
+
+                for i in range(n_LIDs):
+                    array[i, :] = self._data_by_LID[i, :][iEIDs]
+
             else:
-                array[:n_LIDs, :] = self._data_by_EID[iEIDs, :][:, iLIDs].T
+
+                for i in range(n_EIDs):
+                    array[:n_LIDs, i] = self._data_by_EID[i, :][iLIDs].T
 
         if is_combination:
             array0 = array
