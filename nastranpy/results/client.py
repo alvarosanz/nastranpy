@@ -14,7 +14,7 @@ class DatabaseClient(ParentDatabase):
             self._request(request_type='header', path=self.path)
 
     def _set_headers(self, headers):
-        self._path = headers['path']
+        self.path = headers['path']
         self._headers = headers['headers']
         self._project = headers['project']
         self._name = headers['name']
@@ -53,6 +53,12 @@ class DatabaseClient(ParentDatabase):
     def query(self, request_file):
         query = get_query_from_file(request_file)
         query['request_type'] = 'query'
+
+        if self.path:
+            query['path'] = self.path
+
+        query['host'] = self.server_address[1]
+        query['port'] = self.server_address[1]
         return self._request(**query)
 
     def create(self, files, database_path, database_name, database_version,
@@ -81,9 +87,6 @@ class DatabaseClient(ParentDatabase):
                 connection.send_files(kwargs['files'])
                 msg, data, _ = connection.recv()
                 print(msg)
-            elif kwargs['request_type'] == 'query':
-                connection.send()
-                _, data, _ = connection.recv()
 
         finally:
             connection.kill()

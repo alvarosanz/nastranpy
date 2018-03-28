@@ -33,11 +33,12 @@ class QueryHandler(socketserver.BaseRequestHandler):
             else:
                 db = Database(query['path'])
 
+            df = None
+
             if query['request_type'] == 'check':
                 msg = db.check(print_to_screen=False)
             elif query['request_type'] == 'query':
-                connection.send(dataframe=db.query(**process_query(query)))
-                connection.recv()
+                df=db.query(**process_query(query))
             elif query['request_type'] == 'append_to_database':
                 connection.send('Appending to database ...')
                 db.append([connection.recv_files()], query['batch'], filenames=query['files'])
@@ -46,7 +47,7 @@ class QueryHandler(socketserver.BaseRequestHandler):
                 db.restore(query['batch'])
                 msg = f"Database restored to '{query['batch']}' state succesfully!"
 
-            connection.send(msg, data=db._export_header())
+            connection.send(msg, data=db._export_header(), dataframe=df)
 
         except Exception as e:
             connection.send('#' + str(e))
