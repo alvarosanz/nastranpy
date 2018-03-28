@@ -7,6 +7,7 @@ import socketserver
 import pandas as pd
 from nastranpy.results.results import create_database
 from nastranpy.results.database import Database, process_query
+from nastranpy.bdf.misc import humansize
 
 
 class QueryHandler(socketserver.BaseRequestHandler):
@@ -69,7 +70,7 @@ class Connection(object):
     def kill(self):
         self.socket.close()
 
-    def send(self, msg='', data_type='', data=None, files=None):
+    def send(self, msg='', data_type='', data=None):
         msg = msg.strip()
         buffer = BytesIO()
         position = 0
@@ -126,6 +127,7 @@ class Connection(object):
 
     def send_files(self, files):
         nbytes = sum(os.path.getsize(file) for file in files)
+        print(f"Transferring {len(files)} file/s ({humansize(bytes)})")
         self.socket.sendall(str(nbytes).encode())
         answer = self.socket.recv(self.buffer_size)
 
