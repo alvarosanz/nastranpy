@@ -30,6 +30,130 @@ class ParentDatabase(object):
     def restore_points(self):
         return [batch_name for batch_name, _, _ in self._batches]
 
+    def reload(self, headers=None):
+        self._clear()
+        self._load(headers)
+
+    def _clear(self):
+        self.tables = None
+        self._headers = None
+        self._project = None
+        self._name = None
+        self._version = None
+        self._batches = None
+        self._nbytes = 0
+
+    def _load(self, headers=None):
+
+        if self.path:
+            self._set_headers(headers)
+            self.tables = dict()
+            fields = None
+
+            for name, header in self._headers.items():
+                LID_name, LID_dtype = header['columns'][0]
+                EID_name, EID_dtype = header['columns'][1]
+
+                if self._is_local:
+                    n_LIDs = header['LIDs']
+                    n_EIDs = header['EIDs']
+                    LIDs_file = os.path.join(header['path'], LID_name + '.bin')
+                    EIDs_file = os.path.join(header['path'], EID_name + '.bin')
+                    self._nbytes += os.path.getsize(LIDs_file)
+                    self._nbytes += os.path.getsize(EIDs_file)
+
+                    if (n_LIDs * np.dtype(LID_dtype).itemsize != os.path.getsize(LIDs_file) or
+                        n_EIDs * np.dtype(EID_dtype).itemsize != os.path.getsize(EIDs_file)):
+                        raise ValueError("Inconsistency found! ('{}')".format(name))
+
+                    header['LIDs'] = list(np.fromfile(LIDs_file, dtype=LID_dtype))
+                    header['EIDs'] = np.fromfile(EIDs_file, dtype=EID_dtype)
+                    fields = list()
+
+                    for field_name, dtype in header['columns'][2:]:
+                        file = os.path.join(header['path'], field_name + '.bin')
+                        self._nbytes += os.path.getsize(file)
+                        offset = n_LIDs * n_EIDs * np.dtype(dtype).itemsize
+
+                        if 2 * offset != os.path.getsize(file):
+                            raise ValueError("Inconsistency found! ('{}')".format(file))
+
+                        fields.append(FieldData(field_name,
+                                                np.memmap(file, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r'),
+                                                np.memmap(file, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r', offset=offset),
+                                                header['LIDs'], header['EIDs'],
+                                                LID_name, EID_name))
+                else:
+                    fields = [field_name for field_name in header['columns'][2:]]
+
+                self.tables[name] = TableData(fields,
+                                              header['LIDs'], header['EIDs'],
+                                              LID_name, EID_name)
+
+    def _set_headers(self, headers=None):
+
+        if self._is_local:
+
+            with open(os.path.join(self.path, '#header.json')) as f:
+                headers = json.load(f)
+
+        else:
+
+            if not headers:
+                headers = self._request(request_type='header', path=self.path)
+
+            self.path = headers['path']
+            self._headers = headers['headers']
+            self._nbytes = headers['nbytes']
+
+        self._project = headers['project']
+        self._name = headers['name']
+        self._version = headers['version']
+        self._batches = headers['batches']
+
+        if self._is_local:
+            self._headers = dict()
+
+            for name in headers['tables']:
+                table_path = os.path.join(self.path, name)
+
+                if self._is_local:
+
+                    with open(os.path.join(table_path, '#header.json')) as f:
+                        header = json.load(f)
+
+                header['path'] = table_path
+                header['files'] = dict()
+                self._headers[name] = header
+
+    def _export_header(self):
+        header = {'path': self.path,
+                  'project': self._project,
+                  'name': self._name,
+                  'version': self._version,
+                  'batches': self._batches,
+                  'nbytes': self._nbytes,
+                  'headers': {name: self._headers[name] for name in self._headers}}
+
+        for table in header['headers']:
+            header['headers'][table]['LIDs'] = [int(x) for x in header['headers'][table]['LIDs']]
+            header['headers'][table]['EIDs'] = [int(x) for x in header['headers'][table]['EIDs']]
+
+        return header
+
+    def _get_tables_specs(self):
+        tables_specs = get_tables_specs()
+
+        for name, header in self._headers.items():
+            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
+            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
+            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
+                                                  field in tables_specs[name]['dtypes'] else
+                                                  dtype) for field, dtype in row] for row in
+                                                tables_specs[name]['pch_format']]
+
+        return tables_specs
+
     def info(self, print_to_screen=True, detailed=False):
         info = list()
         info.append(f'Path: {self.path}')
@@ -77,107 +201,14 @@ class ParentDatabase(object):
 
 class Database(ParentDatabase):
 
-    def __init__(self, path, model=None, max_chunk_size=1e8):
+    def __init__(self, path=None, model=None, max_chunk_size=1e8):
         self.path = path
         self.model = model
         self._max_chunk_size = max_chunk_size
+        self._is_local = True
         self.reload()
 
-    def reload(self):
-        self.clear()
-        self.load()
-
-    def clear(self):
-        self.tables = None
-        self._headers = None
-        self._project = None
-        self._name = None
-        self._version = None
-        self._batches = None
-        self._nbytes = 0
-
-    def _set_headers(self):
-
-        with open(os.path.join(self.path, '#header.json')) as f:
-            database_header = json.load(f)
-
-        self._project = database_header['project']
-        self._name = database_header['name']
-        self._version = database_header['version']
-        self._batches = database_header['batches']
-        self._headers = dict()
-
-        for name in database_header['tables']:
-            table_path = os.path.join(self.path, name)
-
-            with open(os.path.join(table_path, '#header.json')) as f:
-                header = json.load(f)
-
-            header['path'] = table_path
-            header['files'] = dict()
-            self._headers[name] = header
-
-    def _export_header(self):
-        header = {'path': self.path,
-                  'project': self._project,
-                  'name': self._name,
-                  'version': self._version,
-                  'batches': self._batches,
-                  'nbytes': self._nbytes,
-                  'headers': {name: self._headers[name] for name in self._headers}}
-
-        for table in header['headers']:
-            header['headers'][table]['LIDs'] = [int(x) for x in header['headers'][table]['LIDs']]
-            header['headers'][table]['EIDs'] = [int(x) for x in header['headers'][table]['EIDs']]
-
-        return header
-
-    def load(self):
-
-        if self.tables is None:
-            self._set_headers()
-            self.tables = dict()
-
-            for name, header in self._headers.items():
-                LID_name, LID_dtype = header['columns'][0]
-                EID_name, EID_dtype = header['columns'][1]
-                n_LIDs = header['LIDs']
-                n_EIDs = header['EIDs']
-                LIDs_file = os.path.join(header['path'], LID_name + '.bin')
-                EIDs_file = os.path.join(header['path'], EID_name + '.bin')
-                self._nbytes += os.path.getsize(LIDs_file)
-                self._nbytes += os.path.getsize(EIDs_file)
-
-                if (n_LIDs * np.dtype(LID_dtype).itemsize != os.path.getsize(LIDs_file) or
-                    n_EIDs * np.dtype(EID_dtype).itemsize != os.path.getsize(EIDs_file)):
-                    raise ValueError("Inconsistency found! ('{}')".format(name))
-
-                header['LIDs'] = list(np.fromfile(LIDs_file, dtype=LID_dtype))
-                header['EIDs'] = np.fromfile(EIDs_file, dtype=EID_dtype)
-                fields = list()
-
-                for field_name, dtype in header['columns'][2:]:
-                    file = os.path.join(header['path'], field_name + '.bin')
-                    self._nbytes += os.path.getsize(file)
-                    offset = n_LIDs * n_EIDs * np.dtype(dtype).itemsize
-
-                    if 2 * offset != os.path.getsize(file):
-                        raise ValueError("Inconsistency found! ('{}')".format(file))
-
-                    fields.append(FieldData(field_name,
-                                            np.memmap(file, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r'),
-                                            np.memmap(file, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r', offset=offset),
-                                            header['LIDs'], header['EIDs'],
-                                            LID_name, EID_name))
-
-                self.tables[name] = TableData(fields,
-                                              header['LIDs'], header['EIDs'],
-                                              LID_name, EID_name)
-        else:
-            print('Database already loaded!')
-
-    def check(self):
-        print('Checking data integrity ...')
+    def check(self, print_to_screen=True):
         files_corrupted = list()
 
         for header in self._headers.values():
@@ -196,14 +227,47 @@ class Database(ParentDatabase):
                 if f_checksum.read() != hash_bytestr(f, get_hasher(header['checksum'])):
                     files_corrupted.append(header_file)
 
+        info = list()
+
         if files_corrupted:
 
             for file in files_corrupted:
-                print(f"'{file}' is corrupted!")
+                info.append(f"'{file}' is corrupted!")
         else:
-            print('Everything is OK!')
+            info.append('Everything is OK!')
 
-    def append(self, files, batch_name, table_generator=None, **kwargs):
+        info = '\n'.join(info)
+
+        if print_to_screen:
+            print(info)
+        else:
+            return info
+
+    def create(self, files, database_path, database_name, database_version,
+               database_project=None, tables_specs=None, overwrite=False,
+               checksum='sha256', table_generator=None):
+        print('Creating database ...')
+
+        if not os.path.exists(database_path):
+            os.mkdir(database_path)
+        elif not overwrite:
+            raise FileExistsError(f"Database already exists at '{database_path}'!")
+
+        self.path = database_path
+
+        if isinstance(files, str):
+            files = [files]
+
+        batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
+        headers, load_cases_info = create_tables(self.path, files, tables_specs,
+                                                 checksum=checksum, table_generator=table_generator)
+        finalize_database(self.path, database_name, database_version, database_project,
+                          headers, load_cases_info, batches, self._max_chunk_size)
+
+        self.reload()
+        print('Database created succesfully!')
+
+    def append(self, files, batch_name, table_generator=None):
 
         if batch_name in {batch_name for batch_name, _, _ in self._batches}:
             raise ValueError(f"'{batch_name}' already exists!")
@@ -222,16 +286,10 @@ class Database(ParentDatabase):
                                            load_cases_info={name: dict() for name in self.tables},
                                            table_generator=table_generator)
 
-        if not 'filenames' in kwargs:
-            filenames = [os.path.basename(file) for file in files]
-        else:
-            filenames = [os.path.basename(file) for file in kwargs['filenames']]
-
-        self._batches.append([batch_name, None, filenames])
+        self._batches.append([batch_name, None, [os.path.basename(file) for file in files]])
         finalize_database(self.path, self.name, self.version, self.project,
                           self._headers, load_cases_info, self._batches, self._max_chunk_size)
         self.reload()
-
         print('Database updated succesfully!')
 
     def restore(self, batch_name=None):
@@ -411,19 +469,6 @@ class Database(ParentDatabase):
 
         for table in self.tables.values():
             table.close()
-
-    def _get_tables_specs(self):
-        tables_specs = get_tables_specs()
-
-        for name, header in self._headers.items():
-            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
-            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
-            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
-                                                  field in tables_specs[name]['dtypes'] else
-                                                  dtype) for field, dtype in row] for row in
-                                                tables_specs[name]['pch_format']]
-
-        return tables_specs
 
     @staticmethod
     def _is_abs(field_str):

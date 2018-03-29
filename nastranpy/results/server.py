@@ -5,7 +5,6 @@ import json
 import socket
 import socketserver
 import pandas as pd
-from nastranpy.results.results import create_database
 from nastranpy.results.database import Database, process_query
 from nastranpy.results.read_results import tables_in_pch, ResultsTable
 from nastranpy.results.tables_specs import get_tables_specs
@@ -28,10 +27,10 @@ class QueryHandler(socketserver.BaseRequestHandler):
             if query['request_type'] == 'create_database':
                 path.mkdir(parents=True, exist_ok=True)
                 connection.send('Creating database ...', data=get_tables_specs())
-                db = create_database(None, query['path'], query['name'], query['version'],
-                                     database_project=query['project'], overwrite=True,
-                                     table_generator=connection.recv_tables(),
-                                     filenames=query['files'])
+                db = Database()
+                db.create(query['files'], query['path'], query['name'], query['version'],
+                          database_project=query['project'], overwrite=True,
+                          table_generator=connection.recv_tables())
                 msg = 'Database created succesfully!'
             else:
                 db = Database(query['path'])
@@ -44,8 +43,7 @@ class QueryHandler(socketserver.BaseRequestHandler):
                 df=db.query(**process_query(query))
             elif query['request_type'] == 'append_to_database':
                 connection.send('Appending to database ...', data=db._get_tables_specs())
-                db.append(None, query['batch'], table_generator=connection.recv_tables(),
-                          filenames=query['files'])
+                db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
                 msg = 'Database created succesfully!'
             elif query['request_type'] == 'restore_database':
                 db.restore(query['batch'])
@@ -144,11 +142,8 @@ class Connection(object):
 
         return msg, data, df
 
-    def send_tables(self, files, tables_specs=None):
+    def send_tables(self, files, tables_specs):
         ignored_tables = set()
-
-        if not tables_specs:
-            tables_specs = get_tables_specs()
 
         for file in files:
 

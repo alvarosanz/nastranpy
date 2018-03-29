@@ -2,12 +2,12 @@ import os
 import json
 import datetime
 import numpy as np
-import pandas as pd
 from nastranpy.results.read_results import tables_in_pch
+from nastranpy.results.tables_specs import get_tables_specs
 from nastranpy.bdf.misc import get_hasher, hash_bytestr
 
 
-def create_tables(database_path, files, tables_specs,
+def create_tables(database_path, files, tables_specs=None,
                   headers=None, load_cases_info=None, checksum='sha256',
                   table_generator=None):
 
@@ -16,6 +16,9 @@ def create_tables(database_path, files, tables_specs,
 
     if load_cases_info is None:
         load_cases_info = dict()
+
+    if not tables_specs:
+        tables_specs = get_tables_specs()
 
     if not table_generator:
         table_generator = (table for file in files for table in
