@@ -51,7 +51,15 @@ class FieldData(object):
         self._data_by_LID = None
         self._data_by_EID = None
 
-    def get_array(self, LIDs=None, EIDs=None, max_size=2e9):
+    def get_array(self, LIDs=None, EIDs=None, array=None):
+        LIDs_queried = self._LIDs if LIDs is None else LIDs
+        EIDs_queried = self._EIDs if EIDs is None else EIDs
+        LIDs = slice(None) if LIDs is None else LIDs
+        EIDs = slice(None) if EIDs is None else EIDs
+
+        if array is None:
+            array = np.empty((len(LIDs_queried), len(EIDs_queried)), dtype=self._dtype)
+
         is_combination = isinstance(LIDs, dict)
 
         if is_combination:
@@ -61,77 +69,38 @@ class FieldData(object):
                                   LID not in LIDs_requested and LID in self._iLIDs})
             LIDs_combined_used = list({LID for seq in LIDs.values() for _, LID in seq if
                                        LID not in self._iLIDs})
-            LIDs_index = {LID: i for i, LID in enumerate(LIDs)}
             LIDs_queried_index = {LID: i for i, LID in enumerate(LIDs_queried + LIDs_combined_used)}
+            LID_combinations = [(LIDs_queried_index[LID] if LID in LIDs_queried_index else None,
+                                 np.array([LIDs_queried_index[LID] for _, LID in seq]),
+                                 np.array([coeff for coeff, _ in seq])) for LID, seq in LIDs.items()]
+            output_array = array
+            array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(EIDs_queried)), dtype=self._dtype)
+
+        if len(LIDs_queried) < len(EIDs_queried):
+            iEIDs = EIDs if EIDs == slice(None) else np.array([self._iEIDs[EID] for EID in EIDs_queried])
+
+            for i, LID in enumerate(LIDs_queried):
+                array[i, :] = self._data_by_LID[self._iLIDs[LID], :][iEIDs]
 
         else:
-            LIDs_queried = self._LIDs if LIDs is None else LIDs
-            LIDs_combined_used = list()
+            iLIDs = LIDs if LIDs == slice(None) else np.array([self._iLIDs[LID] for LID in LIDs_queried])
 
-        n_LIDs = len(LIDs_queried)
-        n_EIDs = self._n_EIDs if EIDs is None else len(EIDs)
-
-        if n_LIDs * n_EIDs * self._item_size > max_size:
-            raise MemoryError('The requested data is too large to fit into memory!')
-
-        array = np.empty((n_LIDs + len(LIDs_combined_used), n_EIDs), dtype=self._dtype)
-
-        if LIDs is None and EIDs is None:
-            LIDs = np.array(self._LIDs)
-            EIDs = np.array(self._EIDs)
-            array[:n_LIDs, :] = self._data_by_LID
-        elif EIDs is None:
-            EIDs = np.array(self._EIDs)
-            iLIDs = np.array(sorted(self._iLIDs[LID] for LID in LIDs_queried))
-
-            if n_LIDs < n_EIDs:
-                array[:n_LIDs, :] = self._data_by_LID[iLIDs, :]
-            else:
-
-                for i in range(n_EIDs):
-                    array[:n_LIDs, i] = self._data_by_EID[i, :][iLIDs].T
-
-        elif LIDs is None:
-            LIDs = np.array(self._LIDs)
-            iEIDs = np.array(sorted(self._iEIDs[EID] for EID in EIDs))
-
-            if n_LIDs < n_EIDs:
-
-                for i in range(n_LIDs):
-                    array[i, :] = self._data_by_LID[i, :][iEIDs]
-
-            else:
-                array[:n_LIDs, :] = self._data_by_EID[iEIDs, :].T
-
-        else:
-            iLIDs = np.array(sorted(self._iLIDs[LID] for LID in LIDs_queried))
-            iEIDs = np.array(sorted(self._iEIDs[EID] for EID in EIDs))
-
-            if n_LIDs < n_EIDs:
-
-                for i in range(n_LIDs):
-                    array[i, :] = self._data_by_LID[i, :][iEIDs]
-
-            else:
-
-                for i in range(n_EIDs):
-                    array[:n_LIDs, i] = self._data_by_EID[i, :][iLIDs].T
+            for i, EID in enumerate(EIDs_queried):
+                array[:len(LIDs_queried), i] = self._data_by_EID[self._iEIDs[EID], :][iLIDs].T
 
         if is_combination:
-            array0 = array
-            array = np.empty((len(LIDs), n_EIDs), dtype=self._dtype)
 
-            for LID, seq in LIDs.items():
+            for i, (index, indexes, coeffs) in enumerate(LID_combinations):
 
-                if seq:
-                    row = np.dot(array0[np.array([LIDs_queried_index[LID] for _, LID in seq]), :].T,
-                                 np.array([coeff for coeff, _ in seq]))
+                if len(coeffs):
+                    output_array[i, :] = np.dot(array[indexes, :].T, coeffs)
 
-                    if LID in LIDs_queried_index:
-                        array0[LIDs_queried_index[LID], :] = row
+                    if index:
+                        array[index, :] = output_array[i, :]
 
-                    array[LIDs_index[LID], :] = row
                 else:
-                    array[LIDs_index[LID], :] = array0[LIDs_queried_index[LID], :]
+                    output_array[i, :] = array[index, :]
 
-        return array, LIDs, EIDs
+            return output_array
+        else:
+            return array

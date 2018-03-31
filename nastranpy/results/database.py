@@ -201,9 +201,8 @@ class ParentDatabase(object):
 
 class Database(ParentDatabase):
 
-    def __init__(self, path=None, model=None, max_chunk_size=1e8):
+    def __init__(self, path=None, max_chunk_size=1e8):
         self.path = path
-        self.model = model
         self._max_chunk_size = max_chunk_size
         self._is_local = True
         self.reload()
@@ -338,13 +337,7 @@ class Database(ParentDatabase):
         print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
-              geometry=None, weights=None, file=None, custom_functions=None, **kwargs):
-
-        if file:
-            return self.query(**get_query_from_file(file))
-        elif not table and not fields:
-            raise ValueError('You must specify a query!')
-
+              geometry=None, weights=None, custom_functions=None, **kwargs):
         EID_groups = None
 
         if isinstance(EIDs, dict):
@@ -356,14 +349,18 @@ class Database(ParentDatabase):
             geometry = {parameter: np.array([geometry[parameter][EID] for EID in EIDs]) for
                         parameter in geometry}
 
-        query = dict()
-        fields = dict()
-        all_aggregations = list()
-
         if not outputs:
             outputs = self.tables[table].names
 
-        for output in outputs:
+        LIDs_queried = self.tables[table].LIDs if LIDs is None else np.array(list(LIDs))
+        EIDs_queried = self.tables[table].EIDs if EIDs is None else np.array(list(EIDs))
+        data = np.empty((len(outputs), len(LIDs_queried), len(EIDs_queried)), dtype=np.float64)
+        columns = list()
+        fields = dict()
+        all_aggregations = list()
+
+        for i, output in enumerate(outputs):
+            output_array = data[i, :, :]
 
             if isinstance(output, str):
                 output_field, is_absolute = self._is_abs(output.upper())
@@ -374,9 +371,12 @@ class Database(ParentDatabase):
                 all_aggregations.append(aggregations)
 
             if output_field in self.tables[table]:
-                field_array, LIDs, EIDs = self.tables[table][output_field].get_array(LIDs, EIDs)
-                fields[output_field] = field_array
-                output_array = np.array(fields[output_field])
+
+                if output_field not in fields:
+                    fields[output_field] = self.tables[table][output_field].get_array(LIDs, EIDs, output_array)
+                else:
+                    output_array[:, :] = fields[output_field]
+
             else:
                 func_name, func_args = self._get_args(output_field)
 
@@ -392,22 +392,24 @@ class Database(ParentDatabase):
 
                 for arg in func_args:
 
-                    if arg not in fields:
+                    if arg in self.tables[table]:
 
-                        if geometry and arg in geometry:
-                            fields[arg] = geometry[arg]
-                        elif arg in self.tables[table]:
-                            field_array, LIDs, EIDs = self.tables[table][arg].get_array(LIDs, EIDs)
-                            fields[arg] = field_array
-                        else:
-                            continue
+                        if arg not in fields:
+                            fields[arg] = self.tables[table][arg].get_array(LIDs, EIDs)
 
-                    args.append(fields[arg])
+                        arg = fields[arg]
+                    elif geometry and arg in geometry:
+                        arg = geometry[arg]
+                    else:
+                        continue
 
-                output_array = func(*args)
+                    args.append(arg)
+
+                output_array[:, :] = func(*args)
 
             if is_absolute:
-                output_array = np.abs(output_array)
+                fields[output_field] =np.array(output_array)
+                output_array[:, :] = np.abs(output_array)
                 output_field = f'ABS({output_field})'
 
             if EID_groups:
@@ -442,28 +444,28 @@ class Database(ParentDatabase):
                 if aggregations:
                     raise ValueError('A pick query must not be aggregated!')
 
-                query[output_field] = output_array
-                index0 = np.array(list(LIDs))
-                index1 = EIDs
+                index0 = LIDs_queried
+                index1 = EIDs_queried
+
+            columns.append(output_field)
 
         if len({0 if aggregations is None else len(aggregations.split('-')) for
                 aggregations in all_aggregations}) > 1:
             raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
 
-        data = {field: array.ravel() for field, array in query.items()}
-        columns = list(data)
+        data = data.reshape((len(outputs), len(LIDs_queried) * len(EIDs_queried))).T
 
         if EID_groups:
             index_names = ['Group', self.tables[table]._LID_name]
         else:
-            index_names = [self.tables[table]._LID_name, self.tables[table]._EID_name]
+            index_names = self.tables[table].index_labels
 
         if index1 is None:
             index = pd.Index(index0, name='Group')
         else:
             index = pd.MultiIndex.from_product([index0, index1], names=index_names)
 
-        return pd.DataFrame(data, columns=columns, index=index)
+        return pd.DataFrame(data, columns=columns, index=index, copy=False)
 
     def _close(self):
 
