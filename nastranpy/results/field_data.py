@@ -8,8 +8,8 @@ class FieldData(object):
         self._name = name
         self._data_by_LID = data_by_LID
         self._data_by_EID = data_by_EID
-        self._LIDs = np.array(LIDs)
-        self._EIDs = np.array(EIDs)
+        self._LIDs = np.array(LIDs, dtype=np.int64)
+        self._EIDs = np.array(EIDs, dtype=np.int64)
         self._LID_name = LID_name
         self._EID_name = EID_name
         self._iLIDs = {LID: i for i, LID in enumerate(self._LIDs)}
@@ -51,14 +51,14 @@ class FieldData(object):
         self._data_by_LID = None
         self._data_by_EID = None
 
-    def get_array(self, LIDs=None, EIDs=None, array=None):
+    def read(self, LIDs=None, EIDs=None, out=None):
         LIDs_queried = self._LIDs if LIDs is None else LIDs
         EIDs_queried = self._EIDs if EIDs is None else EIDs
-        LIDs = slice(None) if LIDs is None else LIDs
-        EIDs = slice(None) if EIDs is None else EIDs
 
-        if array is None:
-            array = np.empty((len(LIDs_queried), len(EIDs_queried)), dtype=self._dtype)
+        if out is None:
+            out = np.empty((len(LIDs_queried), len(EIDs_queried)), dtype=self._dtype)
+
+        array = out
 
         is_combination = isinstance(LIDs, dict)
 
@@ -73,17 +73,16 @@ class FieldData(object):
             LID_combinations = [(LIDs_queried_index[LID] if LID in LIDs_queried_index else None,
                                  np.array([LIDs_queried_index[LID] for _, LID in seq]),
                                  np.array([coeff for coeff, _ in seq])) for LID, seq in LIDs.items()]
-            output_array = array
             array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(EIDs_queried)), dtype=self._dtype)
 
         if len(LIDs_queried) < len(EIDs_queried):
-            iEIDs = EIDs if EIDs == slice(None) else np.array([self._iEIDs[EID] for EID in EIDs_queried])
+            iEIDs = slice(None) if EIDs is None else np.array([self._iEIDs[EID] for EID in EIDs_queried])
 
             for i, LID in enumerate(LIDs_queried):
                 array[i, :] = self._data_by_LID[self._iLIDs[LID], :][iEIDs]
 
         else:
-            iLIDs = LIDs if LIDs == slice(None) else np.array([self._iLIDs[LID] for LID in LIDs_queried])
+            iLIDs = slice(None) if LIDs is None else np.array([self._iLIDs[LID] for LID in LIDs_queried])
 
             for i, EID in enumerate(EIDs_queried):
                 array[:len(LIDs_queried), i] = self._data_by_EID[self._iEIDs[EID], :][iLIDs].T
@@ -93,14 +92,12 @@ class FieldData(object):
             for i, (index, indexes, coeffs) in enumerate(LID_combinations):
 
                 if len(coeffs):
-                    output_array[i, :] = np.dot(array[indexes, :].T, coeffs)
+                    out[i, :] = np.dot(array[indexes, :].T, coeffs)
 
                     if index:
-                        array[index, :] = output_array[i, :]
+                        array[index, :] = out[i, :]
 
                 else:
-                    output_array[i, :] = array[index, :]
+                    out[i, :] = array[index, :]
 
-            return output_array
-        else:
-            return array
+        return out

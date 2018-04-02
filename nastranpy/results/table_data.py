@@ -4,8 +4,8 @@ import numpy as np
 class TableData(object):
 
     def __init__(self, fields, LIDs, EIDs, LID_name='LID', EID_name='EID'):
-        self._LIDs = np.array(LIDs)
-        self._EIDs = np.array(EIDs)
+        self._LIDs = np.array(LIDs, dtype=np.int64)
+        self._EIDs = np.array(EIDs, dtype=np.int64)
         self._LID_name = LID_name
         self._EID_name = EID_name
 
