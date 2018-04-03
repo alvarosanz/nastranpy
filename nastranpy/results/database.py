@@ -1,6 +1,5 @@
 import os
 import json
-import re
 import shutil
 import numpy as np
 import pandas as pd
@@ -337,7 +336,7 @@ class Database(ParentDatabase):
         print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
-              geometry=None, weights=None, custom_functions=None, **kwargs):
+              geometry=None, weights=None, **kwargs):
         EID_groups = None
 
         if isinstance(EIDs, dict):
@@ -356,11 +355,10 @@ class Database(ParentDatabase):
         EIDs_queried = self.tables[table].EIDs if EIDs is None else np.array(list(EIDs), dtype=np.int64)
         data = np.empty((len(outputs), len(LIDs_queried), len(EIDs_queried)), dtype=np.float64)
         data_agg = None
-        LIDs_agg = None
+        aggs = dict()
         columns = list()
-        columns_agg = list()
         fields = dict()
-        all_aggregations = list()
+        n_aggregations = None
 
         for i, output in enumerate(outputs):
             output_array = data[i, :, :]
@@ -371,7 +369,17 @@ class Database(ParentDatabase):
             else:
                 output_field, is_absolute = self._is_abs(output[0].upper())
                 aggregations = output[1].strip().upper().split('-')
-                all_aggregations.append(aggregations)
+
+            if aggregations and not EID_groups:
+                raise ValueError('A pick query must not be aggregated!')
+
+            if not aggregations and EID_groups:
+                raise ValueError('A grouped query must be aggregated!')
+
+            if n_aggregations is None:
+                n_aggregations = len(aggregations)
+            elif len(aggregations) != n_aggregations:
+                raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
 
             if output_field in self.tables[table]:
 
@@ -381,35 +389,30 @@ class Database(ParentDatabase):
                     output_array[:, :] = fields[output_field]
 
             else:
-                func_name, func_args = self._get_args(output_field)
 
-                if custom_functions and func_name in custom_functions:
-                    func = custom_functions[func_name]
-                elif func_name in query_functions[table]:
-                    func, func_args = query_functions[table][func_name]
+                if output_field in query_functions[table]:
+                    func, func_args = query_functions[table][output_field]
+                    args = list()
+
+                    for arg in func_args:
+
+                        if arg in self.tables[table]:
+
+                            if arg not in fields:
+                                fields[arg] = self.tables[table][arg].read(LIDs, EIDs)
+
+                            arg = fields[arg]
+                        elif geometry and arg in geometry:
+                            arg = geometry[arg]
+                        else:
+                            continue
+
+                        args.append(arg)
+
+                    args.append(output_array)
+                    func(*args)
                 else:
                     raise ValueError(f"Unsupported output: '{output_field}'")
-
-                output_field = func_name
-                args = list()
-
-                for arg in func_args:
-
-                    if arg in self.tables[table]:
-
-                        if arg not in fields:
-                            fields[arg] = self.tables[table][arg].read(LIDs, EIDs)
-
-                        arg = fields[arg]
-                    elif geometry and arg in geometry:
-                        arg = geometry[arg]
-                    else:
-                        continue
-
-                    args.append(arg)
-
-                args.append(output_array)
-                func(*args)
 
             if is_absolute:
                 fields[output_field] =np.array(output_array)
@@ -417,57 +420,47 @@ class Database(ParentDatabase):
                 output_field = f'ABS({output_field})'
 
             if EID_groups:
-
-                if not aggregations:
-                    raise ValueError('A grouped query must be aggregated!')
-
-                index0 = list(EID_groups)
+                index0 = LIDs_queried
+                index1 = list(EID_groups)
+                columns.append(f"{output_field} ({'-'.join(aggregations)})")
 
                 if len(aggregations) == 2:
-                    n = 1
-                    index1 = None
+                    index0 = None
+                    array_agg = np.empty((1, len(EID_groups)), dtype=np.float64)
+                    LIDs_agg = np.empty((1, len(EID_groups)), dtype=np.int64)
+                    aggs[columns[-1]] = array_agg
+                    aggs['{} (LID {})'.format(output_field, aggregations[1])] = LIDs_agg
                 else:
-                    n = len(LIDs_queried)
-                    index1 = LIDs_queried
 
-                if data_agg is None:
-                    data_agg = np.empty((len(outputs), len(EID_groups), n), dtype=np.float64)
+                    if data_agg is None:
+                        data_agg = np.empty((len(outputs), len(LIDs_queried), len(EID_groups)), dtype=np.float64)
 
-                    if index1 is None:
-                        LIDs_agg = np.empty((len(outputs), len(EID_groups), n), dtype=np.int64)
+                    array_agg = data_agg[i, :, :]
+                    LIDs_agg = np.empty((1, len(EID_groups)), dtype=np.int64)
 
                 for j, EID_group in enumerate(EID_groups.values()):
-                    weights = np.array([weights[EID] for EID in EID_group]) if weights else None
-                    data_agg[i, j, :] = self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EID_group])],
-                                                        aggregations, LIDs, weights, LIDs_agg[i, j, :])
+                    self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EID_group])],
+                                    array_agg[:, j], aggregations, LIDs_queried, LIDs_agg[:, j],
+                                    np.array([weights[EID] for EID in EID_group]) if weights else None)
 
-                columns.append(f'{output_field} ({'-'.join(aggregations)})')
-
-                if index1 is None:
-                    columns_agg.append('{} (LID {})'.format(output_field, aggregations[1]))
             else:
-
-                if aggregations:
-                    raise ValueError('A pick query must not be aggregated!')
-
                 index0 = LIDs_queried
                 index1 = EIDs_queried
                 columns.append(output_field)
 
-        if len({len(aggregations) for aggregations in all_aggregations}) > 1:
-            raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
-
-        data = data.reshape((len(outputs), len(LIDs_queried) * len(EIDs_queried))).T
+        index_names = list(self.tables[table].index_labels)
 
         if EID_groups:
-            index_names = ['Group', self.tables[table].index_labels[0]]
-        else:
-            index_names = self.tables[table].index_labels
+            data = data_agg
+            index_names[1] = 'Group'
 
-        if index1 is None:
-            index = pd.Index(index0, name='Group')
-        else:
+        if len(aggregations) < 2:
+            data = data.reshape((len(outputs), len(index0) * len(index1))).T
             index = pd.MultiIndex.from_product([index0, index1], names=index_names)
+        else:
+            data = {field: aggs[field].ravel() for field in aggs}
+            columns = list(aggs)
+            index = pd.Index(index1, name=index_names[1])
 
         return pd.DataFrame(data, columns=columns, index=index, copy=False)
 
@@ -484,17 +477,8 @@ class Database(ParentDatabase):
         else:
             return field_str, False
 
-    @staticmethod
-    def _get_args(func_str):
-        re_match = re.search('(.+)\((.+?)\)', func_str)
-
-        if re_match:
-            return re_match[1], [arg.strip() for arg in re_match[2].split(',')]
-        else:
-            return func_str, None
-
     @classmethod
-    def _aggregate(cls, array, aggregations, LIDs, weights, out, LIDs_agg=None):
+    def _aggregate(cls, array, array_agg, aggregations, LIDs, LIDs_agg, weights):
 
         for i, aggregation in enumerate(aggregations):
             axis = 1 - i
@@ -529,7 +513,7 @@ class Database(ParentDatabase):
             if is_absolute:
                 np.abs(array, out=array)
 
-        return array
+        array_agg[:] = array
 
 
 def get_query_from_file(file):
