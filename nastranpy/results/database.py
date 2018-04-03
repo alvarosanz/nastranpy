@@ -367,10 +367,10 @@ class Database(ParentDatabase):
 
             if isinstance(output, str):
                 output_field, is_absolute = self._is_abs(output.upper())
-                aggregations = None
+                aggregations = list()
             else:
                 output_field, is_absolute = self._is_abs(output[0].upper())
-                aggregations = output[1].upper()
+                aggregations = output[1].strip().upper().split('-')
                 all_aggregations.append(aggregations)
 
             if output_field in self.tables[table]:
@@ -422,9 +422,8 @@ class Database(ParentDatabase):
                     raise ValueError('A grouped query must be aggregated!')
 
                 index0 = list(EID_groups)
-                n_agg = len(aggregations.split('-'))
 
-                if n_agg == 2:
+                if len(aggregations) == 2:
                     n = 1
                     index1 = None
                 else:
@@ -442,10 +441,10 @@ class Database(ParentDatabase):
                     data_agg[i, j, :] = self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EID_group])],
                                                         aggregations, LIDs, weights, LIDs_agg[i, j, :])
 
-                columns.append(f'{output_field} ({aggregations})')
+                columns.append(f'{output_field} ({'-'.join(aggregations)})')
 
                 if index1 is None:
-                    columns_agg.append('{} (LID {})'.format(output_field, aggregations.split('-')[1]))
+                    columns_agg.append('{} (LID {})'.format(output_field, aggregations[1]))
             else:
 
                 if aggregations:
@@ -455,8 +454,7 @@ class Database(ParentDatabase):
                 index1 = EIDs_queried
                 columns.append(output_field)
 
-        if len({0 if aggregations is None else len(aggregations.split('-')) for
-                aggregations in all_aggregations}) > 1:
+        if len({len(aggregations) for aggregations in all_aggregations}) > 1:
             raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
 
         data = data.reshape((len(outputs), len(LIDs_queried) * len(EIDs_queried))).T
@@ -496,9 +494,9 @@ class Database(ParentDatabase):
             return func_str, None
 
     @classmethod
-    def _aggregate(cls, output_array, aggregations, LIDs, weights, LIDs_agg=None):
+    def _aggregate(cls, array, aggregations, LIDs, weights, out, LIDs_agg=None):
 
-        for i, aggregation in enumerate(aggregations.strip().split('-')):
+        for i, aggregation in enumerate(aggregations):
             axis = 1 - i
             aggregation, is_absolute = cls._is_abs(aggregation)
 
@@ -510,28 +508,28 @@ class Database(ParentDatabase):
                 if axis == 0:
                     raise ValueError("'AVG' aggregation cannot be applied to LIDs!")
 
-                output_array = np.average(output_array, axis, weights)
+                array = np.average(array, axis, weights)
             elif aggregation == 'MAX':
 
                 if axis == 0:
-                    LIDs_agg[0] = LIDs[output_array.argmax(axis)]
-                    output_array = np.array([np.max(output_array, axis)])
+                    LIDs_agg[0] = LIDs[array.argmax(axis)]
+                    array = np.array([np.max(array, axis)])
                 else:
-                    output_array = np.max(output_array, axis)
+                    array = np.max(array, axis)
             elif aggregation == 'MIN':
 
                 if axis == 0:
-                    LIDs_agg[0] = LIDs[output_array.argmin(axis)]
-                    output_array = np.array([np.min(output_array, axis)])
+                    LIDs_agg[0] = LIDs[array.argmin(axis)]
+                    array = np.array([np.min(array, axis)])
                 else:
-                    output_array = np.min(output_array, axis)
+                    array = np.min(array, axis)
             else:
                 raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
 
             if is_absolute:
-                np.abs(output_array, out=output_array)
+                np.abs(array, out=array)
 
-        return output_array
+        return array
 
 
 def get_query_from_file(file):
