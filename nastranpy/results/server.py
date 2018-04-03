@@ -18,38 +18,59 @@ class QueryHandler(socketserver.BaseRequestHandler):
         try:
             connection = Connection(connection_socket=self.request)
             _, query, _ = connection.recv()
-            msg = ''
-            path = Path(query['path'])
 
-            if not self.server.root_path in path.parents:
-                raise PermissionError(f"'{path}' is not a valid path!")
+            if self.server.childs:
 
-            if query['request_type'] == 'create_database':
-                path.mkdir(parents=True, exist_ok=True)
-                connection.send('Creating database ...', data=get_tables_specs())
-                db = Database()
-                db.create(query['files'], query['path'], query['name'], query['version'],
-                          database_project=query['project'], overwrite=True,
-                          table_generator=connection.recv_tables())
-                msg = 'Database created succesfully!'
+                if query['request_type'] == 'unlock_child':
+                    self.server.lock_child(query['child_address'])
+                else:
+                    child = self.server.get_child()
+                    self.server.lock_child(child)
+                    connection.send(data={'child_address': child,
+                                          'redir2child': True})
+
+            elif query['request_type'] == 'check_child':
+
+                try:
+                    parent_connection = Connection(self.server.parent)
+                    parent_connection.send(data={'check_child': self.server.parent == query['parent_address'],
+                                                 'databases': self.server.get_databases()})
+
+                finally:
+                    parent_connection.kill()
             else:
-                db = Database(query['path'])
+                msg = ''
+                path = Path(query['path'])
 
-            df = None
+                if not self.server.root_path in path.parents:
+                    raise PermissionError(f"'{path}' is not a valid path!")
 
-            if query['request_type'] == 'check':
-                msg = db.check(print_to_screen=False)
-            elif query['request_type'] == 'query':
-                df=db.query(**process_query(query))
-            elif query['request_type'] == 'append_to_database':
-                connection.send('Appending to database ...', data=db._get_tables_specs())
-                db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
-                msg = 'Database created succesfully!'
-            elif query['request_type'] == 'restore_database':
-                db.restore(query['batch'])
-                msg = f"Database restored to '{query['batch']}' state succesfully!"
+                if query['request_type'] == 'create_database':
+                    path.mkdir(parents=True, exist_ok=True)
+                    connection.send('Creating database ...', data=get_tables_specs())
+                    db = Database()
+                    db.create(query['files'], query['path'], query['name'], query['version'],
+                              database_project=query['project'], overwrite=True,
+                              table_generator=connection.recv_tables())
+                    msg = 'Database created succesfully!'
+                else:
+                    db = Database(query['path'])
 
-            connection.send(msg, data=db._export_header(), df=df)
+                df = None
+
+                if query['request_type'] == 'check':
+                    msg = db.check(print_to_screen=False)
+                elif query['request_type'] == 'query':
+                    df=db.query(**process_query(query))
+                elif query['request_type'] == 'append_to_database':
+                    connection.send('Appending to database ...', data=db._get_tables_specs())
+                    db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
+                    msg = 'Database created succesfully!'
+                elif query['request_type'] == 'restore_database':
+                    db.restore(query['batch'])
+                    msg = f"Database restored to '{query['batch']}' state succesfully!"
+
+                connection.send(msg, data=db._export_header(), df=df)
 
         except Exception as e:
             connection.send('#' + str(e))
@@ -62,19 +83,24 @@ class Connection(object):
                  header_size=12, buffer_size=4096):
 
         if server_address:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.connect(server_address)
+            self.connect(server_address)
         else:
             self.socket = connection_socket
 
         self.header_size = header_size
         self.buffer_size = buffer_size
         self.pending_data = b''
+        self.last_send = None
+
+    def connect(self, server_address):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect(server_address)
 
     def kill(self):
         self.socket.close()
 
     def send(self, msg='', data=None, df=None):
+        self.last_send = {'msg': msg, 'data': data, 'df': df}
         msg = msg.strip()
         buffer = BytesIO()
         buffer.seek(3 * self.header_size + len(msg))
@@ -132,6 +158,14 @@ class Connection(object):
 
         if data_size:
             data = json.loads(buffer.read(data_size).decode())
+
+            if 'child_address' in data and 'redir2child' in data and data['redir2child']:
+                self.kill()
+                self.connect(data['child_address'])
+                self.last_send['data']['parent_address'] = self.socket.getpeername()
+                self.send(**self.last_send)
+                return self.recv()
+
         else:
             data = None
 
@@ -210,13 +244,82 @@ class Connection(object):
 class DatabaseServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
 
-    def __init__(self, server_address, root_path):
+    def __init__(self, server_address, root_path,
+                 parent_address=None, child_addresses=None):
         super().__init__(server_address, QueryHandler)
         self.root_path = Path(root_path)
 
+        if parent_address and child_addresses:
+            raise ValueError('A server cannot be parent and child at the same time!')
 
-def start_server(server_address, root_path):
-    server = DatabaseServer(server_address, root_path)
+        self.parent = parent_address
+        self.childs = dict()
+
+        for child_address in child_addresses:
+            self.add_child(child_address)
+
+    def check_child(self, child_address, databases):
+
+        try:
+            connection = Connection(child_address)
+            connection.send(data={'request_type': 'check_child',
+                                  'parent_address': self.server_address})
+            _, data, _ = connection.recv()
+
+            is_OK = data['check_child']
+            databases += data['databases']
+
+        except:
+            is_OK = False
+        finally:
+            connection.kill()
+
+        return is_OK
+
+    def add_child(self, child_address):
+        child_databases = list()
+
+        if check_child(child_address, child_databases):
+            self.childs[child_address] = {'is_busy': False,
+                                          'databases': child_databases}
+        else:
+            print(f"WARNING: Child server not available: {child_address}")
+
+    def remove_child(self, child_address):
+        del self.childs[child_address]
+
+    def get_child(self, database_path):
+
+        for child in self.childs:
+
+            if not self.childs[child]['is_busy'] and self.check_child(child):
+                return child
+
+    def lock_child(self, child):
+        self.childs[child]['is_busy'] = True
+
+    def unlock_child(self, child):
+        self.childs[child]['is_busy'] = False
+
+    def get_databases(self):
+        return list()
+
+    def shutdown_request(self):
+        super().shutdown_request()
+
+        if self.parent:
+
+            try:
+                connection = Connection(self.parent)
+                connection.send(data={'request_type': 'unlock_child',
+                                      'child_address': self.server_address})
+            finally:
+                connection.kill()
+
+
+def start_server(server_address, root_path,
+                 parent_address=None, child_addresses=None):
+    server = DatabaseServer(server_address, root_path, parent_address, child_addresses)
     server.serve_forever()
 
 
