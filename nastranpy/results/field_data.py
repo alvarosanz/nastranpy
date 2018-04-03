@@ -1,4 +1,5 @@
 import numpy as np
+from numba import guvectorize
 
 
 class FieldData(object):
@@ -56,7 +57,7 @@ class FieldData(object):
         EIDs_queried = self._EIDs if EIDs is None else EIDs
 
         if out is None:
-            out = np.empty((len(LIDs_queried), len(EIDs_queried)), dtype=self._dtype)
+            out = np.empty((len(LIDs_queried), len(EIDs_queried)), dtype=np.float64)
 
         array = out
 
@@ -71,9 +72,9 @@ class FieldData(object):
                                        LID not in self._iLIDs})
             LIDs_queried_index = {LID: i for i, LID in enumerate(LIDs_queried + LIDs_combined_used)}
             LID_combinations = [(LIDs_queried_index[LID] if LID in LIDs_queried_index else None,
-                                 np.array([LIDs_queried_index[LID] for _, LID in seq]),
-                                 np.array([coeff for coeff, _ in seq])) for LID, seq in LIDs.items()]
-            array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(EIDs_queried)), dtype=self._dtype)
+                                 np.array([LIDs_queried_index[LID] for _, LID in seq], dtype=np.int64),
+                                 np.array([coeff for coeff, _ in seq], dtype=np.float64)) for LID, seq in LIDs.items()]
+            array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(EIDs_queried)), dtype=np.float64)
 
         if len(LIDs_queried) < len(EIDs_queried):
             iEIDs = slice(None) if EIDs is None else np.array([self._iEIDs[EID] for EID in EIDs_queried])
@@ -92,7 +93,7 @@ class FieldData(object):
             for i, (index, indexes, coeffs) in enumerate(LID_combinations):
 
                 if len(coeffs):
-                    out[i, :] = np.dot(array[indexes, :].T, coeffs)
+                    combine(array, indexes, coeffs, out[i, :])
 
                     if index:
                         array[index, :] = out[i, :]
@@ -101,3 +102,16 @@ class FieldData(object):
                     out[i, :] = array[index, :]
 
         return out
+
+@guvectorize(['(double[:, :], int64[:], double[:], double[:])'],
+             '(n, m), (l), (l) -> (m)',
+             target='parallel', nopython=True)
+def combine(array, indexes, coeffs, out):
+
+    for i in range(array.shape[1]):
+        aux = 0.0
+
+        for j in range(indexes.shape[0]):
+            aux += array[indexes[j], i] * coeffs[j]
+
+        out[i] = aux

@@ -1,7 +1,9 @@
 from numba import guvectorize
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'], '(n, m), (n, m), (n, m) -> (n, m)', target='parallel', nopython=True)
+@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+             '(n, m), (n, m), (n, m) -> (n, m)',
+             target='parallel', nopython=True)
 def von_mises_2D(sxx, syy, sxy, out):
 
     for i in range(out.shape[0]):
@@ -10,7 +12,9 @@ def von_mises_2D(sxx, syy, sxy, out):
             out[i, j] = (sxx[i, j] ** 2 + syy[i, j] ** 2 - sxx[i, j] * syy[i, j] + 3 * sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'], '(n, m), (n, m), (n, m) -> (n, m)', target='parallel', nopython=True)
+@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+             '(n, m), (n, m), (n, m) -> (n, m)',
+             target='parallel', nopython=True)
 def max_ppal_2D(sxx, syy, sxy, out):
 
     for i in range(out.shape[0]):
@@ -19,7 +23,9 @@ def max_ppal_2D(sxx, syy, sxy, out):
             out[i, j] = (sxx[i, j] + syy[i, j]) / 2 + (((sxx[i, j] - syy[i, j]) / 2) ** 2 + sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'], '(n, m), (n, m), (n, m) -> (n, m)', target='parallel', nopython=True)
+@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+             '(n, m), (n, m), (n, m) -> (n, m)',
+             target='parallel', nopython=True)
 def min_ppal_2D(sxx, syy, sxy, out):
 
     for i in range(out.shape[0]):
@@ -28,7 +34,9 @@ def min_ppal_2D(sxx, syy, sxy, out):
             out[i, j] = (sxx[i, j] + syy[i, j]) / 2 - (((sxx[i, j] - syy[i, j]) / 2) ** 2 + sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'], '(n, m), (n, m), (n, m) -> (n, m)', target='parallel', nopython=True)
+@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+             '(n, m), (n, m), (n, m) -> (n, m)',
+             target='parallel', nopython=True)
 def max_shear_2D(sxx, syy, sxy, out):
 
     for i in range(out.shape[0]):
@@ -37,7 +45,9 @@ def max_shear_2D(sxx, syy, sxy, out):
             out[i, j] = (((sxx[i, j] - syy[i, j]) / 2) ** 2 + sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:], double[:, :])'], '(n, m), (m) -> (n, m)', target='parallel', nopython=True)
+@guvectorize(['(double[:, :], double[:], double[:, :])'],
+             '(n, m), (m) -> (n, m)',
+             target='parallel', nopython=True)
 def stress_2D(value, thickness, out):
 
     for i in range(out.shape[0]):
