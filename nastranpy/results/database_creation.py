@@ -250,7 +250,7 @@ def set_checksums(header, batch_name):
 def create_database_header(database_path, database_name, database_version,
                            database_project, headers, batches):
 
-    with open(os.path.join(database_path, '#header.json'), 'w') as f:
+    with open(os.path.join(database_path, '##header.json'), 'w') as f:
 
         if database_project is None:
             database_project = ''

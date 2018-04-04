@@ -93,7 +93,7 @@ class ParentDatabase(object):
 
         if self._is_local:
 
-            with open(os.path.join(self.path, '#header.json')) as f:
+            with open(os.path.join(self.path, '##header.json')) as f:
                 headers = json.load(f)
 
         else:
