@@ -101,7 +101,6 @@ class ParentDatabase(object):
             if not headers:
                 headers = self._request(request_type='header', path=self.path)
 
-            self.path = headers['path']
             self._headers = headers['headers']
             self._nbytes = headers['nbytes']
 
@@ -290,11 +289,9 @@ class Database(ParentDatabase):
         self.reload()
         print('Database updated succesfully!')
 
-    def restore(self, batch_name=None):
+    def restore(self, batch_name):
 
-        if not batch_name:
-            batch_name = 'Initial batch'
-        elif batch_name not in self.restore_points or batch_name == self.restore_points[-1]:
+        if batch_name not in self.restore_points or batch_name == self.restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
         print(f"Restoring database to '{batch_name}' state ...")

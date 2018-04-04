@@ -2,10 +2,12 @@ import os
 from pathlib import Path
 from io import BytesIO
 import json
+import logging
 import socket
 import socketserver
-import pandas as pd
+import threading
 from multiprocessing import Process, cpu_count
+import pandas as pd
 from nastranpy.results.database import Database, process_query
 from nastranpy.results.read_results import tables_in_pch, ResultsTable
 from nastranpy.results.tables_specs import get_tables_specs
@@ -23,32 +25,37 @@ class QueryHandler(socketserver.BaseRequestHandler):
             if query['request_type'] == 'shutdown':
                 self.server.shutdown()
             elif query['request_type'] == 'add_child':
-                self.server.add_child(self.client_address, query['databases'])
+                self.server.add_child(tuple(query['child_address']), query['databases'])
             elif query['request_type'] == 'remove_child':
-                self.server.remove_child(self.client_address)
+                self.server.remove_child(tuple(query['child_address']))
             elif query['request_type'] == 'unlock_child':
-                self.server.unlock_child(self.client_address)
-            elif self.childs:
+                self.server.unlock_child(tuple(query['child_address']))
+            elif self.server.childs:
+
+                if query['request_type'] == 'create_database':
+                    query['path'] = None
+
                 child = self.server.get_child(query['path'])
+
+                if not child:
+                    raise FileNotFoundError(f"Database '{query['path']}' not found!")
+
                 self.server.lock_child(child)
-                connection.send(data={'child_address': child})
+                connection.send(data={'redirection_address': child})
             else:
                 msg = ''
-                path = Path(query['path'])
-
-                if not self.server.root_path in path.parents:
-                    path = self.server.root_path / path
+                path = self.server.root_path / query['path']
 
                 if query['request_type'] == 'create_database':
                     path.mkdir(parents=True, exist_ok=True)
                     connection.send('Creating database ...', data=get_tables_specs())
                     db = Database()
-                    db.create(query['files'], query['path'], query['name'], query['version'],
+                    db.create(query['files'], str(path), query['name'], query['version'],
                               database_project=query['project'], overwrite=True,
                               table_generator=connection.recv_tables())
                     msg = 'Database created succesfully!'
                 else:
-                    db = Database(query['path'])
+                    db = Database(str(path))
 
                 df = None
 
@@ -67,6 +74,7 @@ class QueryHandler(socketserver.BaseRequestHandler):
                 connection.send(msg, data=db._export_header(), df=df)
 
         except Exception as e:
+            self.server.log.error(str(e))
             connection.send('#' + str(e))
             raise Exception(str(e))
 
@@ -153,10 +161,9 @@ class Connection(object):
         if data_size:
             data = json.loads(buffer.read(data_size).decode())
 
-            if 'child_address' in data:
+            if 'redirection_address' in data:
                 self.kill()
-                self.connect(data['child_address'])
-                self.last_send['data']['parent_address'] = self.socket.getpeername()
+                self.connect(tuple(data['redirection_address']))
                 self.send(**self.last_send)
                 return self.recv()
 
@@ -235,7 +242,7 @@ class Connection(object):
                 yield line
 
 
-class DatabaseServer(socketserver.ThreadingTCPServer):
+class DatabaseServer(socketserver.TCPServer):
     allow_reuse_address = True
     request_queue_size = 5
 
@@ -244,22 +251,19 @@ class DatabaseServer(socketserver.ThreadingTCPServer):
         self.root_path = Path(root_path)
         self.parent = parent_address
         self.childs = dict()
-        host, port = self.server_address
+        self.log = logging.getLogger('DatabaseServer')
+        self.log.setLevel(logging.DEBUG)
+        fh = logging.FileHandler(self.root_path / 'server.log')
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        self.log.addHandler(fh)
 
-        for i in range(cpu_count() - 1 if subprocesses is None else subprocesses):
-            process = Process(target=start_server,
-                              args=((host, port + i + 1), root_path,
-                                    self.server_address if parent_address is None else parent_address, 0))
-            process.start()
-
-        if self.parent:
-            self.send2parent({'request_type': 'add_child',
-                              'databases': self.get_databases()})
 
     def shutdown(self):
 
         if self.parent:
-            self.send2parent({'request_type': 'remove_child'})
+            self.send2parent({'request_type': 'remove_child',
+                              'child_address': self.server_address})
         elif self.childs:
 
             for child in self.childs:
@@ -267,11 +271,12 @@ class DatabaseServer(socketserver.ThreadingTCPServer):
 
         super().shutdown()
 
-    def shutdown_request(self):
-        super().shutdown_request()
+    def shutdown_request(self, request):
+        super().shutdown_request(request)
 
         if self.parent:
-            self.send2parent({'request_type': 'unlock_child'})
+            self.send2parent({'request_type': 'unlock_child',
+                              'child_address': self.server_address})
 
     def send2parent(self, data):
 
@@ -283,16 +288,16 @@ class DatabaseServer(socketserver.ThreadingTCPServer):
 
     def add_child(self, child_address, databases):
         self.childs[child_address] = {'queue': 0,
-                                      'databases': child_databases}
+                                      'databases': set(databases)}
 
     def remove_child(self, child_address):
         del self.childs[child_address]
 
-    def get_child(self, database):
+    def get_child(self, database=None):
 
-        for child in sorted(self.childs, lambda x: self.childs[x]['queue']):
+        for child in sorted(self.childs, key=lambda x: self.childs[x]['queue']):
 
-            if database in self.childs[child]['databases']:
+            if not database or database in self.childs[child]['databases']:
                 return child
 
     def lock_child(self, child):
@@ -304,12 +309,35 @@ class DatabaseServer(socketserver.ThreadingTCPServer):
     def get_databases(self):
         databases = list()
 
-        for header in self.root_path.glob('**/##header.json')
-            databases.append(header.parent())
+        for header in self.root_path.glob('**/##header.json'):
+            databases.append(str(header.parent.relative_to(self.root_path)))
 
         return databases
 
 
-def start_server(server_address, root_path, parent_address=None, n_child=None):
-    server = DatabaseServer(server_address, root_path, parent_address, n_child)
-    server.serve_forever()
+def start_server(server_address, root_path, parent_address=None, subprocesses=None):
+    server = DatabaseServer(server_address, root_path, parent_address)
+    server_thread = threading.Thread(target=server.serve_forever)
+    server_thread.start()
+
+    host, port = server.server_address
+    subprocesses = cpu_count() - 1 if subprocesses is None else subprocesses
+
+    for i in range(subprocesses):
+        process = Process(target=start_server,
+                          args=((host, port + i + 1), root_path,
+                                server.server_address if parent_address is None else parent_address, 0))
+        process.start()
+
+    if server.parent:
+        server.send2parent({'request_type': 'add_child',
+                            'child_address': server.server_address,
+                            'databases': server.get_databases()})
+
+    server_type = 'Child' if server.parent else 'Parent'
+    print(f'{server_type} server {server.server_address[0]}:{server.server_address[1]} is ready!')
+
+    if subprocesses:
+        return server
+    else:
+        server_thread.join()
