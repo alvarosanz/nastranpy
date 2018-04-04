@@ -1,10 +1,11 @@
 import os
 from pathlib import Path
-from io import StringIO, BytesIO
+from io import BytesIO
 import json
 import socket
 import socketserver
 import pandas as pd
+from multiprocessing import Process, cpu_count
 from nastranpy.results.database import Database, process_query
 from nastranpy.results.read_results import tables_in_pch, ResultsTable
 from nastranpy.results.tables_specs import get_tables_specs
@@ -19,31 +20,24 @@ class QueryHandler(socketserver.BaseRequestHandler):
             connection = Connection(connection_socket=self.request)
             _, query, _ = connection.recv()
 
-            if self.server.childs:
-
-                if query['request_type'] == 'unlock_child':
-                    self.server.lock_child(query['child_address'])
-                else:
-                    child = self.server.get_child()
-                    self.server.lock_child(child)
-                    connection.send(data={'child_address': child,
-                                          'redir2child': True})
-
-            elif query['request_type'] == 'check_child':
-
-                try:
-                    parent_connection = Connection(self.server.parent)
-                    parent_connection.send(data={'check_child': self.server.parent == query['parent_address'],
-                                                 'databases': self.server.get_databases()})
-
-                finally:
-                    parent_connection.kill()
+            if query['request_type'] == 'shutdown':
+                self.server.shutdown()
+            elif query['request_type'] == 'add_child':
+                self.server.add_child(self.client_address, query['databases'])
+            elif query['request_type'] == 'remove_child':
+                self.server.remove_child(self.client_address)
+            elif query['request_type'] == 'unlock_child':
+                self.server.unlock_child(self.client_address)
+            elif self.childs:
+                child = self.server.get_child(query['path'])
+                self.server.lock_child(child)
+                connection.send(data={'child_address': child})
             else:
                 msg = ''
                 path = Path(query['path'])
 
                 if not self.server.root_path in path.parents:
-                    raise PermissionError(f"'{path}' is not a valid path!")
+                    path = self.server.root_path / path
 
                 if query['request_type'] == 'create_database':
                     path.mkdir(parents=True, exist_ok=True)
@@ -159,7 +153,7 @@ class Connection(object):
         if data_size:
             data = json.loads(buffer.read(data_size).decode())
 
-            if 'child_address' in data and 'redir2child' in data and data['redir2child']:
+            if 'child_address' in data:
                 self.kill()
                 self.connect(data['child_address'])
                 self.last_send['data']['parent_address'] = self.socket.getpeername()
@@ -243,85 +237,79 @@ class Connection(object):
 
 class DatabaseServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
+    request_queue_size = 5
 
-    def __init__(self, server_address, root_path,
-                 parent_address=None, child_addresses=None):
+    def __init__(self, server_address, root_path, parent_address=None, subprocesses=None):
         super().__init__(server_address, QueryHandler)
         self.root_path = Path(root_path)
-
-        if parent_address and child_addresses:
-            raise ValueError('A server cannot be parent and child at the same time!')
-
         self.parent = parent_address
         self.childs = dict()
+        host, port = self.server_address
 
-        for child_address in child_addresses:
-            self.add_child(child_address)
+        for i in range(cpu_count() - 1 if subprocesses is None else subprocesses):
+            process = Process(target=start_server,
+                              args=((host, port + i + 1), root_path,
+                                    self.server_address if parent_address is None else parent_address, 0))
+            process.start()
 
-    def check_child(self, child_address, databases):
+        if self.parent:
+            self.send2parent({'request_type': 'add_child',
+                              'databases': self.get_databases()})
 
-        try:
-            connection = Connection(child_address)
-            connection.send(data={'request_type': 'check_child',
-                                  'parent_address': self.server_address})
-            _, data, _ = connection.recv()
+    def shutdown(self):
 
-            is_OK = data['check_child']
-            databases += data['databases']
+        if self.parent:
+            self.send2parent({'request_type': 'remove_child'})
+        elif self.childs:
 
-        except:
-            is_OK = False
-        finally:
-            connection.kill()
+            for child in self.childs:
+                self.send2parent({'request_type': 'shutdown'})
 
-        return is_OK
-
-    def add_child(self, child_address):
-        child_databases = list()
-
-        if check_child(child_address, child_databases):
-            self.childs[child_address] = {'is_busy': False,
-                                          'databases': child_databases}
-        else:
-            print(f"WARNING: Child server not available: {child_address}")
-
-    def remove_child(self, child_address):
-        del self.childs[child_address]
-
-    def get_child(self, database_path):
-
-        for child in self.childs:
-
-            if not self.childs[child]['is_busy'] and self.check_child(child):
-                return child
-
-    def lock_child(self, child):
-        self.childs[child]['is_busy'] = True
-
-    def unlock_child(self, child):
-        self.childs[child]['is_busy'] = False
-
-    def get_databases(self):
-        return list()
+        super().shutdown()
 
     def shutdown_request(self):
         super().shutdown_request()
 
         if self.parent:
+            self.send2parent({'request_type': 'unlock_child'})
 
-            try:
-                connection = Connection(self.parent)
-                connection.send(data={'request_type': 'unlock_child',
-                                      'child_address': self.server_address})
-            finally:
-                connection.kill()
+    def send2parent(self, data):
+
+        try:
+            connection = Connection(self.parent)
+            connection.send(data=data)
+        finally:
+            connection.kill()
+
+    def add_child(self, child_address, databases):
+        self.childs[child_address] = {'queue': 0,
+                                      'databases': child_databases}
+
+    def remove_child(self, child_address):
+        del self.childs[child_address]
+
+    def get_child(self, database):
+
+        for child in sorted(self.childs, lambda x: self.childs[x]['queue']):
+
+            if database in self.childs[child]['databases']:
+                return child
+
+    def lock_child(self, child):
+        self.childs[child]['queue'] += 1
+
+    def unlock_child(self, child):
+        self.childs[child]['queue'] -= 1
+
+    def get_databases(self):
+        databases = list()
+
+        for header in self.root_path.glob('**/##header.json')
+            databases.append(header.parent())
+
+        return databases
 
 
-def start_server(server_address, root_path,
-                 parent_address=None, child_addresses=None):
-    server = DatabaseServer(server_address, root_path, parent_address, child_addresses)
+def start_server(server_address, root_path, parent_address=None, n_child=None):
+    server = DatabaseServer(server_address, root_path, parent_address, n_child)
     server.serve_forever()
-
-
-if __name__ == '__main__':
-    start_server(('127.0.0.1', 8080))
