@@ -1,6 +1,6 @@
 import json
 from nastranpy.results.database import ParentDatabase
-from nastranpy.results.server import Connection
+from nastranpy.results.connection import Connection
 
 
 class DatabaseClient(ParentDatabase):
