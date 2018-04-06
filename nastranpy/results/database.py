@@ -525,32 +525,3 @@ class Database(ParentDatabase):
                 np.abs(array, out=array)
 
         array_agg[:] = array
-
-
-def get_query_from_file(file):
-
-    try:
-
-        with open(file) as f:
-            query = json.load(f)
-
-    except TypeError:
-        query = json.load(file)
-
-    return process_query(query)
-
-
-def process_query(query):
-    query = {key: value if value else None for key, value in query.items()}
-
-    for field in ('LIDs', 'geometry', 'weights'):
-
-        try:
-
-            if query[field]:
-                query[field] = {int(key): value for key, value in query[field].items()}
-
-        except AttributeError:
-            pass
-
-    return query

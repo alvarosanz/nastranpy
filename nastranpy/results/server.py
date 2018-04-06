@@ -5,7 +5,8 @@ import traceback
 import socketserver
 import threading
 from multiprocessing import Process, cpu_count
-from nastranpy.results.database import Database, process_query
+from nastranpy.results.database import Database
+from nastranpy.results.results import process_query
 from nastranpy.results.tables_specs import get_tables_specs
 from nastranpy.results.connection import Connection, get_ip
 
