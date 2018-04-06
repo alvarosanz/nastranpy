@@ -150,6 +150,10 @@ class CentralServer(DatabaseServer):
     def unlock_worker(self, worker):
         self.workers[worker]['queue'] -= 1
 
+    def get_databases(self):
+        return {db for worker in self.workers for db in self.workers[worker]['databases']}
+
+
 class WorkerServer(DatabaseServer):
 
     def __init__(self, server_address, root_path, central_address):
@@ -182,6 +186,7 @@ def start_central_server(root_path):
     server_thread.start()
     processes = start_workers(server.server_address, root_path, cpu_count() - 1)
     print(f"Central server is ready! {server.server_address} ({len(server.workers)} workers)")
+    print(f"{len(server.get_databases())} database/s available")
     return server, processes
 
 

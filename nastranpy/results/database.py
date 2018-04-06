@@ -333,7 +333,7 @@ class Database(ParentDatabase):
         print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
-              geometry=None, weights=None, **kwargs):
+              geometry=None, weights=None, output_file=None, **kwargs):
         EID_groups = None
 
         if isinstance(EIDs, dict):
@@ -459,7 +459,13 @@ class Database(ParentDatabase):
             columns = list(aggs)
             index = pd.Index(index1, name=index_names[1])
 
-        return pd.DataFrame(data, columns=columns, index=index, copy=False)
+        df = pd.DataFrame(data, columns=columns, index=index, copy=False)
+
+        if self._is_local and output_file:
+            print(f"Writing '{os.path.basename(output_file)}' ...")
+            df.to_csv(output_file)
+
+        return df
 
     def _close(self):
 

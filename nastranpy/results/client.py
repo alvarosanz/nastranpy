@@ -23,11 +23,11 @@ class DatabaseClient(ParentDatabase):
     def create(self, files, database_path, database_name, database_version,
                database_project=None):
         self.path = database_path
-        return self._request(request_type='create_database', files=files,
-                             name=database_name, version=database_version, project=database_project)
+        self._request(request_type='create_database', files=files,
+                      name=database_name, version=database_version, project=database_project)
 
     def append(self, files, batch_name):
-        return self._request(request_type='append_to_database', files=files, batch=batch_name)
+        self._request(request_type='append_to_database', files=files, batch=batch_name)
 
     def restore(self, batch_name):
 
@@ -37,9 +37,9 @@ class DatabaseClient(ParentDatabase):
         self._request(request_type='restore_database', batch=batch_name)
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
-              geometry=None, weights=None, **kwargs):
+              geometry=None, weights=None, output_file=None, **kwargs):
         query = {'table': table, 'outputs': outputs, 'LIDs': LIDs, 'EIDs': EIDs,
-                 'geometry': geometry, 'weights': weights}
+                 'geometry': geometry, 'weights': weights, 'output_file': output_file}
         return self._request(request_type='query', **query)
 
     def _request(self, **kwargs):
@@ -71,8 +71,8 @@ class DatabaseClient(ParentDatabase):
 
         if kwargs['request_type'] == 'query':
 
-            if kwargs['output_path']:
-                print(f"Writing '{os.path.basename(kwargs['output_path'])}' ...")
-                df.to_csv(kwargs['output_path'])
+            if kwargs['output_file']:
+                print(f"Writing '{os.path.basename(kwargs['output_file'])}' ...")
+                df.to_csv(kwargs['output_file'])
 
             return df
