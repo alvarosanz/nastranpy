@@ -34,22 +34,22 @@ class CentralQueryHandler(QueryHandler):
         if query['request_type'] == 'shutdown':
             self.server.shutdown()
         elif query['request_type'] == 'add_worker':
-            self.server.add_worker(tuple(query['worker_address']), query['databases'])
+            self.server._add_worker(tuple(query['worker_address']), query['databases'])
         elif query['request_type'] == 'remove_worker':
-            self.server.remove_worker(tuple(query['worker_address']))
+            self.server._remove_worker(tuple(query['worker_address']))
         elif query['request_type'] == 'unlock_worker':
-            self.server.unlock_worker(tuple(query['worker_address']))
+            self.server._unlock_worker(tuple(query['worker_address']))
         else:
 
             if query['request_type'] == 'create_database':
                 query['path'] = None
 
-            worker = self.server.get_worker(query['path'])
+            worker = self.server._get_worker(query['path'])
 
             if not worker:
                 raise FileNotFoundError(f"Database '{query['path']}' not found!")
 
-            self.server.lock_worker(worker)
+            self.server._lock_worker(worker)
             connection.send(data={'redirection_address': worker})
 
 
@@ -122,6 +122,8 @@ class CentralServer(DatabaseServer):
         super().__init__(server_address, CentralQueryHandler, root_path)
         self.workers = dict()
         self.type = 'Central'
+        self.processes = list()
+        self.ready = threading.Event()
 
     def shutdown(self):
 
@@ -130,24 +132,27 @@ class CentralServer(DatabaseServer):
 
         super().shutdown()
 
-    def add_worker(self, worker_address, databases):
+    def _add_worker(self, worker_address, databases):
         self.workers[worker_address] = {'queue': 0,
                                         'databases': set(databases)}
 
-    def remove_worker(self, worker_address):
+        if len(self.workers) == len(self.processes):
+            self.ready.set()
+
+    def _remove_worker(self, worker_address):
         del self.workers[worker_address]
 
-    def get_worker(self, database=None):
+    def _get_worker(self, database=None):
 
         for worker in sorted(self.workers, key=lambda x: self.workers[x]['queue']):
 
             if not database or database in self.workers[worker]['databases']:
                 return worker
 
-    def lock_worker(self, worker):
+    def _lock_worker(self, worker):
         self.workers[worker]['queue'] += 1
 
-    def unlock_worker(self, worker):
+    def _unlock_worker(self, worker):
         self.workers[worker]['queue'] -= 1
 
     def get_databases(self):
@@ -182,26 +187,31 @@ class WorkerServer(DatabaseServer):
 
 def start_central_server(root_path):
     server = CentralServer((get_ip(), SERVER_PORT), root_path)
-    server_thread = threading.Thread(target=server.serve_forever)
-    server_thread.start()
-    processes = start_workers(server.server_address, root_path, cpu_count() - 1)
-    print(f"Central server is ready! {server.server_address} ({len(server.workers)} workers)")
-    print(f"{len(server.get_databases())} database/s available")
-    return server, processes
+    server.processes = get_workers(server.server_address, root_path, cpu_count() - 1)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
 
-
-def start_workers(central_address, root_path, n_workers=None):
-
-    if n_workers is None:
-        n_workers = cpu_count()
-
-    processes = list()
-
-    for i in range(n_workers):
-        process = Process(target=start_worker, args=((get_ip(), SERVER_PORT + 1 + i),
-                                                     root_path, central_address))
+    for process in server.processes:
         process.start()
-        processes.append(process)
+
+    server.ready.wait()
+    print(f"Address: {server.server_address}")
+    print(f"Workers: {len(server.workers)}")
+    print(f"Databases: {len(server.get_databases())}")
+    return server
+
+
+def get_workers(central_address, root_path, n_workers):
+    return [Process(target=start_worker,
+                    args=((get_ip(), SERVER_PORT + 1 + i),
+                          root_path, central_address)) for i in range(n_workers)]
+
+
+def start_workers(central_address, root_path):
+    processes = get_workers(central_address, root_path, cpu_count())
+
+    for process in processes:
+        process.start()
 
     return processes
 
