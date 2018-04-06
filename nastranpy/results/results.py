@@ -12,7 +12,4 @@ def query(query=None, file=None):
     else:
         db = Database(query['path'])
 
-    if query['check']:
-        db.check()
-
     return db.query(**query)

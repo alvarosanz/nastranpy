@@ -105,7 +105,7 @@ class FieldData(object):
 
 @guvectorize(['(double[:, :], int64[:], double[:], double[:])'],
              '(n, m), (l), (l) -> (m)',
-             target='parallel', nopython=True)
+             target='cpu', nopython=True)
 def combine(array, indexes, coeffs, out):
 
     for i in range(array.shape[1]):
