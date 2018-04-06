@@ -8,7 +8,7 @@ from nastranpy.bdf.misc import get_hasher, hash_bytestr
 
 
 def create_tables(database_path, files, tables_specs=None,
-                  headers=None, load_cases_info=None, checksum='sha256',
+                  headers=None, load_cases_info=None,
                   table_generator=None):
 
     if headers is None:
@@ -49,8 +49,7 @@ def create_tables(database_path, files, tables_specs=None,
                     'LIDs': list(),
                     'EIDs': None,
                     'files': dict(),
-                    'checksum': checksum,
-                    'checksums': {field + '.bin': list() for field in tables_specs[name]['columns']}
+                    'batches': list()
                 }
 
                 open_table(headers[name], new_table=True)
@@ -136,14 +135,14 @@ def close_table(header):
 
 
 def finalize_database(database_path, database_name, database_version, database_project,
-                       headers, load_cases_info, batches, max_chunk_size):
+                       headers, load_cases_info, batches, max_chunk_size, checksum='sha256'):
 
     for name, header in headers.items():
         create_transpose(header, max_chunk_size)
-        create_table_header(header, load_cases_info[name], batches[-1][0])
+        create_table_header(header, load_cases_info[name], batches[-1][0], checksum)
 
     create_database_header(database_path, database_name, database_version,
-                           database_project, headers, batches)
+                           database_project, headers, batches, checksum)
 
 
 def create_transpose(header, max_chunk_size):
@@ -183,15 +182,14 @@ def create_transpose(header, max_chunk_size):
                 i0 += n_EIDs_per_chunk
 
 
-def create_table_header(header, load_cases_info, batch_name):
+def create_table_header(header, load_cases_info, batch_name, checksum):
     table_header = dict()
     table_header['name'] = header['name']
     table_header['columns'] = header['columns']
     table_header[header['columns'][0][0] + 's'] = len(header['LIDs'])
     table_header[header['columns'][1][0] + 's'] = len(header['EIDs'])
-    table_header['checksum'] = header['checksum']
-    set_checksums(header, batch_name)
-    table_header['checksums'] = header['checksums']
+    set_restore_points(header, batch_name, checksum)
+    table_header['batches'] = header['batches']
 
     common_items = dict()
 
@@ -222,45 +220,68 @@ def create_table_header(header, load_cases_info, batch_name):
                 if load_cases_info[LID][item] and load_cases_info[LID][item] != common_items[item]:
                     table_header['LOAD CASES INFO'][LID][item] = load_cases_info[LID][item]
 
-    header_file = os.path.join(header['path'], '#header.json')
-
-    with open(header_file, 'w') as f:
+    with open(os.path.join(header['path'], '#header.json'), 'w') as f:
         json.dump(table_header, f, indent=4)
 
-    with open(header_file, 'rb') as f_in, open(os.path.splitext(header_file)[0] + '.' + header['checksum'], 'wb') as f_out:
-        f_out.write(hash_bytestr(f_in, get_hasher(header['checksum'])))
 
+def set_restore_points(header, batch_name, checksum):
 
-def set_checksums(header, batch_name):
+    if header['batches'] and header['batches'][-1][0] == batch_name:
+        check = True
+    else:
+        check = False
+
+    if not check:
+        header['batches'].append([batch_name, len(header['LIDs']), dict()])
 
     for field, _ in header['columns']:
 
         with open(os.path.join(header['path'], field + '.bin'), 'rb') as f:
 
-            if (header['checksums'][field + '.bin'] and
-                header['checksums'][field + '.bin'][-1][0] == batch_name):
+            if check:
 
-                if header['checksums'][field + '.bin'][-1][2] != hash_bytestr(f, get_hasher(header['checksum']), ashexstr=True):
+                if header['batches'][-1][2][field + '.bin'] != hash_bytestr(f, get_hasher(checksum), ashexstr=True):
                     print(f"ERROR: '{os.path.join(header['path'], field + '.bin')} is corrupted!'")
 
             else:
-                header['checksums'][field + '.bin'].append((batch_name, len(header['LIDs']),
-                                                            hash_bytestr(f, get_hasher(header['checksum']), ashexstr=True)))
+                header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(checksum), ashexstr=True)
+
 
 def create_database_header(database_path, database_name, database_version,
-                           database_project, headers, batches):
+                           database_project, headers, batches, checksum):
 
-    with open(os.path.join(database_path, '##header.json'), 'w') as f:
+    if database_project is None:
+        database_project = ''
 
-        if database_project is None:
-            database_project = ''
+    if batches[-1][1] is None:
+        batches[-1][1] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-        if batches[-1][1] is None:
-            batches[-1][1] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    checksums = dict()
 
-        json.dump({'project': database_project,
-                   'name': database_name,
-                   'version': database_version,
-                   'date': str(datetime.date.today()),
-                   'tables': [table for table in headers],
-                   'batches': batches}, f, indent=4)
+    for table in headers:
+
+        with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
+            checksums[table] = hash_bytestr(f, get_hasher(checksum), ashexstr=True)
+
+    database_header = {'project': database_project,
+                       'name': database_name,
+                       'version': database_version,
+                       'date': str(datetime.date.today()),
+                       'checksum': checksum,
+                       'tables': checksums,
+                       'batches': batches}
+
+    database_header_file = os.path.join(database_path, '##header.json')
+
+    with open(database_header_file, 'w') as f:
+        json.dump(database_header, f, indent=4)
+
+    with open(database_header_file, 'rb') as f_in, open(os.path.splitext(database_header_file)[0] + '.' + checksum, 'wb') as f_out:
+        f_out.write(hash_bytestr(f_in, get_hasher(checksum)))
+
+
+def truncate_file(file, offset):
+
+    with open(file, 'rb+') as f:
+        f.seek(offset)
+        f.truncate()

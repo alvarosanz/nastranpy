@@ -7,7 +7,7 @@ from nastranpy.results.field_data import FieldData
 from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
 from nastranpy.results.tables_specs import get_tables_specs
-from nastranpy.results.database_creation import create_tables, finalize_database, open_table
+from nastranpy.results.database_creation import create_tables, finalize_database, open_table, truncate_file
 from nastranpy.bdf.misc import humansize, get_hasher, hash_bytestr
 
 
@@ -40,6 +40,8 @@ class ParentDatabase(object):
         self._name = None
         self._version = None
         self._batches = None
+        self._checksum = None
+        self._checksums = None
         self._nbytes = 0
 
     def _load(self, headers=None):
@@ -108,6 +110,8 @@ class ParentDatabase(object):
         self._name = headers['name']
         self._version = headers['version']
         self._batches = headers['batches']
+        self._checksum = headers['checksum']
+        self._checksums = headers['tables']
 
         if self._is_local:
             self._headers = dict()
@@ -210,19 +214,26 @@ class Database(ParentDatabase):
 
         for header in self._headers.values():
 
-            for file, checksums in header['checksums'].items():
+            for file, checksum in header['batches'][-1][2].items():
 
                 with open(os.path.join(header['path'], file), 'rb') as f:
 
-                    if checksums[-1][2] != hash_bytestr(f, get_hasher(header['checksum']), ashexstr=True):
+                    if checksum != hash_bytestr(f, get_hasher(self._checksum), ashexstr=True):
                         files_corrupted.append(file)
 
             header_file = os.path.join(header['path'], '#header.json')
 
-            with open(header_file, 'rb') as f, open(os.path.splitext(header_file)[0] + '.' + header['checksum'], 'rb') as f_checksum:
+            with open(header_file, 'rb') as f:
 
-                if f_checksum.read() != hash_bytestr(f, get_hasher(header['checksum'])):
+                if self._checksums[header['name']] != hash_bytestr(f, get_hasher(self._checksum), ashexstr=True):
                     files_corrupted.append(header_file)
+
+        database_header_file = os.path.join(self.path, '##header.json')
+
+        with open(database_header_file, 'rb') as f, open(os.path.splitext(database_header_file)[0] + '.' + self._checksum, 'rb') as f_checksum:
+
+            if f_checksum.read() != hash_bytestr(f, get_hasher(self._checksum)):
+                files_corrupted.append(database_header_file)
 
         info = list()
 
@@ -242,7 +253,7 @@ class Database(ParentDatabase):
 
     def create(self, files, database_path, database_name, database_version,
                database_project=None, tables_specs=None, overwrite=False,
-               checksum='sha256', table_generator=None):
+               table_generator=None):
         print('Creating database ...')
 
         if not os.path.exists(database_path):
@@ -257,7 +268,7 @@ class Database(ParentDatabase):
 
         batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
         headers, load_cases_info = create_tables(self.path, files, tables_specs,
-                                                 checksum=checksum, table_generator=table_generator)
+                                                 table_generator=table_generator)
         finalize_database(self.path, database_name, database_version, database_project,
                           headers, load_cases_info, batches, self._max_chunk_size)
 
@@ -285,7 +296,7 @@ class Database(ParentDatabase):
 
         self._batches.append([batch_name, None, [os.path.basename(file) for file in files]])
         finalize_database(self.path, self.name, self.version, self.project,
-                          self._headers, load_cases_info, self._batches, self._max_chunk_size)
+                          self._headers, load_cases_info, self._batches, self._max_chunk_size, self._checksum)
         self.reload()
         print('Database updated succesfully!')
 
@@ -296,39 +307,36 @@ class Database(ParentDatabase):
 
         print(f"Restoring database to '{batch_name}' state ...")
         self._close()
+        batch_index = 0
 
         for name, header in self._headers.items():
 
-            if batch_name in {batch_name for batch_name, _, _ in header['checksums']['LID.bin']}:
-                index = [batch_name for batch_name, _, _ in header['checksums']['LID.bin']].index(batch_name)
-                position = header['checksums']['LID.bin'][index][1]
-                header['LIDs'] = header['LIDs'][:position]
+            try:
+                index = [batch_name for batch_name, _, _ in header['batches']].index(batch_name)
+                batch_index = max(batch_index, index)
+                header['batches'] = header['batches'][:index + 1]
+                position = header['batches'][index][1]
 
                 for LID in header['LIDs'][position:]:
                     header['LOAD CASES INFO'].pop(LID, None)
 
-                for field, dtype in header['columns']:
+                header['LIDs'] = header['LIDs'][:position]
 
-                    if field != self.tables[name].index_labels[1]:
-                        header['checksums'][field + '.bin'] = header['checksums'][field + '.bin'][:index + 1]
-                        offset = position * np.dtype(dtype).itemsize
+                truncate_file(os.path.join(header['path'], 'LID.bin'),
+                              position * np.dtype(header['columns'][0][1]).itemsize)
 
-                        if field not in self.tables[name].index_labels:
-                            offset *= len(header['EIDs'])
+                for field, dtype in header['columns'][2:]:
+                    truncate_file(os.path.join(header['path'], field + '.bin'),
+                                  position * np.dtype(dtype).itemsize * len(header['EIDs']))
 
-                        with open(os.path.join(header['path'], field + '.bin'), 'rb+') as f:
-                            f.seek(offset)
-                            f.truncate()
-
-            else:
+            except ValueError:
                 del self.tables[name]
                 shutil.rmtree(header['path'])
 
-        batch_index = [batch_name for batch_name, _, _ in self._batches].index(batch_name)
         finalize_database(self.path, self.name, self.version, self.project,
                           {name: self._headers[name] for name in self.tables},
                           {name: dict() for name in self.tables},
-                          self._batches[:batch_index + 1], self._max_chunk_size)
+                          self._batches[:batch_index + 1], self._max_chunk_size, self._checksum)
         self.reload()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
