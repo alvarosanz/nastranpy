@@ -16,6 +16,9 @@ class DatabaseClient(ParentDatabase):
         if self._headers:
             super().info(print_to_screen, detailed)
 
+    def cluster_info(self):
+        self._request(request_type='cluster_info')
+
     def check(self):
         self._request(request_type='check')
 

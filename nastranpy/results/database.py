@@ -134,6 +134,8 @@ class ParentDatabase(object):
                   'name': self._name,
                   'version': self._version,
                   'batches': self._batches,
+                  'checksum': self._checksum,
+                  'tables': self._checksums,
                   'nbytes': self._nbytes,
                   'headers': {name: self._headers[name] for name in self._headers}}
 
