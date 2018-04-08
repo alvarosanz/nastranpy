@@ -169,6 +169,25 @@ class Connection(object):
                 yield line
 
 
+def send(address, data):
+
+    try:
+        connection = Connection(address)
+        connection.send(data=data)
+    finally:
+        connection.kill()
+
+
+def request(address, **kwargs):
+
+    try:
+        connection = Connection(address)
+        connection.send(data=kwargs)
+        return connection.recv()
+    finally:
+        connection.kill()
+
+
 def get_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -180,3 +199,11 @@ def get_ip():
     finally:
         s.close()
     return IP
+
+
+def find_free_port():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(('localhost', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
