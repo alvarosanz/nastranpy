@@ -138,35 +138,24 @@ class Connection(object):
             table.df = df
             yield table
 
-    def send_files(self, files):
-        nbytes = sum(os.path.getsize(file) for file in files)
-        print(f"Transferring {len(files)} file/s ({humansize(nbytes)}) ...")
-        self.socket.sendall(str(nbytes).encode())
-        answer = self.socket.recv(self.buffer_size)
+    def send_file(self, file):
+        self.socket.send(str(os.path.getsize(file)).zfill(self.header_size).encode())
 
-        for i, file in enumerate(files):
-            print(f"Sending {os.path.basename(file)} ({i + 1} of {len(files)}) ...")
+        with open(file, 'rb') as f:
+            sended = 1
 
-            with open(file, 'rb') as f:
-                sended = 1
+            while sended:
+                sended = self.socket.send(f.read(self.buffer_size))
 
-                while sended:
-                    sended = self.socket.send(f.read(self.buffer_size))
+    def recv_file(self, file):
+        data = self.socket.recv(self.buffer_size)
+        size = int(data[:self.header_size].decode())
 
-    def recv_files(self, delimiter='\n'):
-        size = int(self.socket.recv(self.buffer_size).decode())
-        self.socket.send(b'proceed')
-        received = 0
-        buffer = ''
+        with open(file, 'wb') as f:
+            f.write(data[self.header_size:])
 
-        while received < size:
-            data = self.socket.recv(self.buffer_size).decode()
-            received += len(data)
-            buffer += data
-
-            while buffer.find(delimiter) != -1:
-                line, buffer = buffer.split(delimiter, 1)
-                yield line
+            while f.tell() < size:
+                f.write(self.socket.recv(self.buffer_size))
 
 
 def send(address, data):

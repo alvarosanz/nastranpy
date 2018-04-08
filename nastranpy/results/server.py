@@ -28,9 +28,6 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
 
         if query['request_type'] == 'shutdown':
             threading.Thread(target=self.server.shutdown).start()
-        elif query['request_type'] == 'list_databases':
-            self.server.refresh_databases()
-            connection.send(data=self.server.databases)
         elif query['request_type'] == 'add_worker':
             self.server._add_worker(tuple(query['node_address']),
                                     tuple(query['worker_address']), query['databases'])
@@ -42,6 +39,9 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                                        tuple(query['worker_address']))
         elif query['request_type'] == 'cluster_info':
             connection.send(self.server.info(print_to_screen=False))
+        elif query['request_type'] == 'list_databases':
+            self.server.refresh_databases()
+            connection.send(data=self.server.databases)
         else:
             node, worker = self.server._get_worker(query['request_type'], query['path'])
             self.server._lock_worker(node, worker)
@@ -56,9 +56,6 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
         if query['request_type'] == 'shutdown':
             threading.Thread(target=self.server.shutdown).start()
-        elif query['request_type'] == 'list_databases':
-            self.server.refresh_databases()
-            connection.send(data=self.server.databases)
         else:
             msg = ''
             path = os.path.join(self.server.root_path, query['path'])
@@ -105,9 +102,9 @@ class DatabaseServer(socketserver.TCPServer):
         self._done = threading.Event()
         self._is_shut_down = False
         self._debug = debug
-        self.set_log()
+        self._set_log()
 
-    def set_log(self):
+    def _set_log(self):
         self.log = logging.getLogger('DatabaseServer')
         self.log.setLevel(logging.DEBUG)
 
@@ -128,12 +125,45 @@ class DatabaseServer(socketserver.TCPServer):
         self.log.error(tb)
         Connection(connection_socket=request).send('#' + tb)
 
-    def wait(self):
+    def _wait(self):
         self._done.wait()
         self._done.clear()
 
     def refresh_databases(self):
         self.databases = get_local_databases(self.root_path)
+
+    def _send_database(self, address, database):
+        database_path = Path(self.root_path) / database
+        files = [file for pattern in ('**/*header.*', '**/*.bin') for file in database_path.glob(pattern)]
+
+        try:
+            connection = Connection(address)
+            connection.send(data={'request_type': 'send_database',
+                                  'database': database,
+                                  'files': [str(file.relative_to(database_path)) for file in files]})
+            msg = connection.recv()[0]
+
+            for file in files:
+                connection.send_file(file)
+
+            msg = connection.recv()[0]
+        finally:
+            connection.kill()
+
+    def _request_database(self, address, database):
+
+        try:
+            connection = Connection(address)
+            connection.send(data={'request_type': 'request_database',
+                                  'database': database})
+            msg, data, _ = connection.recv()
+
+            for file in data['files']:
+                connection.recv_file(file)
+
+            msg = connection.recv()[0]
+        finally:
+            connection.kill()
 
 
 class CentralServer(DatabaseServer):
@@ -146,7 +176,7 @@ class CentralServer(DatabaseServer):
     def start(self):
         threading.Thread(target=self.serve_forever).start()
         start_workers(self.server_address, self.server_address, self.root_path, self._debug)
-        self.wait()
+        self._wait()
         print(f"Address: {self.server_address}")
         print(f"Nodes: {len(self.nodes)} ({self.n_workers} workers)")
         print(f"Databases: {len(self.databases)}")
@@ -158,7 +188,7 @@ class CentralServer(DatabaseServer):
             for worker in list(node.workers):
                 send(worker, {'request_type': 'shutdown'})
 
-        self.wait()
+        self._wait()
         super().shutdown()
         self._is_shut_down = True
         print("Cluster shut down succesfully!")
@@ -194,7 +224,7 @@ class CentralServer(DatabaseServer):
     def _add_worker(self, node, worker, databases):
 
         if node not in self.nodes:
-            self.nodes[node] = Node()
+            self.nodes[node] = Node(node)
             self.nodes[node].databases = databases
 
         self.nodes[node].workers[worker] = 0
@@ -263,13 +293,14 @@ class CentralServer(DatabaseServer):
                         self.databases[local_database] != node_databases[local_database]):
                         databases2sync.append(local_database)
 
-            for database in databases2sync:
-                pass
+                for database in databases2sync:
+                    self._send_database(node, database)
 
 
 class Node(object):
 
-    def __init__(self):
+    def __init__(self, node_address):
+        self.node_address = node_address
         self.workers = dict()
         self.databases = dict()
 
@@ -277,7 +308,7 @@ class Node(object):
         return sorted(self.workers, key= lambda x: self.workers[x])[0]
 
     def refresh_databases(self):
-        self.databases = request(self.get_worker(), request_type='list_databases')[1]
+        self.databases = request(self.node_address, request_type='list_databases')[1]
 
     @property
     def queue(self):
@@ -295,7 +326,7 @@ class NodeServer(DatabaseServer):
     def start(self):
         threading.Thread(target=self.serve_forever).start()
         start_workers(self.central_address, self.server_address, self.root_path, self._debug)
-        self.wait()
+        self._wait()
         print(f"Central address: {self.central_address}")
         print(f"Workers: {len(self.workers)}")
         print(f"Databases: {len(self.databases)}")
@@ -305,7 +336,7 @@ class NodeServer(DatabaseServer):
         for worker in list(self.workers):
             send(worker, {'request_type': 'shutdown'})
 
-        self.wait()
+        self._wait()
         super().shutdown()
         self._is_shut_down = True
         print(f"Node {self.server_address} shut down succesfully!")
@@ -349,7 +380,7 @@ class NodeServer(DatabaseServer):
                     databases2sync.append(local_database)
 
         for database in databases2sync:
-            pass
+            self._request_database(self.central_address, database)
 
 
 class WorkerServer(DatabaseServer):
