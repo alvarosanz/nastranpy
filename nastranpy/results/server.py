@@ -61,18 +61,21 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             connection.send(data=self.server.databases)
         else:
             msg = ''
-            path = Path(self.server.root_path) / query['path']
+            path = os.path.join(self.server.root_path, query['path'])
 
             if query['request_type'] == 'create_database':
-                path.mkdir(parents=True)
+
+                if query['path'] in self.server.databases:
+                    raise FileExistsError(f"Database already exists at '{query['path']}'!")
+
                 connection.send('Creating database ...', data=get_tables_specs())
                 db = Database()
-                db.create(query['files'], str(path), query['name'], query['version'],
-                          database_project=query['project'], overwrite=True,
+                db.create(query['files'], path, query['name'], query['version'],
+                          database_project=query['project'],
                           table_generator=connection.recv_tables())
                 msg = 'Database created succesfully!'
             else:
-                db = Database(str(path))
+                db = Database(path)
 
             df = None
 
@@ -109,7 +112,7 @@ class DatabaseServer(socketserver.TCPServer):
         self.log.setLevel(logging.DEBUG)
 
         if not self.log.handlers:
-            fh = logging.FileHandler(Path(self.root_path) / 'server.log')
+            fh = logging.FileHandler(os.path.join(self.root_path, 'server.log'))
 
             if self._debug:
                 fh.setLevel(logging.DEBUG)
@@ -230,7 +233,9 @@ class CentralServer(DatabaseServer):
 
             for node in sorted(self.nodes, key=lambda x: self.nodes[x].queue):
 
-                if database in self.nodes[node].databases and self.nodes[node].databases[database] == self.databases[database]:
+                if (database in self.nodes[node].databases and
+                    (not database in self.databases or
+                     self.nodes[node].databases[database] == self.databases[database])):
                     return node, self.nodes[node].get_worker()
 
     def _lock_worker(self, node, worker):
@@ -242,6 +247,24 @@ class CentralServer(DatabaseServer):
             self.nodes[node].workers[worker] -= 1
         except KeyError:
             pass
+
+    def sync(self):
+        self.refresh_databases()
+
+        for node in self.nodes:
+
+            if node != self.server_address:
+                databases2sync = list()
+                node_databases = request(node, data={'request_type': 'list_databases'})[1]
+
+                for local_database in self.databases:
+
+                    if (local_database in node_databases and
+                        self.databases[local_database] != node_databases[local_database]):
+                        databases2sync.append(local_database)
+
+            for database in databases2sync:
+                pass
 
 
 class Node(object):
@@ -310,6 +333,24 @@ class NodeServer(DatabaseServer):
     def queue(self):
         return sum(queue for queue in self.workers.values())
 
+    def sync(self, database=None):
+        self.refresh_databases()
+        databases2sync = list()
+
+        if database:
+            databases2sync.append(database)
+        else:
+            central_databases = request(self.central_address, data={'request_type': 'list_databases'})[1]
+
+            for local_database in self.databases:
+
+                if (local_database in central_databases and
+                    self.databases[local_database] != central_databases[local_database]):
+                    databases2sync.append(local_database)
+
+        for database in databases2sync:
+            pass
+
 
 class WorkerServer(DatabaseServer):
 
@@ -361,10 +402,9 @@ def start_workers(central_address, node_address, root_path, debug):
 
 
 def get_local_databases(root_path):
-    root_path = Path(root_path)
     databases = dict()
 
-    for header_file in root_path.glob('**/##header.json'):
+    for header_file in Path(root_path).glob('**/##header.json'):
         database = str(header_file.parent.relative_to(root_path))
 
         with open(header_file) as f:

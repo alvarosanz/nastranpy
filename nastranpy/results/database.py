@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import json
 import shutil
 import numpy as np
@@ -256,13 +257,8 @@ class Database(ParentDatabase):
     def create(self, files, database_path, database_name, database_version,
                database_project=None, tables_specs=None, overwrite=False,
                table_generator=None):
+        Path(database_path).mkdir(parents=True, exist_ok=overwrite)
         print('Creating database ...')
-
-        if not os.path.exists(database_path):
-            os.mkdir(database_path)
-        elif not overwrite:
-            raise FileExistsError(f"Database already exists at '{database_path}'!")
-
         self.path = database_path
 
         if isinstance(files, str):
