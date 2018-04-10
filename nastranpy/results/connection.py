@@ -91,6 +91,12 @@ class Connection(object):
             if 'redirection_address' in data:
                 self.kill()
                 self.connect(tuple(data['redirection_address']))
+
+                for key in data:
+
+                    if key != 'redirection_address':
+                        self.last_send['data'][key] = data[key]
+
                 self.send(**self.last_send)
                 return self.recv()
 
