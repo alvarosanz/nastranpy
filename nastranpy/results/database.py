@@ -221,21 +221,21 @@ class Database(ParentDatabase):
 
                 with open(os.path.join(header['path'], file), 'rb') as f:
 
-                    if checksum != hash_bytestr(f, get_hasher(self._checksum), ashexstr=True):
+                    if checksum != hash_bytestr(f, get_hasher(self._checksum)):
                         files_corrupted.append(file)
 
             header_file = os.path.join(header['path'], '#header.json')
 
             with open(header_file, 'rb') as f:
 
-                if self._checksums[header['name']] != hash_bytestr(f, get_hasher(self._checksum), ashexstr=True):
+                if self._checksums[header['name']] != hash_bytestr(f, get_hasher(self._checksum)):
                     files_corrupted.append(header_file)
 
         database_header_file = os.path.join(self.path, '##header.json')
 
         with open(database_header_file, 'rb') as f, open(os.path.splitext(database_header_file)[0] + '.' + self._checksum, 'rb') as f_checksum:
 
-            if f_checksum.read() != hash_bytestr(f, get_hasher(self._checksum)):
+            if f_checksum.read() != hash_bytestr(f, get_hasher(self._checksum), ashexstr=False):
                 files_corrupted.append(database_header_file)
 
         info = list()

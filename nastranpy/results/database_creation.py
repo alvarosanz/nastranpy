@@ -240,11 +240,11 @@ def set_restore_points(header, batch_name, checksum):
 
             if check:
 
-                if header['batches'][-1][2][field + '.bin'] != hash_bytestr(f, get_hasher(checksum), ashexstr=True):
+                if header['batches'][-1][2][field + '.bin'] != hash_bytestr(f, get_hasher(checksum)):
                     print(f"ERROR: '{os.path.join(header['path'], field + '.bin')} is corrupted!'")
 
             else:
-                header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(checksum), ashexstr=True)
+                header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(checksum))
 
 
 def create_database_header(database_path, database_name, database_version,
@@ -261,7 +261,7 @@ def create_database_header(database_path, database_name, database_version,
     for table in headers:
 
         with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
-            checksums[table] = hash_bytestr(f, get_hasher(checksum), ashexstr=True)
+            checksums[table] = hash_bytestr(f, get_hasher(checksum))
 
     database_header = {'project': database_project,
                        'name': database_name,
@@ -277,7 +277,7 @@ def create_database_header(database_path, database_name, database_version,
         json.dump(database_header, f, indent=4)
 
     with open(database_header_file, 'rb') as f_in, open(os.path.splitext(database_header_file)[0] + '.' + checksum, 'wb') as f_out:
-        f_out.write(hash_bytestr(f_in, get_hasher(checksum)))
+        f_out.write(hash_bytestr(f_in, get_hasher(checksum), ashexstr=False))
 
 
 def truncate_file(file, offset):

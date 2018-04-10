@@ -93,7 +93,7 @@ def humansize(nbytes):
     return '%s %s' % (f, suffixes[i])
 
 
-def hash_bytestr(file, hasher, blocksize=65536, ashexstr=False):
+def hash_bytestr(file, hasher, blocksize=65536, ashexstr=True):
 
     for block in file_as_blockiter(file, blocksize):
         hasher.update(block)
