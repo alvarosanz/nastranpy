@@ -1,12 +1,12 @@
 {
-    "host": "127.0.0.1",
+    "host": "192.168.0.154",
     "port": 8080,
     "request_type": "query",
     "project": "",
     "name": "",
     "version": "",
-    "path": "/Users/Alvaro/Desktop/nastran_model_input/nastranpy_inputs/sandbox/foo",
-    "output_file": "",
+    "path": "new_foo",
+    "output_file": "/Users/Alvaro/Desktop/nastran_model_input/query_output.csv",
     "table": "ELEMENT FORCES - QUAD4",
     "outputs": [
         ["NX", "AVG-MAX"],

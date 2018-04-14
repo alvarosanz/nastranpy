@@ -1,5 +1,5 @@
 {
-    "host": "127.0.0.1",
+    "host": "192.168.0.154",
     "port": 8080,
     "request_type": "query",
     "project": "",
@@ -9,7 +9,7 @@
     "files": [
         "/Users/Alvaro/Desktop/nastran_model_input/nastranpy_inputs/pch/0_KC390_rf_global_Close_Ramp_H1A_ENV_11_F06.pch"
     ],
-    "output_file": "",
+    "output_file": "/Users/Alvaro/Desktop/nastran_model_input/query_output.csv",
     "table": "ELEMENT FORCES - QUAD4",
     "outputs": [
         "NX",

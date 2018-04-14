@@ -1,3 +1,9 @@
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.fernet import Fernet
 import socket
 import json
 import pandas as pd
@@ -9,17 +15,18 @@ from nastranpy.results.read_results import tables_in_pch, ResultsTable
 class Connection(object):
 
     def __init__(self, server_address=None, connection_socket=None,
-                 header_size=12, buffer_size=4096):
+                 private_key=None, header_size=12, buffer_size=4096):
 
         if server_address:
             self.connect(server_address)
         else:
             self.socket = connection_socket
 
+        self.encryptor = None
+        self.private_key = private_key
         self.header_size = header_size
         self.buffer_size = buffer_size
         self.pending_data = b''
-        self.last_send = None
 
     def connect(self, server_address):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,9 +34,9 @@ class Connection(object):
 
     def kill(self):
         self.socket.close()
+        self.encryptor = None
 
     def send(self, msg='', data=None, df=None):
-        self.last_send = {'msg': msg, 'data': data, 'df': df}
         msg = msg.strip()
         buffer = BytesIO()
         buffer.seek(3 * self.header_size + len(msg))
@@ -87,19 +94,6 @@ class Connection(object):
 
         if data_size:
             data = json.loads(buffer.read(data_size).decode())
-
-            if 'redirection_address' in data:
-                self.kill()
-                self.connect(tuple(data['redirection_address']))
-
-                for key in data:
-
-                    if key != 'redirection_address':
-                        self.last_send['data'][key] = data[key]
-
-                self.send(**self.last_send)
-                return self.recv()
-
         else:
             data = None
 
@@ -163,24 +157,43 @@ class Connection(object):
             while f.tell() < size:
                 f.write(self.socket.recv(self.buffer_size))
 
+    def send_secret(self, secret):
 
-def send(address, data):
+        if not self.encryptor:
+            self.send(self.private_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
+                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo).decode())
+            public_key_other = serialization.load_pem_public_key(self.recv()[0].encode(),
+                                                                 backend=default_backend())
+            self.encryptor = Fernet(self._get_key(public_key_other))
 
-    try:
-        connection = Connection(address)
-        connection.send(data=data)
-    finally:
-        connection.kill()
+        self.send(self.encryptor.encrypt(secret.encode()).decode())
+
+    def recv_secret(self):
+
+        if not self.encryptor:
+            public_key_other = serialization.load_pem_public_key(self.recv()[0].encode(),
+                                                                 backend=default_backend())
+            self.send(self.private_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
+                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo).decode())
+            self.encryptor = Fernet(self._get_key(public_key_other))
+
+        return self.encryptor.decrypt(self.recv()[0].encode()).decode()
+
+    def _get_key(self, public_key_other):
+        shared_key = self.private_key.exchange(ec.ECDH(), public_key_other)
+        return base64.urlsafe_b64encode(HKDF(algorithm=hashes.SHA256(),
+                                             length=32,
+                                             salt=None,
+                                             info=b'handshake data',
+                                             backend=default_backend()).derive(shared_key))
 
 
-def request(address, **kwargs):
+def get_private_key():
+    return ec.generate_private_key(ec.SECP384R1(), default_backend())
 
-    try:
-        connection = Connection(address)
-        connection.send(data=kwargs)
-        return connection.recv()
-    finally:
-        connection.kill()
+
+def get_master_key():
+    return Fernet.generate_key().decode()
 
 
 def get_ip():

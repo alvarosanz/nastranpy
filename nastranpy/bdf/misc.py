@@ -126,6 +126,11 @@ def get_hasher(hash_type):
         raise ValueError(f"Unsupported checksum method: {hash_type}")
 
 
+def get_hash(value):
+    hasher = hashlib.sha256(value.encode())
+    return hasher.hexdigest()
+
+
 class CallCounted(object):
 
     def __init__(self, method):

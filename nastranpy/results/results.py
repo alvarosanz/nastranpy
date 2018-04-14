@@ -1,7 +1,7 @@
 import csv
 import json
 from nastranpy.results.database import Database
-from nastranpy.results.client import DatabaseClient
+from nastranpy.results.client import Client
 
 
 def get_query_from_file(file):
@@ -67,7 +67,7 @@ def query(query=None, file=None):
         query = get_query_from_file(file)
 
     if 'host' in query and query['host']:
-        db = DatabaseClient((query['host'], query['port']), query['path'])
+        db = Client((query['host'], query['port']), query['path'])
     else:
         db = Database(query['path'])
 

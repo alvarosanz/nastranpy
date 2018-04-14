@@ -1,12 +1,18 @@
+import os
+import getpass
+import json
 from nastranpy.results.database import ParentDatabase
-from nastranpy.results.connection import Connection
+from nastranpy.results.connection import Connection, get_private_key
+from nastranpy.bdf.misc import get_hash
 
 
-class DatabaseClient(ParentDatabase):
+class Client(ParentDatabase):
 
     def __init__(self, server_address, path=None):
         self.server_address = server_address
         self.path = path
+        self._private_key = get_private_key()
+        self._authentication = None
         self._is_local = False
         self.reload()
 
@@ -44,16 +50,63 @@ class DatabaseClient(ParentDatabase):
                  'geometry': geometry, 'weights': weights, 'output_file': output_file}
         return self._request(request_type='query', **query)
 
+    def add_session(self, user, password, is_admin=False, create_allowed=False, databases=None):
+        self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
+                      user=user, is_admin=is_admin, create_allowed=create_allowed, databases=databases)
+
+    def remove_session(self, user):
+        self._request(request_type='remove_session', user=user)
+
+    def list_sessions(self):
+        self._request(request_type='list_sessions')
+
+    def remove_database(self, database):
+
+        if not self.path:
+            self._request(request_type='remove_database', path=database)
+
+    def sync_databases(self, nodes=None, databases=None):
+        self._request(request_type='sync_databases', nodes=nodes, databases=databases)
+
+    def shutdown(self):
+        self._request(request_type='shutdown')
+
     def _request(self, **kwargs):
-        kwargs['path'] = self.path
+
+        if 'path' not in kwargs:
+            kwargs['path'] = self.path
 
         if 'files' in kwargs and isinstance(kwargs['files'], str):
             kwargs['files'] = [kwargs['files']]
 
         try:
-            connection = Connection(self.server_address)
+            connection = Connection(self.server_address, private_key=self._private_key)
+
+            if self._authentication:
+                connection.send_secret(json.dumps({'authentication': self._authentication}))
+            else:
+                connection.send_secret(json.dumps({'user': input('user: '),
+                                                   'password': getpass.getpass('password: '),
+                                                   'request': 'authentication'}))
+                self._authentication = connection.recv_secret()
+
+            connection.recv()
             connection.send(data=kwargs)
             msg, data, df = connection.recv()
+
+            if data and 'redirection_address' in data:
+
+                for key in data:
+
+                    if key != 'redirection_address':
+                        kwargs[key] = data[key]
+
+                connection.kill()
+                connection.connect(tuple(data['redirection_address']))
+                connection.send_secret(json.dumps({'authentication': self._authentication}))
+                connection.recv()
+                connection.send(data=kwargs)
+                msg, data, df = connection.recv()
 
             if kwargs['request_type'] == 'header':
                 return data
