@@ -9,6 +9,7 @@ from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
 from nastranpy.results.tables_specs import get_tables_specs
 from nastranpy.results.database_creation import create_tables, finalize_database, open_table, truncate_file
+from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import humansize, get_hasher, hash_bytestr
 
 
@@ -472,6 +473,9 @@ class Database(ParentDatabase):
             df.to_csv(output_file)
 
         return df
+
+    def query_from_file(self, file):
+        return self.query(**get_query_from_file(file))
 
     def _close(self):
 

@@ -1,7 +1,5 @@
 import csv
 import json
-from nastranpy.results.database import Database
-from nastranpy.results.client import Client
 
 
 def get_query_from_file(file):

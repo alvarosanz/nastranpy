@@ -191,8 +191,7 @@ Display database info::
 
 Perform a query::
 
-    query = nastranpy.results.get_query_from_file(query_file)
-    dataframe = database.query(**query)
+    dataframe = database.query_from_file(query_file)
 
 Append new result files to an existing database (this action is reversible)::
 
@@ -215,16 +214,6 @@ Open a new client interfacing the cluster (you will be asked to login)::
 
     client = nastranpy.results.Client(('192.168.0.154', 8080))
 
-Create a new database::
-
-    files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
-    database_path = 'FooDatabase'
-    database_name = 'Foo database'
-    database_version = '0.0.1'
-
-    database = nastranpy.results.Database()
-    database.create(files, database_path, database_name, database_version)
-
 Load a database::
 
     client.load('FooDatabase')
@@ -239,8 +228,7 @@ Check database integrity::
 
 Perform a query::
 
-    query = nastranpy.results.get_query_from_file(query_file)
-    dataframe = client.database.query(**query)
+    dataframe = client.database.query_from_file(query_file)
 
 Append new result files to an existing database (this action is reversible)::
 
@@ -258,7 +246,7 @@ Display cluster info::
 
 List cluster sessions::
 
-    client.list_sessions()
+    client.sessions()
 
 Add a new session::
 
@@ -267,6 +255,15 @@ Add a new session::
 Remove a session::
 
     client.remove_session('jimmy_mcnulty')
+
+Create a new database::
+
+    files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
+    database_path = 'FooDatabase'
+    database_name = 'Foo database'
+    database_version = '0.0.1'
+
+    client.create_database(files, database_path, database_name, database_version)
 
 Remove a database::
 

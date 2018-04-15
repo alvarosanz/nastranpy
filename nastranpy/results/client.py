@@ -2,6 +2,7 @@ import getpass
 import json
 from nastranpy.results.database import ParentDatabase
 from nastranpy.results.connection import Connection, get_private_key
+from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import get_hash
 
 
@@ -39,6 +40,9 @@ class DatabaseClient(ParentDatabase):
         query = {'table': table, 'outputs': outputs, 'LIDs': LIDs, 'EIDs': EIDs,
                  'geometry': geometry, 'weights': weights, 'output_file': output_file}
         return self._request(request_type='query', **query)
+
+    def query_from_file(file):
+        return self.query(**get_query_from_file(file))
 
     def _request(self, **kwargs):
 
@@ -134,13 +138,19 @@ class Client(object):
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication)
 
-    def create(self, files, database, database_name, database_version,
-               database_project=None):
+    def create_database(self, files, database, database_name, database_version,
+                        database_project=None):
 
         headers = self._request(request_type='create_database', files=files, path=database,
                                 name=database_name, version=database_version, project=database_project)
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication, headers)
+
+    def remove_database(self, database):
+        self._request(request_type='remove_database', path=database)
+
+    def sessions(self):
+        self._request(request_type='list_sessions')
 
     def add_session(self, user, password, is_admin=False, create_allowed=False, databases=None):
         self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
@@ -148,12 +158,6 @@ class Client(object):
 
     def remove_session(self, user):
         self._request(request_type='remove_session', user=user)
-
-    def list_sessions(self):
-        self._request(request_type='list_sessions')
-
-    def remove_database(self, database):
-        self._request(request_type='remove_database', path=database)
 
     def sync_databases(self, nodes=None, databases=None):
         self._request(request_type='sync_databases', nodes=nodes, databases=databases)
