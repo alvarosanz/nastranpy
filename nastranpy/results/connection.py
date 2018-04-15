@@ -1,3 +1,4 @@
+import os
 import base64
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
@@ -37,7 +38,6 @@ class Connection(object):
         self.encryptor = None
 
     def send(self, msg='', data=None, df=None):
-        msg = msg.strip()
         buffer = BytesIO()
         buffer.seek(3 * self.header_size + len(msg))
 

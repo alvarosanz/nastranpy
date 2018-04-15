@@ -17,6 +17,7 @@ from nastranpy.results.sessions import Sessions
 from nastranpy.results.tables_specs import get_tables_specs
 from nastranpy.results.connection import Connection, get_master_key, get_private_key, get_ip, find_free_port
 from nastranpy.setup_logging import LoggerWriter
+from nastranpy.bdf.misc import humansize
 
 
 SERVER_PORT = 8080
@@ -29,11 +30,19 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
         query = connection.recv()[1]
         self.server.check_session(query)
 
-        if query['request_type'] == 'shutdown':
-            threading.Thread(target=self.server.shutdown).start()
-            connection.send('Cluster shutdown succesfully!')
+        if query['request_type'] == 'authentication':
+            connection.send('Login succesfully!')
+        elif query['request_type'] == 'shutdown':
+
+            if query['node']:
+                self.server.shutdown_node(query['node'])
+                connection.send('Node shutdown succesfully!')
+            else:
+                threading.Thread(target=self.server.shutdown).start()
+                connection.send('Cluster shutdown succesfully!')
+
         elif query['request_type'] == 'add_worker':
-            self.server.add_worker(tuple(query['worker_address']), query['databases'])
+            self.server.add_worker(tuple(query['worker_address']), query['databases'], query['backup'])
         elif query['request_type'] == 'remove_worker':
             self.server.remove_worker(tuple(query['worker_address']))
         elif query['request_type'] == 'unlock_worker':
@@ -58,23 +67,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             shutil.rmtree(os.path.join(self.server.root_path, query['path']))
             connection.send("Database '{}' removed succesfully!".format(query['path']))
         elif query['request_type'] == 'sync_databases':
-
-            if not query['nodes']:
-                query['nodes'] = list(self.server.nodes)
-
-            try:
-                query['nodes'].remove(self.server.server_address[0])
-            except ValueError:
-                pass
-
-            if not query['nodes']:
-                raise ValueError('At least 2 nodes are required in order to sync them!')
-
-            worker = self.server.nodes[self.server.server_address[0]].get_worker()
-            self.server.lock_worker(worker)
-            connection.send(data={'request_type': 'sync_databases',
-                                  'nodes': nodes, 'databases': databases,
-                                  'redirection_address': worker})
+            self.server.sync_databases(query['nodes'], query['databases'], connection)
         elif query['request_type'] == 'acquire_worker':
             worker = self.server.nodes[query['node']].get_worker()
             self.server.lock_worker(worker)
@@ -250,7 +243,7 @@ class CentralServer(DatabaseServer):
         self.nodes = dict()
 
     def start(self, sessions_file=None):
-        password = getpass.getpass('password:')
+        password = getpass.getpass('password: ')
 
         if sessions_file:
             self.sessions = Sessions(sessions_file)
@@ -267,23 +260,26 @@ class CentralServer(DatabaseServer):
         except Exception:
             raise PermissionError('Wrong password!')
 
-        start_workers(self.server_address, self.root_path, user='admin', password=password,
+        start_workers(self.server_address, self.root_path, 'admin', password,
                       n_workers=cpu_count() - 1, debug=self._debug)
         print(f"Address: {self.server_address}")
         print(f"Databases: {len(self.databases)}")
         self.serve_forever()
-        self.server_close()
+        print('Cluster shutdown succesfully!')
 
     def shutdown(self):
 
-        for node in list(self.nodes.values()):
-
-            for worker in list(node.workers):
-                send(worker, {'request_type': 'shutdown'},
-                     master_key=self.master_key, private_key=self.private_key)
+        for node in list(self.nodes):
+            self.shutdown_node(node)
 
         self.wait()
         super().shutdown()
+
+    def shutdown_node(self, node):
+
+        for worker in list(self.nodes[node].workers):
+            send(worker, {'request_type': 'shutdown'},
+                 master_key=self.master_key, private_key=self.private_key)
 
     def info(self, print_to_screen=True):
         info = list()
@@ -292,6 +288,9 @@ class CentralServer(DatabaseServer):
 
         for node_address, node in self.nodes.items():
             info.append(f"  '{node_address}': {len(node.workers)} workers ({node.get_queue()} job/s in progress)")
+
+            if node.backup:
+                info[-1] += ' (backup mode)'
 
         info.append(f"\n{len(self.databases)} databases:")
 
@@ -305,13 +304,12 @@ class CentralServer(DatabaseServer):
         else:
             return info
 
-    def add_worker(self, worker, databases):
+    def add_worker(self, worker, databases, backup):
 
         if worker[0] not in self.nodes:
-            self.nodes[worker[0]] = Node()
-
-        self.nodes[worker[0]].workers[worker] = 0
-        self.nodes[worker[0]].databases = databases
+            self.nodes[worker[0]] = Node([worker], databases, backup)
+        else:
+            self.nodes[worker[0]].workers[worker] = 0
 
     def remove_worker(self, worker):
         del self.nodes[worker[0]].workers[worker]
@@ -341,12 +339,34 @@ class CentralServer(DatabaseServer):
                      self.nodes[node].databases[database] == self.databases[database])):
                     return self.nodes[node].get_worker()
 
+    def sync_databases(self, nodes, databases, connection):
+
+        if not nodes:
+            nodes = list(self.nodes)
+
+        try:
+            nodes.remove(self.server_address[0])
+        except ValueError:
+            pass
+
+        nodes = {node: self.nodes[node].backup for node in nodes}
+
+        if not nodes:
+            raise ValueError('At least 2 nodes are required in order to sync them!')
+
+        worker = self.nodes[self.server_address[0]].get_worker()
+        self.lock_worker(worker)
+        connection.send(data={'request_type': 'sync_databases',
+                              'nodes': nodes, 'databases': databases,
+                              'redirection_address': worker})
+
 
 class Node(object):
 
-    def __init__(self):
-        self.workers = dict()
-        self.databases = dict()
+    def __init__(self, workers, databases, backup):
+        self.workers = {worker: 0 for worker in workers}
+        self.databases = databases
+        self.backup = backup
 
     def get_worker(self):
         return sorted(self.workers, key= lambda x: self.workers[x])[0]
@@ -357,9 +377,10 @@ class Node(object):
 
 class WorkerServer(DatabaseServer):
 
-    def __init__(self, server_address, central_address, root_path, debug=False):
+    def __init__(self, server_address, central_address, root_path, backup=False, debug=False):
         super().__init__(server_address, WorkerQueryHandler, root_path, debug)
         self.central = central_address
+        self.backup = backup
         self._shutdown_request = False
         sys.stdout = LoggerWriter(self.log.info)
         sys.stderr = LoggerWriter(self.log.error)
@@ -374,7 +395,8 @@ class WorkerServer(DatabaseServer):
             self.master_key = connection.recv_secret()
             connection.send(data={'request_type': 'add_worker',
                                   'worker_address': self.server_address,
-                                  'databases': self.databases})
+                                  'databases': self.databases,
+                                  'backup': self.backup})
         finally:
             connection.kill()
 
@@ -405,78 +427,97 @@ class WorkerServer(DatabaseServer):
             update_only = True
             databases = self.databases
 
-        for node in nodes:
-            worker = request(self.central_address, {'request_type': 'acquire_worker',
-                                                    'node': node},
-                             master_key=self.master_key, private_key=self.private_key)[1]['worker_address']
+        for node, backup in nodes.items():
+            worker = tuple(request(self.central, {'request_type': 'acquire_worker', 'node': node},
+                                   master_key=self.master_key, private_key=self.private_key)[1]['worker_address'])
+            client_connection.send(f"Syncing node '{node}' ...")
 
             try:
-                connection = Connection(worker)
-                connection.send_secret(json.dumps({'master_key': self.master_key}),
-                                       self.private_key)
+                connection = Connection(worker, private_key=self.private_key)
+                connection.send_secret(json.dumps({'master_key': self.master_key}))
                 connection.recv()
                 connection.send(data={'request_type': 'recv_databases'})
                 remote_databases = connection.recv()[1]
 
                 for database in databases:
-                    client_connection.send(msg=f"Syncing database '{database}' in node '{node}' ...")
 
-                    if (not update_only or database in remote_databases and
-                        databases[database] != remote_databases[database]):
+                    if (not update_only and (database not in remote_databases or
+                                             databases[database] != remote_databases[database]) or
+                        update_only and (not backup and database in remote_databases and databases[database] != remote_databases[database] or
+                                         backup and (database not in remote_databases or databases[database] != remote_databases[database]))):
                         database_path = Path(self.root_path) / database
                         files = [file for pattern in ('**/*header.*', '**/*.bin') for file in database_path.glob(pattern)]
                         connection.send(data={'database': database,
                                               'files': [str(file.relative_to(database_path)) for file in files]})
+                        client_connection.send(f"  Syncing database '{database}' ({len(files)} files; {humansize(sum(os.path.getsize(file) for file in files))})...")
 
                         for file in files:
-                            client_connection.send(msg=f"Sending '{file.relative_to(database_path)}' ...")
                             connection.send_file(file)
                             msg = connection.recv()[0]
 
+                connection.send(f"Done!")
             finally:
                 connection.kill()
 
-            client_connection.send(msg=f"Done!")
+        client_connection.send(f"Done!")
 
     def recv_databases(self, connection):
         self.refresh_databases()
         connection.send(data=self.databases)
-        data = connection.recv()[0]
-        path = Path(self.root_path) / data['database']
-        path_temp = path.parent /path.name + '_TEMP'
-        path_temp.mkdir()
+        msg = ''
 
-        try:
+        while msg != 'Done!':
+            msg, data, _ = connection.recv()
+            path = Path(self.root_path) / data['database']
+            path_temp = path.parent / (path.name + '_TEMP')
+            path_temp.mkdir()
 
-            for file in data['files']:
-                connection.recv_file(path_temp / file)
-                connection.send(msg='OK')
+            try:
 
-            shutil.rmtree(path)
-            path_temp.rename(path)
+                for file in data['files']:
+                    file = path_temp / file
+                    file.parent.mkdir(exist_ok=True)
+                    connection.recv_file(file)
+                    connection.send(msg='OK')
 
-        except Exception:
-            shutil.rmtree(path_temp)
+                if os.path.exists(path):
+                    shutil.rmtree(path)
+
+                path_temp.rename(path)
+
+            except Exception as e:
+                shutil.rmtree(path_temp)
+                raise e
 
 
-def start_worker(server_address, central_address, root_path, user, password, debug):
-    worker = WorkerServer(server_address, central_address, root_path, debug)
+def start_worker(server_address, central_address, root_path, user, password, backup, debug):
+    worker = WorkerServer(server_address, central_address, root_path, backup, debug)
     worker.start(user, password)
 
 
-def start_workers(central_address, root_path, user=None, password=None, n_workers=None, debug=False):
-
-    if not user:
-        user = input('user: ')
-
-    if not password:
-        password = getpass.getpass('password: ')
-
+def start_workers(central_address, root_path, user, password,
+                  n_workers=None, backup=False, debug=False):
     host = get_ip()
+    workers = list()
 
     for i in range(n_workers if n_workers else cpu_count()):
-        Process(target=start_worker, args=((host, find_free_port()), central_address, root_path,
-                                           user, password, debug)).start()
+        workers.append(Process(target=start_worker, args=((host, find_free_port()), central_address, root_path,
+                                                          user, password, backup, debug)))
+        workers[-1].start()
+
+    return workers
+
+
+def start_node(central_address, root_path, backup=False, debug=False):
+    user = input('user: ')
+    password = getpass.getpass('password: ')
+    workers = start_workers(central_address, root_path, user, password,
+                            backup=backup, debug=debug)
+
+    for worker in workers:
+        worker.join()
+
+    print('Node shutdown succesfully!')
 
 
 def get_local_databases(root_path):

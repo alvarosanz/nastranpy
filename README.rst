@@ -10,6 +10,8 @@ Requirements
 * python 3.6 (or later)
 * numpy
 * pandas
+* cryptography
+* pyjwt
 
 Installation
 ============
@@ -159,20 +161,21 @@ Make include self-contained::
     include.make_self_contained()
 
 
-Usage example: Handling nastran results
-======================================
+Usage example: Handling nastran results with a local database
+=============================================================
 
 Create a new database ::
 
     import nastranpy
+
 
     files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
     database_path = '/Users/Alvaro/databases/FooDatabase'
     database_name = 'Foo database'
     database_version = '0.0.1'
 
-    database = nastranpy.results.create_database(files, database_path,
-                                                 database_name, database_version)
+    database = nastranpy.results.Database()
+    database.create(files, database_path, database_name, database_version)
 
 Load an existing database ::
 
@@ -188,46 +191,94 @@ Display database info ::
 
 Perform a query::
 
-    query = ['ELEMENT FORCES - QUAD4', # table
-             ('NX', 'NY', 'ABS(NXY)'), # query fields
-             # query outputs:
-             [
-                 'NX',
-                 'NY',
-                 'ABS(NXY)',
-             ],
+    query = nastranpy.results.get_query_from_file(query_file)
+    dataframe = database.query(**query)
 
-            ]
+Append new result files to an existing database (this action is reversible)::
 
-    query = database.query('ELEMENT FORCES - QUAD4', # table
-                           ('NX', 'NY', 'ABS(NXY)'), # query fields
-                           # query outputs:
-                           [
-                               'NX',
-                               'NY',
-                               'ABS(NXY)',
-                           ],
-                           LIDs=queried_LIDs,
-                           EIDs=queried_EIDs)
+    files = ['/Users/Alvaro/FEM_results/file03.pch', '/Users/Alvaro/FEM_results/file04.pch']
+    batch_name = 'new_batch'
+    database.append(files, batch_name)
 
-Perform an aggregation query::
+Restore database to a previous state (this action is NOT reversible!)::
+    database.restore('Initial batch')
 
-    query = database.query('ELEMENT FORCES - QUAD4', # table
-                           ('NX', 'NY', 'NXY'), # query fields
-                           # query outputs:
-                           [
-                               ('MAX PPAL (2D)', 'AVG/MAX'),
-                               ('MIN PPAL (2D)', 'AVG/MIN'),
-                               ('MAX SHEAR (2D)', 'AVG/MAX'),
-                               ('VON MISES (2D)', 'AVG/MAX'),
-                           ],
-                           LIDs=queried_LIDs,
-                           LID_combinations=linear_combined_subcases, # Additional subcases as a combination of the existing ones
-                           EIDs=queried_EIDs)
 
-Get a pandas dataframe::
+Usage example: Handling nastran results with remote databases
+=============================================================
 
-    df = get_dataframe('ELEMENT FORCES - QUAD4', LIDs=queried_LIDs, EIDs=queried_EIDs)
+Open a new client interfacing the cluster (you will be asked to login)::
+
+    import nastranpy
+
+
+    client = nastranpy.results.Client(('192.168.0.154', 8080))
+
+Create a new database::
+
+    files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
+    database_path = 'FooDatabase'
+    database_name = 'Foo database'
+    database_version = '0.0.1'
+
+    database = nastranpy.results.Database()
+    database.create(files, database_path, database_name, database_version)
+
+Load a database::
+
+    client.load('FooDatabase')
+
+Display database info ::
+
+    client.database.info()
+
+Check database integrity ::
+
+    client.database.check()
+
+Perform a query::
+
+    query = nastranpy.results.get_query_from_file(query_file)
+    dataframe = client.database.query(**query)
+
+Append new result files to an existing database (this action is reversible)::
+
+    files = ['/Users/Alvaro/FEM_results/file03.pch', '/Users/Alvaro/FEM_results/file04.pch']
+    batch_name = 'new_batch'
+    client.database.append(files, batch_name)
+
+Restore database to a previous state (this action is NOT reversible!)::
+
+    client.database.restore('Initial batch')
+
+Display cluster info::
+
+    client.info()
+
+List cluster sessions::
+
+    client.list_sessions()
+
+Add a new session::
+
+    client.add_session('jimmy_mcnulty', 'Im_the_boss', is_admin=True)
+
+Remove a session::
+
+    client.remove_session('jimmy_mcnulty')
+
+Remove a database::
+
+    client.remove_database('FooDatabase')
+
+Sync databases between cluster nodes::
+
+    client.sync_databases()
+
+Shutdown the cluster::
+
+    client.shutdown()
+
 
 Contact
 =======

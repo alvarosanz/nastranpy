@@ -59,19 +59,3 @@ def process_query(query):
             pass
 
     return query
-
-
-def query(query=None, file=None):
-
-    if not query:
-        query = get_query_from_file(file)
-
-    if 'host' in query and query['host']:
-        db = Client((query['host'], query['port']), query['path'])
-    else:
-        db = Database(query['path'])
-
-    return db.query(**query)
-
-
-
