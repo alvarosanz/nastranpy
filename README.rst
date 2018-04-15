@@ -164,7 +164,7 @@ Make include self-contained::
 Usage example: Handling nastran results with a local database
 =============================================================
 
-Create a new database ::
+Create a new database::
 
     import nastranpy
 
@@ -177,15 +177,15 @@ Create a new database ::
     database = nastranpy.results.Database()
     database.create(files, database_path, database_name, database_version)
 
-Load an existing database ::
+Load an existing database::
 
     database = nastranpy.results.DataBase(database_path)
 
-Check database integrity ::
+Check database integrity::
 
     database.check()
 
-Display database info ::
+Display database info::
 
     database.info()
 
@@ -228,11 +228,11 @@ Load a database::
 
     client.load('FooDatabase')
 
-Display database info ::
+Display database info::
 
     client.database.info()
 
-Check database integrity ::
+Check database integrity::
 
     client.database.check()
 
