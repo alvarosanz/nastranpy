@@ -201,6 +201,7 @@ Append new result files to an existing database (this action is reversible)::
     database.append(files, batch_name)
 
 Restore database to a previous state (this action is NOT reversible!)::
+
     database.restore('Initial batch')
 
 
