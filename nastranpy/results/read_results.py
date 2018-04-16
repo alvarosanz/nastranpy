@@ -58,7 +58,6 @@ def _tables_in_pch(file, tables_specs):
 
                 table = ResultsTable(header='', title=line[10:72].strip())
                 data = StringIO()
-                table_type = None
                 item_id = ''
                 line_separator = ''
 
@@ -76,18 +75,18 @@ def _tables_in_pch(file, tables_specs):
                 table.subcase = int(subcase.strip())
             elif line[:13] == '$ELEMENT TYPE':
                 table.element_type = line[27:50].strip()
-                table_type = '{} - {}'.format(table.name, table.element_type)
+                element_number = line[20:27].strip()
+                table.name = f'{table.name} - {table.element_type} ({element_number})'
 
-            if tables_specs and table_type and table_type in tables_specs:
+            if tables_specs and table.name in tables_specs:
                 is_format = True
                 names = [name if name else f'foo{i}' for i, name in
-                         enumerate(name for row in tables_specs[table_type]['pch_format'] for name, _ in row)]
-                widths = [18 for row in tables_specs[table_type]['pch_format'] for _, _ in row]
-                usecols = tables_specs[table_type]['columns']
-                dtype = tables_specs[table_type]['dtypes']
+                         enumerate(name for row in tables_specs[table.name]['pch_format'] for name, _ in row)]
+                widths = [18 for row in tables_specs[table.name]['pch_format'] for _, _ in row]
+                usecols = tables_specs[table.name]['columns']
+                dtype = tables_specs[table.name]['dtypes']
             else:
                 is_format = False
-
 
         else:
             is_header = False

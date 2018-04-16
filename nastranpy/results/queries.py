@@ -57,7 +57,7 @@ def stress_2D(value, thickness, out):
 
 
 query_functions = {
-    'ELEMENT FORCES - QUAD4': {
+    'ELEMENT FORCES - QUAD4 (33)': {
         'SX': [stress_2D, ('NX', 'THK')],
         'SY': [stress_2D, ('NY', 'THK')],
         'SXY': [stress_2D, ('NXY', 'THK')],
@@ -66,7 +66,7 @@ query_functions = {
         'MIN_PPAL': [min_ppal_2D, ('NX', 'NY', 'NXY')],
         'MAX_SHEAR': [max_shear_2D, ('NX', 'NY', 'NXY')],
     },
-    'ELEMENT FORCES - TRIA3': {
+    'ELEMENT FORCES - TRIA3 (74)': {
         'SX': [stress_2D, ('NX', 'THK')],
         'SY': [stress_2D, ('NY', 'THK')],
         'SXY': [stress_2D, ('NXY', 'THK')],

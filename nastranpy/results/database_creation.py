@@ -29,35 +29,34 @@ def create_tables(database_path, files, tables_specs=None,
     try:
 
         for table in table_generator:
-            name = '{} - {}'.format(table.name, table.element_type)
 
-            if name not in tables_specs:
+            if table.name not in tables_specs:
 
-                if name not in ignored_tables:
-                    print("WARNING: '{}' is not supported!".format(name))
-                    ignored_tables.add(name)
+                if table.name not in ignored_tables:
+                    print("WARNING: '{}' is not supported!".format(table.name))
+                    ignored_tables.add(table.name)
 
                 continue
 
-            if name not in headers:
-                load_cases_info[name] = dict()
-                headers[name] = {
-                    'name': name,
-                    'path': os.path.join(database_path, name),
-                    'columns': [(field, tables_specs[name]['dtypes'][field]) for field in
-                                tables_specs[name]['columns']],
+            if table.name not in headers:
+                load_cases_info[table.name] = dict()
+                headers[table.name] = {
+                    'name': table.name,
+                    'path': os.path.join(database_path, table.name),
+                    'columns': [(field, tables_specs[table.name]['dtypes'][field]) for field in
+                                tables_specs[table.name]['columns']],
                     'LIDs': list(),
                     'EIDs': None,
                     'files': dict(),
                     'batches': list()
                 }
 
-                open_table(headers[name], new_table=True)
+                open_table(headers[table.name], new_table=True)
 
-            if append_to_table(table, headers[name]):
-                load_cases_info[name][table.subcase] = {'TITLE': table.title,
-                                                        'SUBTITLE': table.subtitle,
-                                                        'LABEL': table.label}
+            if append_to_table(table, headers[table.name]):
+                load_cases_info[table.name][table.subcase] = {'TITLE': table.title,
+                                                              'SUBTITLE': table.subtitle,
+                                                              'LABEL': table.label}
     finally:
 
         for header in headers.values():

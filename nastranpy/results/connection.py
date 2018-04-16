@@ -110,13 +110,12 @@ class Connection(object):
         for file in files:
 
             for table in tables_in_pch(file, tables_specs):
-                name = '{} - {}'.format(table.name, table.element_type)
 
-                if name not in tables_specs:
+                if table.name not in tables_specs:
 
-                    if name not in ignored_tables:
-                        print("WARNING: '{}' is not supported!".format(name))
-                        ignored_tables.add(name)
+                    if table.name not in ignored_tables:
+                        print("WARNING: '{}' is not supported!".format(table.name))
+                        ignored_tables.add(table.name)
 
                     continue
 
