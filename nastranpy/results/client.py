@@ -41,7 +41,7 @@ class DatabaseClient(ParentDatabase):
                  'geometry': geometry, 'weights': weights, 'output_file': output_file}
         return self._request(request_type='query', **query)
 
-    def query_from_file(file):
+    def query_from_file(self, file):
         return self.query(**get_query_from_file(file))
 
     def _request(self, **kwargs):
