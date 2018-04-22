@@ -2,6 +2,7 @@ import jwt
 import getpass
 import os
 import sys
+import time
 import shutil
 from pathlib import Path
 import json
@@ -10,7 +11,7 @@ import logging
 import traceback
 import socketserver
 import threading
-from multiprocessing import Process, cpu_count, Event, Manager
+from multiprocessing import Process, cpu_count, Event, Manager, Lock
 from nastranpy.results.database import Database
 from nastranpy.results.results import process_query
 from nastranpy.results.sessions import Sessions
@@ -101,9 +102,11 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
         elif query['request_type'] == 'recv_databases':
             self.server.recv_databases(connection)
         elif query['request_type'] == 'remove_database':
+            self.server.acquire_database(query['path'])
             shutil.rmtree(os.path.join(self.server.root_path, query['path']))
             connection.send("Database '{}' removed succesfully!".format(query['path']))
         else:
+            self.server.acquire_database(query['path'])
             msg = ''
             path = os.path.join(self.server.root_path, query['path'])
 
@@ -222,6 +225,7 @@ class DatabaseServer(socketserver.TCPServer):
             return False
 
     def check_session(self, query):
+        self.current_session['request_type'] = query['request_type']
 
         if not self.current_session['is_admin']:
 
@@ -233,12 +237,6 @@ class DatabaseServer(socketserver.TCPServer):
                 query['request_type'] in ('append_to_database', 'restore_database', 'remove_database') and
                 (not self.current_session['databases'] or query('path') not in self.current_session['databases'])):
                 raise PermissionError('Not enough privileges!')
-
-        self.current_session['request_type'] = query['request_type']
-
-    def shutdown_request(self, request):
-        super().shutdown_request(request)
-        self.current_session = None
 
 
 class CentralServer(DatabaseServer):
@@ -369,6 +367,10 @@ class CentralServer(DatabaseServer):
                               'nodes': nodes, 'databases': databases,
                               'redirection_address': worker})
 
+    def shutdown_request(self, request):
+        super().shutdown_request(request)
+        self.current_session = None
+
 
 class Node(object):
 
@@ -387,11 +389,14 @@ class Node(object):
 class WorkerServer(DatabaseServer):
 
     def __init__(self, server_address, central_address, root_path,
-                 databases, locked_databases, backup=False, debug=False):
+                 databases, locked_databases, locks, backup=False, debug=False):
         super().__init__(server_address, WorkerQueryHandler, root_path, debug)
         self.central = central_address
         self.databases = databases
         self.locked_databases = locked_databases
+        self.main_lock = locks[0]
+        self.database_locks = locks[1:]
+        self.database_lock = None
         self.backup = backup
         self._shutdown_request = False
         sys.stdout = LoggerWriter(self.log.info)
@@ -420,26 +425,77 @@ class WorkerServer(DatabaseServer):
              master_key=self.master_key, private_key=self.private_key)
         super().shutdown()
 
+    def acquire_database(self, database, block=True):
+        self.current_session['database'] = database
+
+        with self.main_lock:
+
+            try:
+                lock_index, queue = self.locked_databases[database]
+            except KeyError:
+
+                for lock_index, lock in enumerate(self.database_locks):
+
+                    if lock.acquire(False):
+                        lock.release()
+                        queue = 0
+                        break
+
+            queue += 1
+            self.locked_databases[database] = (lock_index, queue)
+
+        self.database_lock = self.database_locks[lock_index]
+        self.database_lock.acquire()
+
+        if self.current_session['request_type'] not in ('create_database', 'remove_database',
+                                                        'append_to_database', 'restore_database',
+                                                        'recv_databases'):
+            self.database_lock.release()
+        else:
+
+            while queue > 1:
+                time.sleep(1)
+
+                with self.main_lock:
+                    queue = self.locked_databases[database][1]
+
+    def release_database(self):
+
+        if self.database_lock:
+
+            with self.main_lock:
+                database = self.current_session['database']
+                lock_index, queue = self.locked_databases[database]
+
+                if queue > 1:
+                    self.locked_databases[database] = (lock_index, queue - 1)
+                else:
+                    del self.locked_databases[database]
+
+                try:
+                    self.database_lock.release()
+                except ValueError:
+                    pass
+
+                self.database_lock = None
+
     def shutdown_request(self, request):
-
-        try:
-            request_type = self.current_session['request_type']
-        except KeyError:
-            request_type = None
-
         super().shutdown_request(request)
 
         if not self._shutdown_request:
             data = {'request_type': 'unlock_worker',
                     'worker_address': self.server_address}
 
-            if request_type in ('recv_databases',
-                                'append_to_database', 'restore_database',
-                                'create_database', 'remove_database'):
-                self.refresh_databases()
-                data['databases'] = self.databases._getvalue()
+            if self.current_session['request_type'] in ('recv_databases',
+                                                        'append_to_database', 'restore_database',
+                                                        'create_database', 'remove_database'):
+
+                data['databases'] = self.refresh_databases()
 
             send(self.central, data, master_key=self.master_key, private_key=self.private_key)
+
+        self.release_database()
+        self.current_session = None
 
     def sync_databases(self, nodes, databases, client_connection):
         self.refresh_databases()
@@ -470,6 +526,7 @@ class WorkerServer(DatabaseServer):
                                              databases[database] != remote_databases[database]) or
                         update_only and (not backup and database in remote_databases and databases[database] != remote_databases[database] or
                                          backup and (database not in remote_databases or databases[database] != remote_databases[database]))):
+                        self.acquire_database(database)
                         database_path = Path(self.root_path) / database
                         files = [file for pattern in ('**/*header.*', '**/*.bin') for file in database_path.glob(pattern)]
                         connection.send(data={'database': database,
@@ -479,6 +536,8 @@ class WorkerServer(DatabaseServer):
                         for file in files:
                             connection.send_file(file)
                             msg = connection.recv()[0]
+
+                        self.release_database()
 
                 connection.send(f"Done!")
             finally:
@@ -493,6 +552,7 @@ class WorkerServer(DatabaseServer):
 
         while msg != 'Done!':
             msg, data, _ = connection.recv()
+            self.acquire_database(data['database'])
             path = Path(self.root_path) / data['database']
             path_temp = path.parent / (path.name + '_TEMP')
             path_temp.mkdir()
@@ -509,33 +569,43 @@ class WorkerServer(DatabaseServer):
                     shutil.rmtree(path)
 
                 path_temp.rename(path)
-
             except Exception as e:
                 shutil.rmtree(path_temp)
                 raise e
+            finally:
+                self.release_database()
 
     def refresh_databases(self):
-        self.databases.clear()
-        self.databases.update(get_local_databases(self.root_path))
+
+        with self.main_lock:
+            self.databases.clear()
+            self.databases.update(get_local_databases(self.root_path))
+            return self.databases._getvalue()
 
 
 def start_worker(server_address, central_address, root_path,
-                 databases, locked_databases, user, password, backup, debug):
+                 databases, locked_databases, locks, user, password, backup, debug):
     worker = WorkerServer(server_address, central_address, root_path,
-                          databases, locked_databases, backup, debug)
+                          databases, locked_databases, locks, backup, debug)
     worker.start(user, password)
 
 
 def start_workers(central_address, root_path, manager, user, password,
                   n_workers=None, backup=False, debug=False):
+
+    if not n_workers:
+        n_workers = cpu_count()
+
+    databases = manager.dict(get_local_databases(root_path))
+    locked_databases = manager.dict()
+    locks = [Lock() for lock in range(n_workers)]
     host = get_ip()
     workers = list()
-    databases = manager.dict(get_local_databases(root_path))
-    locked_databases = manager.list()
 
-    for i in range(n_workers if n_workers else cpu_count()):
+    for i in range(n_workers):
         workers.append(Process(target=start_worker, args=((host, find_free_port()), central_address, root_path,
-                                                          databases, locked_databases, user, password, backup, debug)))
+                                                          databases, locked_databases, locks,
+                                                          user, password, backup, debug)))
         workers[-1].start()
 
     return workers
