@@ -1,11 +1,11 @@
 from io import StringIO
-import pandas as pd
+import numpy as np
 
 
 class ResultsTable(object):
 
-    def __init__(self, df=None, name=None, element_type=None, header=None, title=None, subtitle=None, label=None, subcase=None, element_id=None):
-        self.df = df
+    def __init__(self, data=None, name=None, element_type=None, header=None, title=None, subtitle=None, label=None, subcase=None, element_id=None):
+        self.data = data
         self.name = name
         self.element_type = element_type
         self.header = header
@@ -48,11 +48,8 @@ def _tables_in_pch(file, tables_specs):
                     data.seek(0)
 
                     if is_format:
-                        table.df = pd.read_fwf(data, names=names, widths=widths,
-                                               usecols=usecols, dtype=dtype,
-                                               index_col=usecols[:2])[usecols[2:]]
-                    else:
-                        table.df = pd.read_fwf(data, header=0)
+                        table.data = np.genfromtxt(data, names=names, delimiter=widths,
+                                                   usecols=usecols, dtype=dtype)
 
                     yield table
 
@@ -84,7 +81,8 @@ def _tables_in_pch(file, tables_specs):
                          enumerate(name for row in tables_specs[table.name]['pch_format'] for name, _ in row)]
                 widths = [18 for row in tables_specs[table.name]['pch_format'] for _, _ in row]
                 usecols = tables_specs[table.name]['columns']
-                dtype = tables_specs[table.name]['dtypes']
+                dtype = [tables_specs[table.name]['dtypes'][name] if name in
+                         tables_specs[table.name]['dtypes'] else None for name in names]
             else:
                 is_format = False
 
@@ -107,10 +105,7 @@ def _tables_in_pch(file, tables_specs):
         data.seek(0)
 
         if is_format:
-            table.df = pd.read_fwf(data, names=names, widths=widths,
-                                   usecols=usecols, dtype=dtype,
-                                   index_col=usecols[:2])[usecols[2:]]
-        else:
-            table.df = pd.read_fwf(data, header=0)
+            table.data = np.genfromtxt(data, names=names, delimiter=widths,
+                                       usecols=usecols, dtype=dtype)
 
         yield table

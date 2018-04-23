@@ -83,14 +83,14 @@ def open_table(header, new_table=False):
 
 
 def append_to_table(table, header):
-    LID = table.df.index.get_level_values(0).values[0]
+    LID = table.data[header['columns'][0][0]][0]
 
     if LID in header['LIDs']:
         print(f'WARNING: Subcase already in the database! It will be skipped (LID: {LID})')
         return False
 
     header['LIDs'].append(LID)
-    EIDs = table.df.index.get_level_values(1).values
+    EIDs = table.data[header['columns'][1][0]]
     index = None
 
     if header['EIDs'] is None:
@@ -111,9 +111,9 @@ def append_to_table(table, header):
     for field, _ in header['columns'][2:]:
 
         if index is None:
-            table.df[field].values.tofile(header['files'][field])
+            table.data[field].tofile(header['files'][field])
         else:
-            table.df[field].values[index].tofile(header['files'][field])
+            table.data[field][index].tofile(header['files'][field])
 
     return True
 
