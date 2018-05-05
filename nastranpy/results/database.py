@@ -51,7 +51,6 @@ class ParentDatabase(object):
         if self.path:
             self._set_headers(headers)
             self.tables = dict()
-            fields = None
 
             for name, header in self._headers.items():
                 LID_name, LID_dtype = header['columns'][0]
@@ -69,29 +68,22 @@ class ParentDatabase(object):
                         n_EIDs * np.dtype(EID_dtype).itemsize != os.path.getsize(EIDs_file)):
                         raise ValueError("Inconsistency found! ('{}')".format(name))
 
-                    header['LIDs'] = list(np.fromfile(LIDs_file, dtype=LID_dtype))
+                    header['LIDs'] = np.fromfile(LIDs_file, dtype=LID_dtype)
                     header['EIDs'] = np.fromfile(EIDs_file, dtype=EID_dtype)
                     fields = list()
 
                     for field_name, dtype in header['columns'][2:]:
                         file = os.path.join(header['path'], field_name + '.bin')
                         self._nbytes += os.path.getsize(file)
-                        offset = n_LIDs * n_EIDs * np.dtype(dtype).itemsize
-
-                        if 2 * offset != os.path.getsize(file):
-                            raise ValueError("Inconsistency found! ('{}')".format(file))
-
-                        fields.append(FieldData(field_name,
-                                                np.memmap(file, dtype=dtype, shape=(n_LIDs, n_EIDs), mode='r'),
-                                                np.memmap(file, dtype=dtype, shape=(n_EIDs, n_LIDs), mode='r', offset=offset),
+                        fields.append(FieldData(field_name, file, dtype,
                                                 header['LIDs'], header['EIDs'],
                                                 LID_name, EID_name))
-                else:
-                    fields = [field_name for field_name in header['columns'][2:]]
 
-                self.tables[name] = TableData(fields,
-                                              header['LIDs'], header['EIDs'],
-                                              LID_name, EID_name)
+                    self.tables[name] = TableData(fields,
+                                                  header['LIDs'], header['EIDs'],
+                                                  LID_name, EID_name)
+                else:
+                    self.tables[name] = None
 
     def _set_headers(self, headers=None):
 
@@ -175,7 +167,7 @@ class ParentDatabase(object):
 
         for header in self._headers.values():
             ncols = len(header['columns'])
-            info.append(f"Table name: '{header['name']}' ({header['columns'][0][0]}: {len(header['LIDs'])}, {header['columns'][1][0]}: {len(header['EIDs'])})")
+            info.append(f"Table: '{header['name']}' ({header['columns'][0][0]}: {len(header['LIDs'])}, {header['columns'][1][0]}: {len(header['EIDs'])})")
             info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
             info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
             info.append('  |' + '|'.join([field.center(6) for field, _ in header['columns']]) + '|')

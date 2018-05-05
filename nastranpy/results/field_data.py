@@ -1,24 +1,20 @@
+import os
 import numpy as np
 from numba import guvectorize
 
 
 class FieldData(object):
 
-    def __init__(self, name, data_by_LID, data_by_EID, LIDs, EIDs,
-                 LID_name='LID', EID_name='EID'):
+    def __init__(self, name, file, dtype, LIDs, EIDs, LID_name='LID', EID_name='EID'):
         self._name = name
-        self._data_by_LID = data_by_LID
-        self._data_by_EID = data_by_EID
-        self._LIDs = np.array(LIDs, dtype=np.int64)
-        self._EIDs = np.array(EIDs, dtype=np.int64)
+        self._file = file
+        self._dtype = dtype
+        self._LIDs = LIDs
+        self._EIDs = EIDs
         self._LID_name = LID_name
         self._EID_name = EID_name
-        self._iLIDs = {LID: i for i, LID in enumerate(self._LIDs)}
-        self._iEIDs = {EID: i for i, EID in enumerate(self._EIDs)}
-        self._n_LIDs = len(self._LIDs)
-        self._n_EIDs = len(self._EIDs)
-        self._dtype = self._data_by_LID.dtype
-        self._item_size = np.dtype(self._dtype).itemsize
+        self._data_by_LID = None
+        self._data_by_EID = None
 
     @property
     def name(self):
@@ -40,19 +36,22 @@ class FieldData(object):
     def dtype(self):
         return self._dtype
 
-    @property
-    def shape(self):
-        return self._data_by_LID.shape
-
-    @property
-    def size(self):
-        return self._data_by_LID.size
-
     def close(self):
         self._data_by_LID = None
         self._data_by_EID = None
 
     def read(self, LIDs=None, EIDs=None, out=None):
+
+        if self._data_by_LID is None and self._data_by_EID  is None:
+            self._n_LIDs = len(self._LIDs)
+            self._n_EIDs = len(self._EIDs)
+            self._iLIDs = {LID: i for i, LID in enumerate(self._LIDs)}
+            self._iEIDs = {EID: i for i, EID in enumerate(self._EIDs)}
+            self._offset = self._n_LIDs * self._n_EIDs * np.dtype(self._dtype).itemsize
+
+            if 2 * self._offset != os.path.getsize(self._file):
+                raise ValueError("Inconsistency found! ('{}')".format(self._file))
+
         LIDs_queried = self._LIDs if LIDs is None else LIDs
         EIDs_queried = self._EIDs if EIDs is None else EIDs
 
@@ -79,11 +78,17 @@ class FieldData(object):
         if len(LIDs_queried) < len(EIDs_queried):
             iEIDs = slice(None) if EIDs is None else np.array([self._iEIDs[EID] for EID in EIDs_queried])
 
+            if self._data_by_LID is None:
+                self._data_by_LID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_LIDs, self._n_EIDs), mode='r')
+
             for i, LID in enumerate(LIDs_queried):
                 array[i, :] = self._data_by_LID[self._iLIDs[LID], :][iEIDs]
 
         else:
             iLIDs = slice(None) if LIDs is None else np.array([self._iLIDs[LID] for LID in LIDs_queried])
+
+            if self._data_by_EID is None:
+                self._data_by_EID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_EIDs, self._n_LIDs), mode='r', offset=self._offset)
 
             for i, EID in enumerate(EIDs_queried):
                 array[:len(LIDs_queried), i] = self._data_by_EID[self._iEIDs[EID], :][iLIDs].T

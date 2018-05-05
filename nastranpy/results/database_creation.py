@@ -89,7 +89,12 @@ def append_to_table(table, header):
         print(f'WARNING: Subcase already in the database! It will be skipped (LID: {LID})')
         return False
 
-    header['LIDs'].append(LID)
+    try:
+        header['LIDs'].append(LID)
+    except AttributeError:
+        header['LIDs'] = list(header['LIDs'])
+        header['LIDs'].append(LID)
+
     EIDs = table.data[header['columns'][1][0]]
     index = None
 

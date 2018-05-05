@@ -4,23 +4,11 @@ import numpy as np
 class TableData(object):
 
     def __init__(self, fields, LIDs, EIDs, LID_name='LID', EID_name='EID'):
-        self._LIDs = np.array(LIDs, dtype=np.int64)
-        self._EIDs = np.array(EIDs, dtype=np.int64)
+        self._LIDs = LIDs
+        self._EIDs = EIDs
         self._LID_name = LID_name
         self._EID_name = EID_name
-
-        try:
-            self._fields = {field.name: field for field in fields}
-
-            if not all(np.array_equal(field.LIDs, self._LIDs) and
-                       np.array_equal(field.EIDs, self._EIDs) and
-                       field._LID_name == self._LID_name and
-                       field._EID_name == self._EID_name for
-                       field in self._fields.values()):
-                raise ValueError('Inconsistent fields!')
-
-        except AttributeError:
-            self._fields = list(fields)
+        self._fields = {field.name: field for field in fields}
 
     @property
     def names(self):
