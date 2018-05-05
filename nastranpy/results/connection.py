@@ -7,7 +7,8 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.fernet import Fernet
 import socket
 import json
-import pandas as pd
+import pyarrow as pa
+import numpy as np
 from io import BytesIO
 from nastranpy.bdf.misc import humansize
 from nastranpy.results.read_results import tables_in_pch, ResultsTable
@@ -16,7 +17,7 @@ from nastranpy.results.read_results import tables_in_pch, ResultsTable
 class Connection(object):
 
     def __init__(self, server_address=None, connection_socket=None,
-                 private_key=None, header_size=12, buffer_size=4096):
+                 private_key=None, header_size=15, buffer_size=4096):
 
         if server_address:
             self.connect(server_address)
@@ -37,26 +38,22 @@ class Connection(object):
         self.socket.close()
         self.encryptor = None
 
-    def send(self, msg='', data=None, df=None):
-        buffer = BytesIO()
-        buffer.seek(3 * self.header_size + len(msg))
+    def send(self, bytes=None, msg=None, data=None, exception=None):
 
-        if data is None:
-            data = b''
-        else:
-            data = json.dumps(data).encode()
-            buffer.write(data)
+        if bytes:
+            data_type = '0'
+        elif msg:
+            data_type = '1'
+            bytes = msg.encode()
+        elif data:
+            data_type = '2'
+            bytes = json.dumps(data).encode()
+        elif exception:
+            data_type = '#'
+            bytes = exception.encode()
 
-        if not df is None:
-            df.to_msgpack(buffer)
-
-        position = buffer.tell()
-        buffer.seek(0)
-        buffer.write((str(position).zfill(self.header_size) +
-                      str(len(msg)).zfill(self.header_size) +
-                      str(len(data)).zfill(self.header_size) +
-                      msg).encode())
-        self.socket.sendall(buffer.getbuffer())
+        self.socket.send((str(len(bytes)).zfill(self.header_size - 1) + data_type).encode())
+        self.socket.sendall(bytes)
 
     def recv(self):
         buffer = BytesIO()
@@ -67,7 +64,7 @@ class Connection(object):
 
             if (self.pending_data and
                 len(self.pending_data) > self.header_size and
-                len(self.pending_data) == int(self.pending_data[:self.header_size].decode())):
+                (len(self.pending_data) - self.header_size) == int(self.pending_data[:self.header_size - 1].decode())):
                 data = b''
             else:
                 data = self.socket.recv(self.buffer_size)
@@ -75,10 +72,9 @@ class Connection(object):
             if size == 1:
                 data = self.pending_data + data
                 self.pending_data = b''
-                msg_size = int(data[self.header_size : 2 * self.header_size].decode())
-                data_size = int(data[2 * self.header_size : 3 * self.header_size].decode())
-                size = int(data[:self.header_size].decode()) - 3 * self.header_size
-                data = data[3 * self.header_size:]
+                size = int(data[:self.header_size - 1].decode())
+                data_type = data[self.header_size - 1:self.header_size].decode()
+                data = data[self.header_size:]
 
             buffer.write(data)
 
@@ -87,22 +83,24 @@ class Connection(object):
         buffer.seek(size)
         buffer.truncate()
         buffer.seek(0)
-        msg = buffer.read(msg_size).decode()
 
-        if msg and msg[0] == '#':
-            raise ConnectionError(msg[1:])
+        if data_type == '0':
+            return buffer
+        elif data_type == '1':
+            return buffer.read().decode()
+        elif data_type == '2':
+            return json.loads(buffer.read().decode())
+        elif data_type == '#':
+            raise ConnectionError(buffer.read().decode())
 
-        if data_size:
-            data = json.loads(buffer.read(data_size).decode())
-        else:
-            data = None
+    def send_dataframe(self, dataframe):
+        batch = pa.RecordBatch.from_pandas(dataframe)
+        writer = pa.RecordBatchStreamWriter(self.socket.makefile('wb'), batch.schema)
+        writer.write_batch(batch)
 
-        if size > 3 * self.header_size + msg_size + data_size:
-            df = pd.read_msgpack(buffer)
-        else:
-            df = None
-
-        return msg, data, df
+    def recv_dataframe(self):
+        reader = pa.RecordBatchStreamReader(self.socket.makefile('rb'))
+        return reader.read_pandas()
 
     def send_tables(self, files, tables_specs):
         ignored_tables = set()
@@ -119,22 +117,24 @@ class Connection(object):
 
                     continue
 
-                df = table.df
-                del table.__dict__['df']
-                self.send(data=table.__dict__, df=df)
+                f = BytesIO()
+                data = np.save(f, table.data)
+                table.data = None
+                self.send(data=table.__dict__)
+                self.send(bytes=f.getbuffer())
 
-        self.send('END')
+        self.send(msg='END')
 
     def recv_tables(self):
 
         while True:
-            msg, data, df = self.recv()
+            data = self.recv()
 
-            if msg == 'END':
+            if data == 'END':
                 break
 
             table = ResultsTable(**data)
-            table.df = df
+            table.data = np.load(self.recv())
             yield table
 
     def send_file(self, file):
@@ -160,23 +160,22 @@ class Connection(object):
 
         if not self.encryptor:
             self.send(self.private_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
-                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo).decode())
-            public_key_other = serialization.load_pem_public_key(self.recv()[0].encode(),
-                                                                 backend=default_backend())
+                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo))
+            public_key_other = serialization.load_pem_public_key(self.recv().read(), backend=default_backend())
             self.encryptor = Fernet(self._get_key(public_key_other))
 
-        self.send(self.encryptor.encrypt(secret.encode()).decode())
+        self.send(self.encryptor.encrypt(secret))
 
     def recv_secret(self):
 
         if not self.encryptor:
-            public_key_other = serialization.load_pem_public_key(self.recv()[0].encode(),
+            public_key_other = serialization.load_pem_public_key(self.recv().read(),
                                                                  backend=default_backend())
             self.send(self.private_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
-                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo).decode())
+                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo))
             self.encryptor = Fernet(self._get_key(public_key_other))
 
-        return self.encryptor.decrypt(self.recv()[0].encode()).decode()
+        return self.encryptor.decrypt(self.recv().read())
 
     def _get_key(self, public_key_other):
         shared_key = self.private_key.exchange(ec.ECDH(), public_key_other)
@@ -192,7 +191,7 @@ def get_private_key():
 
 
 def get_master_key():
-    return Fernet.generate_key().decode()
+    return Fernet.generate_key()
 
 
 def get_ip():

@@ -28,25 +28,17 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         connection = Connection(connection_socket=self.request)
-        query = connection.recv()[1]
+        query = connection.recv()
         self.server.check_session(query)
 
-        if query['request_type'] == 'authentication':
-            connection.send('Login succesfully!')
-        elif query['request_type'] == 'shutdown':
-
-            if query['node']:
-                self.server.shutdown_node(query['node'])
-                connection.send('Node shutdown succesfully!')
-            else:
-                threading.Thread(target=self.server.shutdown).start()
-                connection.send('Cluster shutdown succesfully!')
-
-        elif query['request_type'] == 'add_worker':
+        # WORKER REQUESTS
+        if query['request_type'] == 'add_worker':
             self.server.add_worker(tuple(query['worker_address']), query['databases'], query['backup'])
         elif query['request_type'] == 'remove_worker':
             self.server.remove_worker(tuple(query['worker_address']))
-        elif query['request_type'] == 'unlock_worker':
+        elif query['request_type'] == 'acquire_worker':
+            connection.send(data={'worker_address': self.server.acquire_worker(node=query['node'])})
+        elif query['request_type'] == 'release_worker':
 
             if 'databases' in query:
                 self.server.nodes[query['worker_address'][0]].databases = query['databases']
@@ -54,43 +46,56 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                 if query['worker_address'][0] == self.server.server_address[0]:
                     self.server.databases = query['databases']
 
-            self.server.unlock_worker(tuple(query['worker_address']))
+            self.server.release_worker(tuple(query['worker_address']))
+        elif query['request_type'] == 'list_databases':
+            connection.send(data=self.server.databases)
+
+        # CLIENT REQUESTS
+        elif query['request_type'] == 'authentication':
+            connection.send(msg='Login succesfully!')
+        elif query['request_type'] == 'shutdown':
+
+            if query['node']:
+                self.server.shutdown_node(query['node'])
+                connection.send(msg='Node shutdown succesfully!')
+            else:
+                threading.Thread(target=self.server.shutdown).start()
+                connection.send(msg='Cluster shutdown succesfully!')
+
         elif query['request_type'] == 'cluster_info':
-            connection.send(self.server.info(print_to_screen=False))
+            connection.send(msg=self.server.info(print_to_screen=False))
         elif query['request_type'] == 'add_session':
             self.server.sessions.add_session(query['user'], session_hash=query['session_hash'],
                                              is_admin=query['is_admin'],
                                              create_allowed=query['create_allowed'],
                                              databases=query['databases'])
-            connection.send("User '{}' added succesfully!".format(query['user']))
+            connection.send(msg="User '{}' added succesfully!".format(query['user']))
         elif query['request_type'] == 'remove_session':
             self.server.sessions.remove_session(query['user'])
-            connection.send("User '{}' removed succesfully!".format(query['user']))
+            connection.send(msg="User '{}' removed succesfully!".format(query['user']))
         elif query['request_type'] == 'list_sessions':
-            connection.send(self.server.sessions.info(print_to_screen=False))
-        elif query['request_type'] == 'list_databases':
-            connection.send(data=self.server.databases)
+            connection.send(msg=self.server.sessions.info(print_to_screen=False))
         elif query['request_type'] == 'sync_databases':
             self.server.sync_databases(query['nodes'], query['databases'], connection)
-        elif query['request_type'] == 'acquire_worker':
-            worker = self.server.nodes[query['node']].get_worker()
-            self.server.lock_worker(worker)
-            connection.send(data={'worker_address': worker})
         else:
 
             if query['request_type'] != 'create_database' and query['path'] not in self.server.databases:
                 raise ValueError("Database '{}' not available!".format(query['path']))
 
-            worker = self.server.get_worker(query['request_type'], query['path'])
-            self.server.lock_worker(worker)
-            connection.send(data={'redirection_address': worker})
+            connection.send(data={'redirection_address': self.server.acquire_worker(request_type=query['request_type'],
+                                                                                    database=query['path'])})
 
 class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         connection = Connection(connection_socket=self.request)
-        query = connection.recv()[1]
+        query = connection.recv()
         self.server.check_session(query)
+
+        try:
+            self.server.acquire_database(query['path'])
+        except KeyError:
+            pass
 
         if query['request_type'] == 'shutdown':
             self.server._shutdown_request = True
@@ -102,12 +107,9 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
         elif query['request_type'] == 'recv_databases':
             self.server.recv_databases(connection)
         elif query['request_type'] == 'remove_database':
-            self.server.acquire_database(query['path'])
             shutil.rmtree(os.path.join(self.server.root_path, query['path']))
-            connection.send("Database '{}' removed succesfully!".format(query['path']))
+            connection.send(msg="Database '{}' removed succesfully!".format(query['path']))
         else:
-            self.server.acquire_database(query['path'])
-            msg = ''
             path = os.path.join(self.server.root_path, query['path'])
 
             if query['request_type'] == 'create_database':
@@ -115,7 +117,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 if query['path'] in self.server.databases.keys():
                     raise FileExistsError(f"Database already exists at '{query['path']}'!")
 
-                connection.send('Creating database ...', data=get_tables_specs())
+                connection.send(data=get_tables_specs())
                 db = Database()
                 db.create(query['files'], path, query['name'], query['version'],
                           database_project=query['project'],
@@ -124,21 +126,22 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             else:
                 db = Database(path)
 
-            df = None
+            msg = ''
 
             if query['request_type'] == 'check':
                 msg = db.check(print_to_screen=False)
-            elif query['request_type'] == 'query':
-                df=db.query(**process_query(query))
             elif query['request_type'] == 'append_to_database':
-                connection.send('Appending to database ...', data=db._get_tables_specs())
+                connection.send(data=db._get_tables_specs())
                 db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
                 msg = 'Database created succesfully!'
             elif query['request_type'] == 'restore_database':
                 db.restore(query['batch'])
                 msg = f"Database restored to '{query['batch']}' state succesfully!"
 
-            connection.send(msg, data=db._export_header(), df=df)
+            connection.send(data={'msg': msg, 'header': db._export_header()})
+
+            if query['request_type'] == 'query':
+                connection.send_dataframe(db.query(**process_query(query)))
 
 
 class DatabaseServer(socketserver.TCPServer):
@@ -181,7 +184,7 @@ class DatabaseServer(socketserver.TCPServer):
     def handle_error(self, request, client_address):
         tb = traceback.format_exc()
         self.log.error(tb)
-        Connection(connection_socket=request).send('#' + tb)
+        Connection(connection_socket=request).send(exception=tb)
 
     def refresh_databases(self):
         self.databases = get_local_databases(self.root_path)
@@ -190,11 +193,11 @@ class DatabaseServer(socketserver.TCPServer):
 
         try:
             connection = Connection(connection_socket=request, private_key=self.private_key)
-            data = json.loads(connection.recv_secret())
+            data = json.loads(connection.recv_secret().decode())
 
             if 'master_key' in data:
 
-                if self.master_key != data['master_key']:
+                if self.master_key != data['master_key'].encode():
                     raise PermissionError()
 
                 self.current_session = {'is_admin': True}
@@ -210,18 +213,18 @@ class DatabaseServer(socketserver.TCPServer):
                     connection.send_secret(self.master_key)
                 else:
                     authentication = jwt.encode(self.current_session, self.master_key)
-                    connection.send_secret(authentication.decode())
+                    connection.send_secret(authentication)
 
             elif 'authentication' in data:
-                self.current_session = jwt.decode(data['authentication'], self.master_key)
+                self.current_session = jwt.decode(data['authentication'].encode(), self.master_key)
             else:
                 raise PermissionError()
 
-            connection.send('Access granted!')
+            connection.send(msg='Access granted!')
             return True
 
         except Exception:
-            connection.send('#Access denied!')
+            connection.send(exception='Access denied!')
             return False
 
     def check_session(self, query):
@@ -230,7 +233,7 @@ class DatabaseServer(socketserver.TCPServer):
         if not self.current_session['is_admin']:
 
             if (query['request_type'] in ('shutdown', 'add_worker', 'remove_worker',
-                                          'unlock_worker', 'acquire_worker',
+                                          'release_worker', 'acquire_worker',
                                           'sync_databases', 'recv_databases',
                                           'add_session', 'remove_session', 'list_sessions') or
                 query['request_type'] == 'create_database' and not self.current_session['create_allowed'] or
@@ -327,24 +330,28 @@ class CentralServer(DatabaseServer):
         if len(self.nodes) == 0:
             self._done.set()
 
-    def lock_worker(self, worker):
+    def acquire_worker(self, node=None, request_type=None, database=None):
+
+        if not node:
+
+            if  request_type in ('create_database', 'append_to_database',
+                                 'restore_database', 'remove_database'):
+                node = self.server_address[0]
+            else:
+
+                for node in sorted(self.nodes, key=lambda x: self.nodes[x].get_queue()):
+
+                    if (database in self.nodes[node].databases and
+                        (not database in self.databases or
+                         self.nodes[node].databases[database] == self.databases[database])):
+                        break
+
+        worker = self.nodes[node].get_worker()
         self.nodes[worker[0]].workers[worker] += 1
+        return worker
 
-    def unlock_worker(self, worker):
+    def release_worker(self, worker):
         self.nodes[worker[0]].workers[worker] -= 1
-
-    def get_worker(self, request_type, database=None):
-
-        if request_type in ('create_database', 'append_to_database', 'restore_database', 'remove_database'):
-            return self.nodes[self.server_address[0]].get_worker()
-        else:
-
-            for node in sorted(self.nodes, key=lambda x: self.nodes[x].get_queue()):
-
-                if (database in self.nodes[node].databases and
-                    (not database in self.databases or
-                     self.nodes[node].databases[database] == self.databases[database])):
-                    return self.nodes[node].get_worker()
 
     def sync_databases(self, nodes, databases, connection):
 
@@ -361,11 +368,9 @@ class CentralServer(DatabaseServer):
         if not nodes:
             raise ValueError('At least 2 nodes are required in order to sync them!')
 
-        worker = self.nodes[self.server_address[0]].get_worker()
-        self.lock_worker(worker)
         connection.send(data={'request_type': 'sync_databases',
                               'nodes': nodes, 'databases': databases,
-                              'redirection_address': worker})
+                              'redirection_address': self.acquire_worker(node=self.server_address[0])})
 
     def shutdown_request(self, request):
         super().shutdown_request(request)
@@ -408,7 +413,7 @@ class WorkerServer(DatabaseServer):
             connection = Connection(self.central, private_key=self.private_key)
             connection.send_secret(json.dumps({'user': user,
                                                'password': password,
-                                               'request': 'master_key'}))
+                                               'request': 'master_key'}).encode())
             self.master_key = connection.recv_secret()
             connection.send(data={'request_type': 'add_worker',
                                   'worker_address': self.server_address,
@@ -483,7 +488,7 @@ class WorkerServer(DatabaseServer):
         super().shutdown_request(request)
 
         if not self._shutdown_request:
-            data = {'request_type': 'unlock_worker',
+            data = {'request_type': 'release_worker',
                     'worker_address': self.server_address}
 
             if self.current_session['request_type'] in ('recv_databases',
@@ -511,14 +516,14 @@ class WorkerServer(DatabaseServer):
         for node, backup in nodes.items():
             worker = tuple(request(self.central, {'request_type': 'acquire_worker', 'node': node},
                                    master_key=self.master_key, private_key=self.private_key)[1]['worker_address'])
-            client_connection.send(f"Syncing node '{node}' ...")
+            client_connection.send(msg=f"Syncing node '{node}' ...")
 
             try:
                 connection = Connection(worker, private_key=self.private_key)
-                connection.send_secret(json.dumps({'master_key': self.master_key}))
+                connection.send_secret(json.dumps({'master_key': self.master_key.decode()}).encode())
                 connection.recv()
                 connection.send(data={'request_type': 'recv_databases'})
-                remote_databases = connection.recv()[1]
+                remote_databases = connection.recv()
 
                 for database in databases:
 
@@ -531,27 +536,26 @@ class WorkerServer(DatabaseServer):
                         files = [file for pattern in ('**/*header.*', '**/*.bin') for file in database_path.glob(pattern)]
                         connection.send(data={'database': database,
                                               'files': [str(file.relative_to(database_path)) for file in files]})
-                        client_connection.send(f"  Syncing database '{database}' ({len(files)} files; {humansize(sum(os.path.getsize(file) for file in files))})...")
+                        client_connection.send(msg=f"  Syncing database '{database}' ({len(files)} files; {humansize(sum(os.path.getsize(file) for file in files))})...")
 
                         for file in files:
                             connection.send_file(file)
-                            msg = connection.recv()[0]
+                            msg = connection.recv()
 
                         self.release_database()
 
-                connection.send(f"Done!")
+                connection.send(msg=f"Done!")
             finally:
                 connection.kill()
 
-        client_connection.send(f"Done!")
+        client_connection.send(msg=f"Done!")
 
     def recv_databases(self, connection):
         self.refresh_databases()
         connection.send(data=self.databases._getvalue())
-        msg = ''
+        data = connection.recv()
 
-        while msg != 'Done!':
-            msg, data, _ = connection.recv()
+        while data != 'Done!':
             self.acquire_database(data['database'])
             path = Path(self.root_path) / data['database']
             path_temp = path.parent / (path.name + '_TEMP')
@@ -574,6 +578,8 @@ class WorkerServer(DatabaseServer):
                 raise e
             finally:
                 self.release_database()
+
+            data = connection.recv()
 
     def refresh_databases(self):
 
@@ -645,7 +651,7 @@ def send(address, data, master_key=None, private_key=None, recv=False):
         connection = Connection(address, private_key=private_key)
 
         if connection.private_key:
-            connection.send_secret(json.dumps({'master_key': master_key}))
+            connection.send_secret(json.dumps({'master_key': master_key.decode()}).encode())
             connection.recv()
 
         connection.send(data=data)

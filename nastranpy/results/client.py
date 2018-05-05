@@ -54,22 +54,23 @@ class DatabaseClient(ParentDatabase):
         if 'files' in kwargs and isinstance(kwargs['files'], str):
             kwargs['files'] = [kwargs['files']]
 
+        connection = Connection(self.server_address, private_key=self._private_key)
+
         try:
-            connection = Connection(self.server_address, private_key=self._private_key)
 
             if self._authentication:
-                connection.send_secret(json.dumps({'authentication': self._authentication}))
+                connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
             else:
                 connection.send_secret(json.dumps({'user': input('user: '),
                                                    'password': getpass.getpass('password: '),
-                                                   'request': 'authentication'}))
+                                                   'request': 'authentication'}).encode())
                 self._authentication = connection.recv_secret()
 
             connection.recv()
             connection.send(data=kwargs)
-            msg, data, df = connection.recv()
+            data = connection.recv()
 
-            if data and 'redirection_address' in data:
+            if 'redirection_address' in data:
 
                 for key in data:
 
@@ -78,39 +79,42 @@ class DatabaseClient(ParentDatabase):
 
                 connection.kill()
                 connection.connect(tuple(data['redirection_address']))
-                connection.send_secret(json.dumps({'authentication': self._authentication}))
+                connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
                 connection.recv()
                 connection.send(data=kwargs)
-                msg, data, df = connection.recv()
+                data = connection.recv()
 
-            if msg:
-                print(msg)
-
-            if kwargs['request_type'] in ('authentication', 'cluster_info',
+            if kwargs['request_type'] in ('authentication', 'shutdown', 'cluster_info',
                                           'add_session', 'remove_session', 'list_sessions',
-                                          'remove_database', 'shutdown'):
+                                          'remove_database'):
+                print(data)
                 return
             elif kwargs['request_type'] == 'header':
-                return data
+                return data['header']
             elif kwargs['request_type'] == 'sync_databases':
 
-                while msg != 'Done!':
-                    msg, data, df = connection.recv()
-                    print(msg)
+                while data != 'Done!':
+                    data = connection.recv()
+                    print(data)
 
                 return
             elif kwargs['request_type'] in ('create_database', 'append_to_database'):
                 connection.send_tables(kwargs['files'], data)
-                msg, data, _ = connection.recv()
-                print(msg)
+                data = connection.recv()
+                print(data['msg'])
 
                 if kwargs['request_type'] == 'create_database':
-                    return data
+                    return data['header']
+
+            elif kwargs['request_type'] == 'query':
+                df = connection.recv_dataframe()
+            else:
+                print(data['msg'])
 
         finally:
             connection.kill()
 
-        self.reload(data)
+        self.reload(data['header'])
 
         if kwargs['request_type'] == 'query':
 
