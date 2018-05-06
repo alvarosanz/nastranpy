@@ -3,7 +3,6 @@ from pathlib import Path
 import json
 import shutil
 import numpy as np
-import pandas as pd
 from nastranpy.results.field_data import FieldData
 from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
@@ -13,7 +12,7 @@ from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import humansize, get_hasher, hash_bytestr
 
 
-class ParentDatabase(object):
+class BaseDatabase(object):
 
     @property
     def project(self):
@@ -95,7 +94,7 @@ class ParentDatabase(object):
         else:
 
             if not headers:
-                headers = self._request(request_type='header', path=self.path)
+                headers = self._request(request_type='header', path=self.path)['header']
 
             self._headers = headers['headers']
             self._nbytes = headers['nbytes']
@@ -197,7 +196,7 @@ class ParentDatabase(object):
             return info
 
 
-class Database(ParentDatabase):
+class Database(BaseDatabase):
 
     def __init__(self, path=None, max_chunk_size=1e8):
         self.path = path
@@ -332,7 +331,8 @@ class Database(ParentDatabase):
         print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
-              geometry=None, weights=None, output_file=None, **kwargs):
+              geometry=None, weights=None, **kwargs):
+        import pandas as pd
         EID_groups = None
 
         if isinstance(EIDs, dict):
@@ -458,13 +458,7 @@ class Database(ParentDatabase):
             columns = list(aggs)
             index = pd.Index(index1, name=index_names[1])
 
-        df = pd.DataFrame(data, columns=columns, index=index, copy=False)
-
-        if self._is_local and output_file:
-            print(f"Writing '{os.path.basename(output_file)}' ...")
-            df.to_csv(output_file)
-
-        return df
+        return pd.DataFrame(data, columns=columns, index=index, copy=False)
 
     def query_from_file(self, file):
         return self.query(**get_query_from_file(file))

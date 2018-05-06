@@ -1,12 +1,71 @@
 import getpass
 import json
-from nastranpy.results.database import ParentDatabase
+import jwt
+from nastranpy.results.database import BaseDatabase
 from nastranpy.results.connection import Connection, get_private_key
 from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import get_hash
 
 
-class DatabaseClient(ParentDatabase):
+class BaseClient(object):
+
+    def authenticate(self, connection):
+
+        if self._authentication:
+            connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
+        else:
+            connection.send_secret(json.dumps({'user': input('user: '),
+                                               'password': getpass.getpass('password: '),
+                                               'request': 'authentication'}).encode())
+            self._authentication = connection.recv_secret()
+
+        connection.recv()
+
+    def _request(self, **kwargs):
+        connection = Connection(self.server_address, private_key=self._private_key)
+
+        try:
+            # Authentication
+            self.authenticate(connection)
+
+            # Sending request
+            connection.send(msg=kwargs)
+            data = connection.recv()
+
+            # Redirecting request (if necessary)
+            if 'redirection_address' in data:
+
+                for key in data:
+
+                    if key != 'redirection_address':
+                        kwargs[key] = data[key]
+
+                connection.kill()
+                connection.connect(tuple(data['redirection_address']))
+                self.authenticate(connection)
+                connection.send(msg=kwargs)
+                data = connection.recv()
+
+            # Processing request
+            if kwargs['request_type'] == 'sync_databases':
+
+                while data['msg'] != 'Done!':
+                    data = connection.recv()
+                    print(data['msg'])
+
+            elif kwargs['request_type'] in ('create_database', 'append_to_database'):
+                connection.send_tables(kwargs['files'], data)
+                data = connection.recv()
+            elif kwargs['request_type'] == 'query':
+                data['df'] = connection.recv_dataframe()
+
+        finally:
+            connection.kill()
+
+        return data
+
+
+class DatabaseClient(BaseDatabase, BaseClient):
 
     def __init__(self, server_address, path, private_key, authentication, headers=None):
         self.server_address = server_address
@@ -23,110 +82,44 @@ class DatabaseClient(ParentDatabase):
             super().info(print_to_screen, detailed)
 
     def check(self):
-        self._request(request_type='check')
+        print(self._request(request_type='check')['msg'])
 
     def append(self, files, batch_name):
-        self._request(request_type='append_to_database', files=files, batch=batch_name)
+
+        if isinstance(files, str):
+            files = [files]
+
+        print(self._request(request_type='append_to_database', files=files, batch=batch_name)['msg'])
 
     def restore(self, batch_name):
 
         if batch_name not in self.restore_points or batch_name == self.restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
-        self._request(request_type='restore_database', batch=batch_name)
+        print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
               geometry=None, weights=None, output_file=None, **kwargs):
-        query = {'table': table, 'outputs': outputs, 'LIDs': LIDs, 'EIDs': EIDs,
-                 'geometry': geometry, 'weights': weights, 'output_file': output_file}
-        return self._request(request_type='query', **query)
+        df = self._request(request_type='query', table=table, outputs=outputs,
+                           LIDs=LIDs, EIDs=EIDs, geometry=geometry, weights=weights)['df']
+
+        if output_file:
+            print(f"Writing '{output_file}' ...")
+            df.to_csv(output_file)
+
+        return df
 
     def query_from_file(self, file):
         return self.query(**get_query_from_file(file))
 
     def _request(self, **kwargs):
-
-        try:
-            kwargs['path'] = self.path
-        except AttributeError:
-            pass
-
-        if 'files' in kwargs and isinstance(kwargs['files'], str):
-            kwargs['files'] = [kwargs['files']]
-
-        connection = Connection(self.server_address, private_key=self._private_key)
-
-        try:
-
-            if self._authentication:
-                connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
-            else:
-                connection.send_secret(json.dumps({'user': input('user: '),
-                                                   'password': getpass.getpass('password: '),
-                                                   'request': 'authentication'}).encode())
-                self._authentication = connection.recv_secret()
-
-            connection.recv()
-            connection.send(data=kwargs)
-            data = connection.recv()
-
-            if 'redirection_address' in data:
-
-                for key in data:
-
-                    if key != 'redirection_address':
-                        kwargs[key] = data[key]
-
-                connection.kill()
-                connection.connect(tuple(data['redirection_address']))
-                connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
-                connection.recv()
-                connection.send(data=kwargs)
-                data = connection.recv()
-
-            if kwargs['request_type'] in ('authentication', 'shutdown', 'cluster_info',
-                                          'add_session', 'remove_session', 'list_sessions',
-                                          'remove_database'):
-                print(data)
-                return
-            elif kwargs['request_type'] == 'header':
-                return data['header']
-            elif kwargs['request_type'] == 'sync_databases':
-
-                while data != 'Done!':
-                    data = connection.recv()
-                    print(data)
-
-                return
-            elif kwargs['request_type'] in ('create_database', 'append_to_database'):
-                connection.send_tables(kwargs['files'], data)
-                data = connection.recv()
-                print(data['msg'])
-
-                if kwargs['request_type'] == 'create_database':
-                    return data['header']
-
-            elif kwargs['request_type'] == 'query':
-                df = connection.recv_dataframe()
-            else:
-                print(data['msg'])
-
-        finally:
-            connection.kill()
-
+        kwargs['path'] = self.path
+        data = super()._request(**kwargs)
         self.reload(data['header'])
-
-        if kwargs['request_type'] == 'query':
-
-            if kwargs['output_file']:
-                print(f"Writing '{kwargs['output_file']}' ...")
-                df.to_csv(kwargs['output_file'])
-
-            return df
+        return data
 
 
-class Client(object):
-    _request = DatabaseClient._request
+class Client(BaseClient):
 
     def __init__(self, server_address):
         self.server_address = server_address
@@ -135,8 +128,12 @@ class Client(object):
         self._authentication = None
         self._request(request_type='authentication')
 
+    @property
+    def session(self):
+        return jwt.decode(self._authentication, verify=False)
+
     def info(self):
-        self._request(request_type='cluster_info')
+        print(self._request(request_type='cluster_info')['msg'])
 
     def load(self, database):
         self.database = DatabaseClient(self.server_address, database,
@@ -145,26 +142,34 @@ class Client(object):
     def create_database(self, files, database, database_name, database_version,
                         database_project=None):
 
-        headers = self._request(request_type='create_database', files=files, path=database,
-                                name=database_name, version=database_version, project=database_project)
+        if isinstance(files, str):
+            files = [files]
+
+        data = self._request(request_type='create_database', files=files, path=database,
+                             name=database_name, version=database_version, project=database_project)
+        print(data['msg'])
         self.database = DatabaseClient(self.server_address, database,
-                                       self._private_key, self._authentication, headers)
+                                       self._private_key, self._authentication, data['header'])
 
     def remove_database(self, database):
-        self._request(request_type='remove_database', path=database)
+        print(self._request(request_type='remove_database', path=database)['msg'])
+
+    @property
+    def databases(self):
+        return list(self._request(request_type='list_databases'))
 
     def sessions(self):
-        self._request(request_type='list_sessions')
+        print(self._request(request_type='list_sessions')['msg'])
 
     def add_session(self, user, password, is_admin=False, create_allowed=False, databases=None):
-        self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
-                      user=user, is_admin=is_admin, create_allowed=create_allowed, databases=databases)
+        print(self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
+                            user=user, is_admin=is_admin, create_allowed=create_allowed, databases=databases)['msg'])
 
     def remove_session(self, user):
-        self._request(request_type='remove_session', user=user)
+        print(self._request(request_type='remove_session', user=user)['msg'])
 
     def sync_databases(self, nodes=None, databases=None):
         self._request(request_type='sync_databases', nodes=nodes, databases=databases)
 
     def shutdown(self, node=None):
-        self._request(request_type='shutdown', node=node)
+        print(self._request(request_type='shutdown', node=node)['msg'])

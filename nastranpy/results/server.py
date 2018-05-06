@@ -10,6 +10,7 @@ import binascii
 import logging
 import traceback
 import socketserver
+from contextlib import contextmanager
 import threading
 from multiprocessing import Process, cpu_count, Event, Manager, Lock
 from nastranpy.results.database import Database
@@ -37,7 +38,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
         elif query['request_type'] == 'remove_worker':
             self.server.remove_worker(tuple(query['worker_address']))
         elif query['request_type'] == 'acquire_worker':
-            connection.send(data={'worker_address': self.server.acquire_worker(node=query['node'])})
+            connection.send(msg={'worker_address': self.server.acquire_worker(node=query['node'])})
         elif query['request_type'] == 'release_worker':
 
             if 'databases' in query:
@@ -48,33 +49,33 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
 
             self.server.release_worker(tuple(query['worker_address']))
         elif query['request_type'] == 'list_databases':
-            connection.send(data=self.server.databases)
+            connection.send(msg=self.server.databases)
 
         # CLIENT REQUESTS
         elif query['request_type'] == 'authentication':
-            connection.send(msg='Login succesfully!')
+            connection.send(msg={'msg': 'Login succesfully!'})
         elif query['request_type'] == 'shutdown':
 
             if query['node']:
                 self.server.shutdown_node(query['node'])
-                connection.send(msg='Node shutdown succesfully!')
+                connection.send(msg={'msg': 'Node shutdown succesfully!'})
             else:
                 threading.Thread(target=self.server.shutdown).start()
-                connection.send(msg='Cluster shutdown succesfully!')
+                connection.send(msg={'msg': 'Cluster shutdown succesfully!'})
 
         elif query['request_type'] == 'cluster_info':
-            connection.send(msg=self.server.info(print_to_screen=False))
+            connection.send(msg={'msg': self.server.info(print_to_screen=False)})
         elif query['request_type'] == 'add_session':
             self.server.sessions.add_session(query['user'], session_hash=query['session_hash'],
                                              is_admin=query['is_admin'],
                                              create_allowed=query['create_allowed'],
                                              databases=query['databases'])
-            connection.send(msg="User '{}' added succesfully!".format(query['user']))
+            connection.send(msg={'msg': "User '{}' added succesfully!".format(query['user'])})
         elif query['request_type'] == 'remove_session':
             self.server.sessions.remove_session(query['user'])
-            connection.send(msg="User '{}' removed succesfully!".format(query['user']))
+            connection.send(msg={'msg': "User '{}' removed succesfully!".format(query['user'])})
         elif query['request_type'] == 'list_sessions':
-            connection.send(msg=self.server.sessions.info(print_to_screen=False))
+            connection.send(msg={'msg': self.server.sessions.info(print_to_screen=False)})
         elif query['request_type'] == 'sync_databases':
             self.server.sync_databases(query['nodes'], query['databases'], connection)
         else:
@@ -82,8 +83,8 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             if query['request_type'] != 'create_database' and query['path'] not in self.server.databases:
                 raise ValueError("Database '{}' not available!".format(query['path']))
 
-            connection.send(data={'redirection_address': self.server.acquire_worker(request_type=query['request_type'],
-                                                                                    database=query['path'])})
+            connection.send(msg={'redirection_address': self.server.acquire_worker(request_type=query['request_type'],
+                                                                                   database=query['path'])})
 
 class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
@@ -92,56 +93,61 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
         query = connection.recv()
         self.server.check_session(query)
 
-        try:
-            self.server.acquire_database(query['path'])
-        except KeyError:
-            pass
-
         if query['request_type'] == 'shutdown':
             self.server._shutdown_request = True
             threading.Thread(target=self.server.shutdown).start()
         elif query['request_type'] == 'list_databases':
-            connection.send(data=self.server.databases._getvalue())
+            connection.send(msg=self.server.databases._getvalue())
         elif query['request_type'] == 'sync_databases':
             self.server.sync_databases(query['nodes'], query['databases'], connection)
         elif query['request_type'] == 'recv_databases':
             self.server.recv_databases(connection)
         elif query['request_type'] == 'remove_database':
-            shutil.rmtree(os.path.join(self.server.root_path, query['path']))
-            connection.send(msg="Database '{}' removed succesfully!".format(query['path']))
+
+            with self.server.acquire_database(query['path']):
+                shutil.rmtree(os.path.join(self.server.root_path, query['path']))
+
+            connection.send(msg={'msg': "Database '{}' removed succesfully!".format(query['path'])})
         else:
-            path = os.path.join(self.server.root_path, query['path'])
 
-            if query['request_type'] == 'create_database':
+            with self.server.acquire_database(query['path']):
+                path = os.path.join(self.server.root_path, query['path'])
+                msg = ''
+                df = None
 
-                if query['path'] in self.server.databases.keys():
-                    raise FileExistsError(f"Database already exists at '{query['path']}'!")
+                if query['request_type'] == 'create_database':
 
-                connection.send(data=get_tables_specs())
-                db = Database()
-                db.create(query['files'], path, query['name'], query['version'],
-                          database_project=query['project'],
-                          table_generator=connection.recv_tables())
-                msg = 'Database created succesfully!'
-            else:
-                db = Database(path)
+                    if query['path'] in self.server.databases.keys():
+                        raise FileExistsError(f"Database already exists at '{query['path']}'!")
 
-            msg = ''
+                    connection.send(msg=get_tables_specs())
+                    db = Database()
+                    db.create(query['files'], path, query['name'], query['version'],
+                              database_project=query['project'],
+                              table_generator=connection.recv_tables())
+                    msg = 'Database created succesfully!'
+                else:
+                    db = Database(path)
 
-            if query['request_type'] == 'check':
-                msg = db.check(print_to_screen=False)
-            elif query['request_type'] == 'append_to_database':
-                connection.send(data=db._get_tables_specs())
-                db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
-                msg = 'Database created succesfully!'
-            elif query['request_type'] == 'restore_database':
-                db.restore(query['batch'])
-                msg = f"Database restored to '{query['batch']}' state succesfully!"
+                if query['request_type'] == 'check':
+                    msg = db.check(print_to_screen=False)
+                elif query['request_type'] == 'query':
+                    df = db.query(**process_query(query))
+                elif query['request_type'] == 'append_to_database':
+                    connection.send(msg=db._get_tables_specs())
+                    db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
+                    msg = 'Database created succesfully!'
+                elif query['request_type'] == 'restore_database':
+                    db.restore(query['batch'])
+                    msg = f"Database restored to '{query['batch']}' state succesfully!"
 
-            connection.send(data={'msg': msg, 'header': db._export_header()})
+                header = db._export_header()
+                db = None
 
-            if query['request_type'] == 'query':
-                connection.send_dataframe(db.query(**process_query(query)))
+            connection.send(msg={'msg': msg, 'header': header})
+
+            if not df is None:
+                connection.send_dataframe(df)
 
 
 class DatabaseServer(socketserver.TCPServer):
@@ -220,7 +226,7 @@ class DatabaseServer(socketserver.TCPServer):
             else:
                 raise PermissionError()
 
-            connection.send(msg='Access granted!')
+            connection.send(b'Access granted!')
             return True
 
         except Exception:
@@ -293,6 +299,15 @@ class CentralServer(DatabaseServer):
 
     def info(self, print_to_screen=True):
         info = list()
+        info.append(f"User: {self.current_session['user']}")
+
+        if self.current_session['is_admin']:
+            info.append(f"Administrator privileges")
+        elif self.current_session['create_allowed']:
+            info.append(f"Regular privileges; database creation allowed")
+        else:
+            info.append(f"Regular privileges")
+
         info.append(f"Address: {self.server_address}")
         info.append(f"\n{len(self.nodes)} nodes ({sum(len(node.workers) for node in self.nodes.values())} workers):")
 
@@ -305,7 +320,12 @@ class CentralServer(DatabaseServer):
         info.append(f"\n{len(self.databases)} databases:")
 
         for database in self.databases:
-            info.append(f"  '{database}'")
+
+            if not self.current_session['is_admin'] and (not self.current_session['databases'] or
+                                                         database not in self.current_session['databases']):
+                info.append(f"  '{database}' [read-only]")
+            else:
+                info.append(f"  '{database}'")
 
         info = '\n'.join(info)
 
@@ -368,9 +388,9 @@ class CentralServer(DatabaseServer):
         if not nodes:
             raise ValueError('At least 2 nodes are required in order to sync them!')
 
-        connection.send(data={'request_type': 'sync_databases',
-                              'nodes': nodes, 'databases': databases,
-                              'redirection_address': self.acquire_worker(node=self.server_address[0])})
+        connection.send(msg={'request_type': 'sync_databases',
+                             'nodes': nodes, 'databases': databases,
+                             'redirection_address': self.acquire_worker(node=self.server_address[0])})
 
     def shutdown_request(self, request):
         super().shutdown_request(request)
@@ -415,10 +435,10 @@ class WorkerServer(DatabaseServer):
                                                'password': password,
                                                'request': 'master_key'}).encode())
             self.master_key = connection.recv_secret()
-            connection.send(data={'request_type': 'add_worker',
-                                  'worker_address': self.server_address,
-                                  'databases': self.databases._getvalue(),
-                                  'backup': self.backup})
+            connection.send(msg={'request_type': 'add_worker',
+                                 'worker_address': self.server_address,
+                                 'databases': self.databases._getvalue(),
+                                 'backup': self.backup})
         finally:
             connection.kill()
 
@@ -430,8 +450,8 @@ class WorkerServer(DatabaseServer):
              master_key=self.master_key, private_key=self.private_key)
         super().shutdown()
 
-    def acquire_database(self, database, block=True):
-        self.current_session['database'] = database
+    @contextmanager
+    def acquire_database(self, database):
 
         with self.main_lock:
 
@@ -464,25 +484,23 @@ class WorkerServer(DatabaseServer):
                 with self.main_lock:
                     queue = self.locked_databases[database][1]
 
-    def release_database(self):
+        yield
 
-        if self.database_lock:
+        # Release database
+        with self.main_lock:
+            lock_index, queue = self.locked_databases[database]
 
-            with self.main_lock:
-                database = self.current_session['database']
-                lock_index, queue = self.locked_databases[database]
+            if queue > 1:
+                self.locked_databases[database] = (lock_index, queue - 1)
+            else:
+                del self.locked_databases[database]
 
-                if queue > 1:
-                    self.locked_databases[database] = (lock_index, queue - 1)
-                else:
-                    del self.locked_databases[database]
+            try:
+                self.database_lock.release()
+            except ValueError:
+                pass
 
-                try:
-                    self.database_lock.release()
-                except ValueError:
-                    pass
-
-                self.database_lock = None
+            self.database_lock = None
 
     def shutdown_request(self, request):
         super().shutdown_request(request)
@@ -499,7 +517,6 @@ class WorkerServer(DatabaseServer):
 
             send(self.central, data, master_key=self.master_key, private_key=self.private_key)
 
-        self.release_database()
         self.current_session = None
 
     def sync_databases(self, nodes, databases, client_connection):
@@ -516,13 +533,13 @@ class WorkerServer(DatabaseServer):
         for node, backup in nodes.items():
             worker = tuple(request(self.central, {'request_type': 'acquire_worker', 'node': node},
                                    master_key=self.master_key, private_key=self.private_key)[1]['worker_address'])
-            client_connection.send(msg=f"Syncing node '{node}' ...")
+            client_connection.send(msg={'msg': f"Syncing node '{node}' ..."})
 
             try:
                 connection = Connection(worker, private_key=self.private_key)
                 connection.send_secret(json.dumps({'master_key': self.master_key.decode()}).encode())
                 connection.recv()
-                connection.send(data={'request_type': 'recv_databases'})
+                connection.send(msg={'request_type': 'recv_databases'})
                 remote_databases = connection.recv()
 
                 for database in databases:
@@ -531,53 +548,51 @@ class WorkerServer(DatabaseServer):
                                              databases[database] != remote_databases[database]) or
                         update_only and (not backup and database in remote_databases and databases[database] != remote_databases[database] or
                                          backup and (database not in remote_databases or databases[database] != remote_databases[database]))):
-                        self.acquire_database(database)
-                        database_path = Path(self.root_path) / database
-                        files = [file for pattern in ('**/*header.*', '**/*.bin') for file in database_path.glob(pattern)]
-                        connection.send(data={'database': database,
-                                              'files': [str(file.relative_to(database_path)) for file in files]})
-                        client_connection.send(msg=f"  Syncing database '{database}' ({len(files)} files; {humansize(sum(os.path.getsize(file) for file in files))})...")
 
-                        for file in files:
-                            connection.send_file(file)
-                            msg = connection.recv()
+                        with self.acquire_database(database):
+                            database_path = Path(self.root_path) / database
+                            files = [file for pattern in ('**/*header.*', '**/*.bin') for file in database_path.glob(pattern)]
+                            connection.send(msg={'database': database, 'msg': '',
+                                                 'files': [str(file.relative_to(database_path)) for file in files]})
+                            client_connection.send(msg={'msg': f"  Syncing database '{database}' ({len(files)} files; {humansize(sum(os.path.getsize(file) for file in files))})..."})
 
-                        self.release_database()
+                            for file in files:
+                                connection.send_file(file)
+                                msg = connection.recv()
 
-                connection.send(msg=f"Done!")
+                connection.send(msg={'msg': "Done!"})
             finally:
                 connection.kill()
 
-        client_connection.send(msg=f"Done!")
+        client_connection.send(msg={'msg': f"Done!"})
 
     def recv_databases(self, connection):
         self.refresh_databases()
-        connection.send(data=self.databases._getvalue())
+        connection.send(msg=self.databases._getvalue())
         data = connection.recv()
 
-        while data != 'Done!':
-            self.acquire_database(data['database'])
-            path = Path(self.root_path) / data['database']
-            path_temp = path.parent / (path.name + '_TEMP')
-            path_temp.mkdir()
+        while data['msg'] != 'Done!':
 
-            try:
+            with self.acquire_database(data['database']):
+                path = Path(self.root_path) / data['database']
+                path_temp = path.parent / (path.name + '_TEMP')
+                path_temp.mkdir()
 
-                for file in data['files']:
-                    file = path_temp / file
-                    file.parent.mkdir(exist_ok=True)
-                    connection.recv_file(file)
-                    connection.send(msg='OK')
+                try:
 
-                if os.path.exists(path):
-                    shutil.rmtree(path)
+                    for file in data['files']:
+                        file = path_temp / file
+                        file.parent.mkdir(exist_ok=True)
+                        connection.recv_file(file)
+                        connection.send(b'OK')
 
-                path_temp.rename(path)
-            except Exception as e:
-                shutil.rmtree(path_temp)
-                raise e
-            finally:
-                self.release_database()
+                    if os.path.exists(path):
+                        shutil.rmtree(path)
+
+                    path_temp.rename(path)
+                except Exception as e:
+                    shutil.rmtree(path_temp)
+                    raise e
 
             data = connection.recv()
 
@@ -645,7 +660,7 @@ def get_local_databases(root_path):
     return databases
 
 
-def send(address, data, master_key=None, private_key=None, recv=False):
+def send(address, msg, master_key=None, private_key=None, recv=False):
 
     try:
         connection = Connection(address, private_key=private_key)
@@ -654,7 +669,7 @@ def send(address, data, master_key=None, private_key=None, recv=False):
             connection.send_secret(json.dumps({'master_key': master_key.decode()}).encode())
             connection.recv()
 
-        connection.send(data=data)
+        connection.send(msg=msg)
 
         if recv:
             return connection.recv()
@@ -663,5 +678,5 @@ def send(address, data, master_key=None, private_key=None, recv=False):
         connection.kill()
 
 
-def request(address, data, master_key=None, private_key=None):
-    return send(address, data, master_key, private_key, recv=True)
+def request(address, msg, master_key=None, private_key=None):
+    return send(address, msg, master_key, private_key, recv=True)

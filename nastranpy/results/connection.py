@@ -38,16 +38,13 @@ class Connection(object):
         self.socket.close()
         self.encryptor = None
 
-    def send(self, bytes=None, msg=None, data=None, exception=None):
+    def send(self, bytes=None, msg=None, exception=None):
 
         if bytes:
             data_type = '0'
         elif msg:
             data_type = '1'
-            bytes = msg.encode()
-        elif data:
-            data_type = '2'
-            bytes = json.dumps(data).encode()
+            bytes = json.dumps(msg).encode()
         elif exception:
             data_type = '#'
             bytes = exception.encode()
@@ -87,8 +84,6 @@ class Connection(object):
         if data_type == '0':
             return buffer
         elif data_type == '1':
-            return buffer.read().decode()
-        elif data_type == '2':
             return json.loads(buffer.read().decode())
         elif data_type == '#':
             raise ConnectionError(buffer.read().decode())
@@ -120,7 +115,7 @@ class Connection(object):
                 f = BytesIO()
                 data = np.save(f, table.data)
                 table.data = None
-                self.send(data=table.__dict__)
+                self.send(msg=table.__dict__)
                 self.send(bytes=f.getbuffer())
 
         self.send(msg='END')
