@@ -75,7 +75,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             self.server.sessions.remove_session(query['user'])
             connection.send(msg={'msg': "User '{}' removed succesfully!".format(query['user'])})
         elif query['request_type'] == 'list_sessions':
-            connection.send(msg={'msg': self.server.sessions.info(print_to_screen=False)})
+            connection.send(msg={'sessions': list(self.server.sessions.sessions.values())})
         elif query['request_type'] == 'sync_databases':
             self.server.sync_databases(query['nodes'], query['databases'], connection)
         else:
@@ -104,13 +104,16 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             self.server.recv_databases(connection)
         elif query['request_type'] == 'remove_database':
 
-            with self.server.acquire_database(query['path']):
+            with self.server.database_lock.acquire(query['path']):
                 shutil.rmtree(os.path.join(self.server.root_path, query['path']))
 
             connection.send(msg={'msg': "Database '{}' removed succesfully!".format(query['path'])})
         else:
 
-            with self.server.acquire_database(query['path']):
+            with self.server.database_lock.acquire(query['path'],
+                                                   block=(query['request_type'] in ('create_database',
+                                                                                    'append_to_database',
+                                                                                    'restore_database'))):
                 path = os.path.join(self.server.root_path, query['path'])
                 msg = ''
                 df = None
@@ -411,17 +414,73 @@ class Node(object):
         return sum(queue for queue in self.workers.values())
 
 
+class DatabaseLock(object):
+
+    def __init__(self, main_lock, locks, locked_databases):
+        self.main_lock = main_lock
+        self.locks = locks
+        self.locked_databases = locked_databases
+
+    @contextmanager
+    def acquire(self, database, block=True):
+
+        with self.main_lock:
+
+            try:
+                lock_index, queue = self.locked_databases[database]
+            except KeyError:
+
+                for lock_index, lock in enumerate(self.locks):
+
+                    if lock.acquire(False):
+                        lock.release()
+                        queue = 0
+                        break
+
+            queue += 1
+            self.locked_databases[database] = (lock_index, queue)
+
+        lock = self.locks[lock_index]
+        lock.acquire()
+
+        if block:
+
+            while queue > 1:
+                time.sleep(1)
+
+                with self.main_lock:
+                    queue = self.locked_databases[database][1]
+        else:
+            lock.release()
+
+        yield
+
+        # Release database
+        with self.main_lock:
+            lock_index, queue = self.locked_databases[database]
+
+            if queue > 1:
+                self.locked_databases[database] = (lock_index, queue - 1)
+            else:
+                del self.locked_databases[database]
+
+            try:
+                lock.release()
+            except ValueError:
+                pass
+
+            lock = None
+
+
 class WorkerServer(DatabaseServer):
 
     def __init__(self, server_address, central_address, root_path,
-                 databases, locked_databases, locks, backup=False, debug=False):
+                 databases, main_lock, database_lock, backup=False, debug=False):
         super().__init__(server_address, WorkerQueryHandler, root_path, debug)
         self.central = central_address
         self.databases = databases
-        self.locked_databases = locked_databases
-        self.main_lock = locks[0]
-        self.database_locks = locks[1:]
-        self.database_lock = None
+        self.main_lock = main_lock
+        self.database_lock = database_lock
         self.backup = backup
         self._shutdown_request = False
         sys.stdout = LoggerWriter(self.log.info)
@@ -449,58 +508,6 @@ class WorkerServer(DatabaseServer):
                             'worker_address': self.server_address},
              master_key=self.master_key, private_key=self.private_key)
         super().shutdown()
-
-    @contextmanager
-    def acquire_database(self, database):
-
-        with self.main_lock:
-
-            try:
-                lock_index, queue = self.locked_databases[database]
-            except KeyError:
-
-                for lock_index, lock in enumerate(self.database_locks):
-
-                    if lock.acquire(False):
-                        lock.release()
-                        queue = 0
-                        break
-
-            queue += 1
-            self.locked_databases[database] = (lock_index, queue)
-
-        self.database_lock = self.database_locks[lock_index]
-        self.database_lock.acquire()
-
-        if self.current_session['request_type'] not in ('create_database', 'remove_database',
-                                                        'append_to_database', 'restore_database',
-                                                        'recv_databases'):
-            self.database_lock.release()
-        else:
-
-            while queue > 1:
-                time.sleep(1)
-
-                with self.main_lock:
-                    queue = self.locked_databases[database][1]
-
-        yield
-
-        # Release database
-        with self.main_lock:
-            lock_index, queue = self.locked_databases[database]
-
-            if queue > 1:
-                self.locked_databases[database] = (lock_index, queue - 1)
-            else:
-                del self.locked_databases[database]
-
-            try:
-                self.database_lock.release()
-            except ValueError:
-                pass
-
-            self.database_lock = None
 
     def shutdown_request(self, request):
         super().shutdown_request(request)
@@ -549,7 +556,7 @@ class WorkerServer(DatabaseServer):
                         update_only and (not backup and database in remote_databases and databases[database] != remote_databases[database] or
                                          backup and (database not in remote_databases or databases[database] != remote_databases[database]))):
 
-                        with self.acquire_database(database):
+                        with self.database_lock.acquire(database, block=False):
                             database_path = Path(self.root_path) / database
                             files = [file for pattern in ('**/*header.*', '**/*.bin') for file in database_path.glob(pattern)]
                             connection.send(msg={'database': database, 'msg': '',
@@ -573,7 +580,7 @@ class WorkerServer(DatabaseServer):
 
         while data['msg'] != 'Done!':
 
-            with self.acquire_database(data['database']):
+            with self.database_lock.acquire(data['database']):
                 path = Path(self.root_path) / data['database']
                 path_temp = path.parent / (path.name + '_TEMP')
                 path_temp.mkdir()
@@ -605,9 +612,10 @@ class WorkerServer(DatabaseServer):
 
 
 def start_worker(server_address, central_address, root_path,
-                 databases, locked_databases, locks, user, password, backup, debug):
+                 databases, main_lock, locks, locked_databases, user, password, backup, debug):
+    database_lock = DatabaseLock(main_lock, locks, locked_databases)
     worker = WorkerServer(server_address, central_address, root_path,
-                          databases, locked_databases, locks, backup, debug)
+                          databases, main_lock, database_lock, backup, debug)
     worker.start(user, password)
 
 
@@ -618,14 +626,15 @@ def start_workers(central_address, root_path, manager, user, password,
         n_workers = cpu_count()
 
     databases = manager.dict(get_local_databases(root_path))
-    locked_databases = manager.dict()
+    main_lock = Lock()
     locks = [Lock() for lock in range(n_workers)]
+    locked_databases = manager.dict()
     host = get_ip()
     workers = list()
 
     for i in range(n_workers):
         workers.append(Process(target=start_worker, args=((host, find_free_port()), central_address, root_path,
-                                                          databases, locked_databases, locks,
+                                                          databases, main_lock, locks, locked_databases,
                                                           user, password, backup, debug)))
         workers[-1].start()
 

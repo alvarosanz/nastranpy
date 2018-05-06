@@ -158,8 +158,9 @@ class Client(BaseClient):
     def databases(self):
         return list(self._request(request_type='list_databases'))
 
+    @property
     def sessions(self):
-        print(self._request(request_type='list_sessions')['msg'])
+        return self._request(request_type='list_sessions')['sessions']
 
     def add_session(self, user, password, is_admin=False, create_allowed=False, databases=None):
         print(self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
