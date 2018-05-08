@@ -83,8 +83,13 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             if query['request_type'] != 'create_database' and query['path'] not in self.server.databases:
                 raise ValueError("Database '{}' not available!".format(query['path']))
 
-            connection.send(msg={'redirection_address': self.server.acquire_worker(request_type=query['request_type'],
-                                                                                   database=query['path'])})
+            if  query['request_type'] in ('create_database', 'append_to_database',
+                                          'restore_database', 'remove_database'):
+                node = self.server_address[0]
+            else:
+                node = None
+
+            connection.send(msg={'redirection_address': self.server.acquire_worker(node=node, database=query['path'])})
 
 class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
@@ -108,6 +113,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 shutil.rmtree(os.path.join(self.server.root_path, query['path']))
 
             connection.send(msg={'msg': "Database '{}' removed succesfully!".format(query['path'])})
+            del self.server.databases[query['path']]
         else:
 
             with self.server.database_lock.acquire(query['path'],
@@ -146,6 +152,9 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
                 header = db._export_header()
                 db = None
+
+                if self.server.current_session['database_modified']:
+                    self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
 
             connection.send(msg={'msg': msg, 'header': header})
 
@@ -250,6 +259,10 @@ class DatabaseServer(socketserver.TCPServer):
                 (not self.current_session['databases'] or query('path') not in self.current_session['databases'])):
                 raise PermissionError('Not enough privileges!')
 
+        if query['request_type'] in ('recv_databases', 'append_to_database', 'restore_database',
+                                     'create_database', 'remove_database'):
+            self.current_session['database_modified'] = True
+
 
 class CentralServer(DatabaseServer):
 
@@ -353,21 +366,16 @@ class CentralServer(DatabaseServer):
         if len(self.nodes) == 0:
             self._done.set()
 
-    def acquire_worker(self, node=None, request_type=None, database=None):
+    def acquire_worker(self, node=None, database=None):
 
         if not node:
 
-            if  request_type in ('create_database', 'append_to_database',
-                                 'restore_database', 'remove_database'):
-                node = self.server_address[0]
-            else:
+            for node in sorted(self.nodes, key=lambda x: self.nodes[x].get_queue()):
 
-                for node in sorted(self.nodes, key=lambda x: self.nodes[x].get_queue()):
-
-                    if (database in self.nodes[node].databases and
-                        (not database in self.databases or
-                         self.nodes[node].databases[database] == self.databases[database])):
-                        break
+                if (database in self.nodes[node].databases and
+                    (not database in self.databases or
+                     self.nodes[node].databases[database] == self.databases[database])):
+                    break
 
         worker = self.nodes[node].get_worker()
         self.nodes[worker[0]].workers[worker] += 1
@@ -425,31 +433,35 @@ class DatabaseLock(object):
     def acquire(self, database, block=True):
 
         with self.main_lock:
+            locked_databases = self.locked_databases._getvalue()
 
             try:
-                lock_index, queue = self.locked_databases[database]
+                lock_index, queue, n_jobs = locked_databases[database]
             except KeyError:
+                used_locks = {i for i, _ in locked_databases.values()}
+                lock_index = [i for i in range(len(self.locks)) if i not in used_locks]
+                queue = 0
+                n_jobs = 0
 
-                for lock_index, lock in enumerate(self.locks):
+            self.locked_databases[database] = (lock_index, queue + 1, n_jobs)
+            lock = self.locks[lock_index]
 
-                    if lock.acquire(False):
-                        lock.release()
-                        queue = 0
-                        break
-
-            queue += 1
-            self.locked_databases[database] = (lock_index, queue)
-
-        lock = self.locks[lock_index]
         lock.acquire()
+
+        with self.main_lock:
+            lock_index, queue, n_jobs = locked_databases[database]
+            self.locked_databases[database] = (lock_index, queue, n_jobs + 1)
 
         if block:
 
-            while queue > 1:
-                time.sleep(1)
+            while True:
 
                 with self.main_lock:
-                    queue = self.locked_databases[database][1]
+
+                    if self.locked_databases[database][2] == 1:
+                        break
+
+                time.sleep(1)
         else:
             lock.release()
 
@@ -457,19 +469,15 @@ class DatabaseLock(object):
 
         # Release database
         with self.main_lock:
-            lock_index, queue = self.locked_databases[database]
+            lock_index, queue, n_jobs = self.locked_databases[database]
 
             if queue > 1:
-                self.locked_databases[database] = (lock_index, queue - 1)
+                self.locked_databases[database] = (lock_index, queue - 1, n_jobs - 1)
             else:
                 del self.locked_databases[database]
 
-            try:
+            if block:
                 lock.release()
-            except ValueError:
-                pass
-
-            lock = None
 
 
 class WorkerServer(DatabaseServer):
@@ -516,11 +524,8 @@ class WorkerServer(DatabaseServer):
             data = {'request_type': 'release_worker',
                     'worker_address': self.server_address}
 
-            if self.current_session['request_type'] in ('recv_databases',
-                                                        'append_to_database', 'restore_database',
-                                                        'create_database', 'remove_database'):
-
-                data['databases'] = self.refresh_databases()
+            if self.current_session['database_modified']:
+                data['databases'] = self.databases._getvalue()
 
             send(self.central, data, master_key=self.master_key, private_key=self.private_key)
 
@@ -659,14 +664,18 @@ def get_local_databases(root_path):
 
     for header_file in Path(root_path).glob('**/##header.json'):
         database = str(header_file.parent.relative_to(root_path))
-
-        with open(header_file) as f:
-            header = json.load(f)
-
-        with open(str(header_file)[:-4] + header['checksum'], 'rb') as f:
-            databases[database] = binascii.hexlify(f.read()).decode()
+        databases[database] = get_database_hash(header_file)
 
     return databases
+
+
+def get_database_hash(header_file):
+
+    with open(header_file) as f:
+        header = json.load(f)
+
+    with open(str(header_file)[:-4] + header['checksum'], 'rb') as f:
+        return binascii.hexlify(f.read()).decode()
 
 
 def send(address, msg, master_key=None, private_key=None, recv=False):
