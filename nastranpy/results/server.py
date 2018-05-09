@@ -262,6 +262,8 @@ class DatabaseServer(socketserver.TCPServer):
         if query['request_type'] in ('recv_databases', 'append_to_database', 'restore_database',
                                      'create_database', 'remove_database'):
             self.current_session['database_modified'] = True
+        else:
+            self.current_session['database_modified'] = False
 
 
 class CentralServer(DatabaseServer):
@@ -439,7 +441,7 @@ class DatabaseLock(object):
                 lock_index, queue, n_jobs = locked_databases[database]
             except KeyError:
                 used_locks = {i for i, _ in locked_databases.values()}
-                lock_index = [i for i in range(len(self.locks)) if i not in used_locks]
+                lock_index = [i for i in range(len(self.locks)) if i not in used_locks].pop()
                 queue = 0
                 n_jobs = 0
 
@@ -449,7 +451,7 @@ class DatabaseLock(object):
         lock.acquire()
 
         with self.main_lock:
-            lock_index, queue, n_jobs = locked_databases[database]
+            lock_index, queue, n_jobs = self.locked_databases[database]
             self.locked_databases[database] = (lock_index, queue, n_jobs + 1)
 
         if block:
