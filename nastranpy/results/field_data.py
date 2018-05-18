@@ -6,6 +6,26 @@ from numba import guvectorize
 class FieldData(object):
 
     def __init__(self, name, file, dtype, LIDs, EIDs, LID_name='LID', EID_name='EID'):
+        """
+        Initialize a FieldData instance.
+
+        Parameters
+        ----------
+        name: str
+            Field name.
+        file: str
+            File path.
+        dtype: numpy.dtype
+            Field type.
+        LIDs: list of int
+            List of LIDs.
+        EIDs: list of int
+            List of EIDs.
+        LID_name: str, optional
+            Header name for LIDs.
+        EID_name: str, optional
+            Header name for EIDs.
+        """
         self._name = name
         self._file = file
         self._dtype = dtype
@@ -37,10 +57,30 @@ class FieldData(object):
         return self._dtype
 
     def close(self):
+        """
+        Close mapped files.
+        """
         self._data_by_LID = None
         self._data_by_EID = None
 
     def read(self, LIDs=None, EIDs=None, out=None):
+        """
+        Returns requested field values.
+
+        Parameters
+        ----------
+        LIDs: list of int or dict, optional
+            List of LIDs. If not provided or None, all LIDs are returned.
+        EIDs: list of int, optional
+            List of EIDs. If not provided or None, all EIDs are returned.
+        out: numpy.ndarray, optional
+            A location into which the result is stored. If not provided or None, a freshly-allocated array is returned.
+
+        Returns
+        -------
+        numpy.ndarray
+            Field values requested.
+        """
 
         if self._data_by_LID is None and self._data_by_EID  is None:
             self._n_LIDs = len(self._LIDs)
@@ -112,6 +152,20 @@ class FieldData(object):
              '(n, m), (l), (l) -> (m)',
              target='cpu', nopython=True)
 def combine(array, indexes, coeffs, out):
+    """
+    Combine load cases.
+
+    Parameters
+    ----------
+    array: numpy.ndarray
+        Field values (not combined).
+    indexes: numpy.ndarray
+        Indexes of LIDs to combine.
+    coeffs: numpy.ndarray
+        Multiplication coefficients.
+    out: numpy.ndarray
+        Output argument. Combined field values.
+    """
 
     for i in range(array.shape[1]):
         aux = 0.0

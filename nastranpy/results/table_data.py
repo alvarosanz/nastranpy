@@ -4,6 +4,22 @@ import numpy as np
 class TableData(object):
 
     def __init__(self, fields, LIDs, EIDs, LID_name='LID', EID_name='EID'):
+        """
+        Initialize a TableData instance.
+
+        Parameters
+        ----------
+        fields: list of FieldData
+            List of fields.
+        LIDs: list of int
+            List of LIDs.
+        EIDs: list of int
+            List of EIDs.
+        LID_name: str, optional
+            Header name for LIDs.
+        EID_name: str, optional
+            Header name for EIDs.
+        """
         self._LIDs = LIDs
         self._EIDs = EIDs
         self._LID_name = LID_name
@@ -33,6 +49,9 @@ class TableData(object):
         return value in self._fields
 
     def close(self):
+        """
+        Close fields.
+        """
 
         for field in self._fields.values():
             field.close()
