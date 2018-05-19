@@ -1,9 +1,8 @@
 import getpass
 import json
 import jwt
-from nastranpy.results.database import DatabaseHeader
+from nastranpy.results.database import DatabaseHeader, parse_query_file
 from nastranpy.results.connection import Connection, get_private_key
-from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import get_hash
 
 
@@ -114,7 +113,7 @@ class DatabaseClient(BaseClient):
         return df
 
     def query_from_file(self, file):
-        return self.query(**get_query_from_file(file))
+        return self.query(**parse_query_file(file))
 
     def _request(self, **kwargs):
         kwargs['path'] = self.path

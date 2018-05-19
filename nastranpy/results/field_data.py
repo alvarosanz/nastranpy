@@ -5,7 +5,7 @@ from numba import guvectorize
 
 class FieldData(object):
 
-    def __init__(self, name, dtype, file, LIDs, IDs):
+    def __init__(self, name, dtype, file, LIDs, IDs, iLIDs, iIDs):
         """
         Initialize a FieldData instance.
 
@@ -21,18 +21,22 @@ class FieldData(object):
             List of LIDs.
         IDs: list of int
             List of IDs.
+        iLIDs: dict of int: int
+            Dict of LID indexes.
+        iIDs: dict of int: int
+            Dict of ID indexes.
         """
-        self._name = name
-        self._dtype = dtype
-        self._file = file
+        self.name = name
+        self.dtype = dtype
+        self.shape = (len(LIDs), len(IDs))
+        self.file = file
         self._LIDs = LIDs
         self._IDs = IDs
         self._data_by_LID = None
         self._data_by_ID = None
-
-    @property
-    def name(self):
-        return self._name
+        self._iLIDs = iLIDs
+        self._iIDs = iIDs
+        self._offset = len(LIDs) * len(IDs) * np.dtype(dtype).itemsize
 
     @property
     def LIDs(self):
@@ -41,10 +45,6 @@ class FieldData(object):
     @property
     def IDs(self):
         return np.array(self._IDs)
-
-    @property
-    def dtype(self):
-        return self._dtype
 
     def close(self):
         """
@@ -72,23 +72,11 @@ class FieldData(object):
             Field values requested.
         """
 
-        if self._data_by_LID is None and self._data_by_ID  is None:
-            self._n_LIDs = len(self._LIDs)
-            self._n_IDs = len(self._IDs)
-            self._iLIDs = {LID: i for i, LID in enumerate(self._LIDs)}
-            self._iIDs = {ID: i for i, ID in enumerate(self._IDs)}
-            self._offset = self._n_LIDs * self._n_IDs * np.dtype(self._dtype).itemsize
-
-            if 2 * self._offset != os.path.getsize(self._file):
-                raise ValueError("Inconsistency found! ('{}')".format(self._file))
-
         LIDs_queried = self._LIDs if LIDs is None else LIDs
         IDs_queried = self._IDs if IDs is None else IDs
 
         if out is None:
             out = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
-
-        array = out
 
         is_combination = isinstance(LIDs, dict)
 
@@ -104,12 +92,14 @@ class FieldData(object):
                                  np.array([LIDs_queried_index[LID] for _, LID in seq], dtype=np.int64),
                                  np.array([coeff for coeff, _ in seq], dtype=np.float64)) for LID, seq in LIDs.items()]
             array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(IDs_queried)), dtype=np.float64)
+        else:
+            array = out
 
         if len(LIDs_queried) < len(IDs_queried):
             iIDs = slice(None) if IDs is None else np.array([self._iIDs[ID] for ID in IDs_queried])
 
             if self._data_by_LID is None:
-                self._data_by_LID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_LIDs, self._n_IDs), mode='r')
+                self._data_by_LID = np.memmap(self.file, dtype=self.dtype, shape=self.shape, mode='r')
 
             for i, LID in enumerate(LIDs_queried):
                 array[i, :] = self._data_by_LID[self._iLIDs[LID], :][iIDs]
@@ -118,10 +108,11 @@ class FieldData(object):
             iLIDs = slice(None) if LIDs is None else np.array([self._iLIDs[LID] for LID in LIDs_queried])
 
             if self._data_by_ID is None:
-                self._data_by_ID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_IDs, self._n_LIDs), mode='r', offset=self._offset)
+                self._data_by_ID = np.memmap(self.file, dtype=self.dtype, shape=self.shape, mode='r',
+                                             offset=self._offset, order='C')
 
             for i, ID in enumerate(IDs_queried):
-                array[:len(LIDs_queried), i] = self._data_by_ID[self._iIDs[ID], :][iLIDs].T
+                array[:len(LIDs_queried), i] = self._data_by_ID[:, self._iIDs[ID]][iLIDs]
 
         if is_combination:
 
@@ -164,3 +155,4 @@ def combine(array, indexes, coeffs, out):
             aux += array[indexes[j], i] * coeffs[j]
 
         out[i] = aux
+

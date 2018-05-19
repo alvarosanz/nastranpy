@@ -1,14 +1,13 @@
 import os
 from pathlib import Path
+import csv
 import json
 import shutil
 import numpy as np
-from nastranpy.results.field_data import FieldData
 from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
 from nastranpy.results.tables_specs import get_tables_specs
 from nastranpy.results.database_creation import create_tables, finalize_database, open_table, truncate_file
-from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import humansize, get_hasher, hash_bytestr
 
 
@@ -96,10 +95,8 @@ class Database(object):
             self.tables = dict()
 
             for name, header in self.header.tables.items():
-                fields = [FieldData(field_name, dtype,
-                                    os.path.join(self.path, name, field_name + '.bin'),
-                                    header['LIDs'], header['IDs']) for field_name, dtype in
-                          header['columns'][2:]]
+                fields = [(field_name, dtype, os.path.join(self.path, name, field_name + '.bin')) for
+                          field_name, dtype in header['columns'][2:]]
                 self.tables[name] = TableData(fields, header['LIDs'], header['IDs'])
 
     def check(self, print_to_screen=True):
@@ -357,7 +354,7 @@ class Database(object):
         return pd.DataFrame(data, columns=columns, index=index, copy=False)
 
     def query_from_file(self, file):
-        return self.query(**get_query_from_file(file))
+        return self.query(**parse_query_file(file))
 
     def _close(self):
 
@@ -422,3 +419,64 @@ class Database(object):
                 np.abs(array, out=array)
 
         array_agg[:] = array
+
+
+def parse_query_file(file):
+
+    with open(file) as f:
+        query = json.load(f)
+
+    if query['LIDs'] and isinstance(query['LIDs'], str):
+
+        with open(query['LIDs']) as f:
+            rows = list(csv.reader(f))
+
+        if any(len(row) > 1 for row in rows):
+            query['LIDs'] = {int(row[0]): [[float(row[i]), int(row[i + 1])] for i in range(1, len(row), 2)] for row in rows}
+        else:
+            query['LIDs'] = [int(row[0]) for row in rows]
+
+    if query['IDs'] and isinstance(query['IDs'], str):
+
+        with open(query['IDs']) as f:
+            rows = list(csv.reader(f))
+
+        query['IDs'] = [int(row[0]) for row in rows]
+
+    if query['groups'] and isinstance(query['groups'], str):
+
+        with open(query['groups']) as f:
+            rows = list(csv.reader(f))
+
+        query['groups'] = {row[0]: [int(ID) for ID in row[1:]] for row in rows}
+
+    if query['geometry'] and isinstance(query['geometry'], str):
+
+        with open(query['geometry']) as f:
+            rows = list(csv.reader(f))
+
+        query['geometry'] = {field: {int(row[0]): float(row[i + 1]) for row in rows} for i, field in
+                             enumerate(rows[0][1:])}
+
+    if query['weights'] and isinstance(query['weights'], str):
+
+        with open(query['weights']) as f:
+            query['weights'] = {int(row[0]): float(row[1]) for row in csv.reader(f)}
+
+    return parse_query(query)
+
+
+def parse_query(query):
+    query = {key: value if value else None for key, value in query.items()}
+
+    for field in ('LIDs', 'geometry', 'weights'):
+
+        try:
+
+            if query[field]:
+                query[field] = {int(key): value for key, value in query[field].items()}
+
+        except AttributeError:
+            pass
+
+    return query

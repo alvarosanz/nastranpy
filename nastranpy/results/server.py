@@ -13,8 +13,7 @@ import socketserver
 from contextlib import contextmanager
 import threading
 from multiprocessing import Process, cpu_count, Event, Manager, Lock
-from nastranpy.results.database import Database
-from nastranpy.results.results import process_query
+from nastranpy.results.database import Database, parse_query
 from nastranpy.results.sessions import Sessions
 from nastranpy.results.tables_specs import get_tables_specs
 from nastranpy.results.connection import Connection, get_master_key, get_private_key, get_ip, find_free_port
@@ -141,7 +140,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 if query['request_type'] == 'check':
                     msg = db.check(print_to_screen=False)
                 elif query['request_type'] == 'query':
-                    df = db.query(**process_query(query))
+                    df = db.query(**parse_query(query))
                 elif query['request_type'] == 'append_to_database':
                     connection.send(msg=db._get_tables_specs())
                     db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
