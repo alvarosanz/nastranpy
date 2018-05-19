@@ -23,23 +23,25 @@ class DatabaseHeader(object):
             with open(os.path.join(path, '##header.json')) as f:
                 self.__dict__ = json.load(f)
 
-            self.path = path
-            self.tables = dict()
             self.nbytes = 0
+            self.tables = dict()
 
             for name in self.checksums:
-                table_path = os.path.join(path, name)
 
-                with open(os.path.join(table_path, '#header.json')) as f:
+                with open(os.path.join(os.path.join(path, name), '#header.json')) as f:
                     self.tables[name] = json.load(f)
 
-                self.tables[name]['path'] = table_path
-                self.tables[name]['files'] = dict()
+                for i, (field_name, dtype) in enumerate(self.tables[name]['columns']):
+                    file = os.path.join(path, name, field_name + '.bin')
+                    self.nbytes += os.path.getsize(file)
+
+                    if i == 0:
+                        self.tables[name]['LIDs'] = np.fromfile(file, dtype=dtype).tolist()
+                    elif i == 1:
+                        self.tables[name]['IDs'] = np.fromfile(file, dtype=dtype).tolist()
 
     def info(self, print_to_screen=True, detailed=False):
         info = list()
-        info.append(f'Path: {self.path}')
-        info.append('')
 
         if self.project:
             info.append(f'Project: {self.project}')
@@ -51,7 +53,7 @@ class DatabaseHeader(object):
 
         for table in self.tables.values():
             ncols = len(table['columns'])
-            info.append(f"Table: '{table['name']}' ({table['columns'][0][0]}: {len(table['LIDs'])}, {table['columns'][1][0]}: {len(table['EIDs'])})")
+            info.append(f"Table: '{table['name']}' ({table['columns'][0][0]}: {len(table['LIDs'])}, {table['columns'][1][0]}: {len(table['IDs'])})")
             info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
             info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
             info.append('  |' + '|'.join([field.center(6) for field, _ in table['columns']]) + '|')
@@ -94,42 +96,25 @@ class Database(object):
             self.tables = dict()
 
             for name, header in self.header.tables.items():
-                LID_name, LID_dtype = header['columns'][0]
-                EID_name, EID_dtype = header['columns'][1]
-
-                LIDs_file = os.path.join(header['path'], LID_name + '.bin')
-                EIDs_file = os.path.join(header['path'], EID_name + '.bin')
-                self.header.nbytes += os.path.getsize(LIDs_file)
-                self.header.nbytes += os.path.getsize(EIDs_file)
-
-                header['LIDs'] = np.fromfile(LIDs_file, dtype=LID_dtype).tolist()
-                header['EIDs'] = np.fromfile(EIDs_file, dtype=EID_dtype).tolist()
-                fields = list()
-
-                for field_name, dtype in header['columns'][2:]:
-                    file = os.path.join(header['path'], field_name + '.bin')
-                    self.header.nbytes += os.path.getsize(file)
-                    fields.append(FieldData(field_name, file, dtype,
-                                            header['LIDs'], header['EIDs'],
-                                            LID_name, EID_name))
-
-                self.tables[name] = TableData(fields,
-                                              header['LIDs'], header['EIDs'],
-                                              LID_name, EID_name)
+                fields = [FieldData(field_name, dtype,
+                                    os.path.join(self.path, name, field_name + '.bin'),
+                                    header['LIDs'], header['IDs']) for field_name, dtype in
+                          header['columns'][2:]]
+                self.tables[name] = TableData(fields, header['LIDs'], header['IDs'])
 
     def check(self, print_to_screen=True):
         files_corrupted = list()
 
-        for header in self.header.tables.values():
+        for name, header in self.header.tables.items():
 
             for file, checksum in header['batches'][-1][2].items():
 
-                with open(os.path.join(header['path'], file), 'rb') as f:
+                with open(os.path.join(self.path, name, file), 'rb') as f:
 
                     if checksum != hash_bytestr(f, get_hasher(self.header.checksum)):
                         files_corrupted.append(file)
 
-            header_file = os.path.join(header['path'], '#header.json')
+            header_file = os.path.join(self.path, name, '#header.json')
 
             with open(header_file, 'rb') as f:
 
@@ -191,6 +176,7 @@ class Database(object):
         self._close()
 
         for header in self.header.tables.values():
+            header['path'] = os.path.join(self.path, header['name'])
             open_table(header, new_table=False)
 
         _, load_cases_info = create_tables(self.path, files, self._get_tables_specs(), self.header.tables,
@@ -226,16 +212,18 @@ class Database(object):
 
                 header['LIDs'] = header['LIDs'][:position]
 
-                truncate_file(os.path.join(header['path'], 'LID.bin'),
+                truncate_file(os.path.join(self.path, name, 'LID.bin'),
                               position * np.dtype(header['columns'][0][1]).itemsize)
 
                 for field, dtype in header['columns'][2:]:
-                    truncate_file(os.path.join(header['path'], field + '.bin'),
-                                  position * np.dtype(dtype).itemsize * len(header['EIDs']))
+                    truncate_file(os.path.join(self.path, name, field + '.bin'),
+                                  position * np.dtype(dtype).itemsize * len(header['IDs']))
+
+                header['path'] = os.path.join(self.path, header['name'])
 
             except ValueError:
                 del self.tables[name]
-                shutil.rmtree(header['path'])
+                shutil.rmtree(self.path, name)
 
         finalize_database(self.path, self.header.name, self.header.version, self.header.project,
                           {name: self.header.tables[name] for name in self.tables},
@@ -244,26 +232,26 @@ class Database(object):
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
-    def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
+    def query(self, table=None, outputs=None, LIDs=None, IDs=None,
               geometry=None, weights=None, **kwargs):
         import pandas as pd
-        EID_groups = None
+        ID_groups = None
 
-        if isinstance(EIDs, dict):
-            EID_groups = EIDs
-            EIDs = sorted({EID for EIDs in EIDs.values() for EID in EIDs})
-            iEIDs = {EID: i for i, EID in enumerate(EIDs)}
+        if isinstance(IDs, dict):
+            ID_groups = IDs
+            IDs = sorted({ID for IDs in IDs.values() for ID in IDs})
+            iIDs = {ID: i for i, ID in enumerate(IDs)}
 
         if geometry:
-            geometry = {parameter: np.array([geometry[parameter][EID] for EID in EIDs]) for
+            geometry = {parameter: np.array([geometry[parameter][ID] for ID in IDs]) for
                         parameter in geometry}
 
         if not outputs:
             outputs = self.tables[table].names
 
         LIDs_queried = self.tables[table].LIDs if LIDs is None else np.array(list(LIDs), dtype=np.int64)
-        EIDs_queried = self.tables[table].EIDs if EIDs is None else np.array(list(EIDs), dtype=np.int64)
-        data = np.empty((len(outputs), len(LIDs_queried), len(EIDs_queried)), dtype=np.float64)
+        IDs_queried = self.tables[table].IDs if IDs is None else np.array(list(IDs), dtype=np.int64)
+        data = np.empty((len(outputs), len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
         data_agg = None
         aggs = dict()
         columns = list()
@@ -280,10 +268,10 @@ class Database(object):
                 output_field, is_absolute = self._is_abs(output[0].upper())
                 aggregations = output[1].strip().upper().split('-')
 
-            if aggregations and not EID_groups:
+            if aggregations and not ID_groups:
                 raise ValueError('A pick query must not be aggregated!')
 
-            if not aggregations and EID_groups:
+            if not aggregations and ID_groups:
                 raise ValueError('A grouped query must be aggregated!')
 
             if n_aggregations is None:
@@ -294,7 +282,7 @@ class Database(object):
             if output_field in self.tables[table]:
 
                 if output_field not in fields:
-                    fields[output_field] = self.tables[table][output_field].read(LIDs, EIDs, out=output_array)
+                    fields[output_field] = self.tables[table][output_field].read(LIDs, IDs, out=output_array)
                 else:
                     output_array[:, :] = fields[output_field]
 
@@ -309,7 +297,7 @@ class Database(object):
                         if arg in self.tables[table]:
 
                             if arg not in fields:
-                                fields[arg] = self.tables[table][arg].read(LIDs, EIDs)
+                                fields[arg] = self.tables[table][arg].read(LIDs, IDs)
 
                             arg = fields[arg]
                         elif geometry and arg in geometry:
@@ -329,38 +317,39 @@ class Database(object):
                 np.abs(output_array, out=output_array)
                 output_field = f'ABS({output_field})'
 
-            if EID_groups:
+            if ID_groups:
                 index0 = LIDs_queried
-                index1 = list(EID_groups)
+                index1 = list(ID_groups)
                 columns.append(f"{output_field} ({'-'.join(aggregations)})")
 
                 if len(aggregations) == 2:
                     index0 = None
-                    array_agg = np.empty((1, len(EID_groups)), dtype=np.float64)
-                    LIDs_agg = np.empty((1, len(EID_groups)), dtype=np.int64)
+                    array_agg = np.empty((1, len(ID_groups)), dtype=np.float64)
+                    LIDs_agg = np.empty((1, len(ID_groups)), dtype=np.int64)
                     aggs[columns[-1]] = array_agg
                     aggs['{} (LID {})'.format(output_field, aggregations[1])] = LIDs_agg
                 else:
 
                     if data_agg is None:
-                        data_agg = np.empty((len(outputs), len(LIDs_queried), len(EID_groups)), dtype=np.float64)
+                        data_agg = np.empty((len(outputs), len(LIDs_queried), len(ID_groups)), dtype=np.float64)
 
                     array_agg = data_agg[i, :, :]
-                    LIDs_agg = np.empty((1, len(EID_groups)), dtype=np.int64)
+                    LIDs_agg = np.empty((1, len(ID_groups)), dtype=np.int64)
 
-                for j, EID_group in enumerate(EID_groups.values()):
-                    self._aggregate(output_array[:, np.array([iEIDs[EID] for EID in EID_group])],
+                for j, ID_group in enumerate(ID_groups.values()):
+                    self._aggregate(output_array[:, np.array([iIDs[ID] for ID in ID_group])],
                                     array_agg[:, j], aggregations, LIDs_queried, LIDs_agg[:, j],
-                                    np.array([weights[EID] for EID in EID_group]) if weights else None)
+                                    np.array([weights[ID] for ID in ID_group]) if weights else None)
 
             else:
                 index0 = LIDs_queried
-                index1 = EIDs_queried
+                index1 = IDs_queried
                 columns.append(output_field)
 
-        index_names = list(self.tables[table].index_labels)
+        index_names = [self.header.tables[table]['columns'][0][0],
+                       self.header.tables[table]['columns'][1][0]]
 
-        if EID_groups:
+        if ID_groups:
             data = data_agg
             index_names[1] = 'Group'
 

@@ -102,10 +102,10 @@ class DatabaseClient(BaseClient):
 
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
-    def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
+    def query(self, table=None, outputs=None, LIDs=None, IDs=None,
               geometry=None, weights=None, output_file=None, **kwargs):
         df = self._request(request_type='query', table=table, outputs=outputs,
-                           LIDs=LIDs, EIDs=EIDs, geometry=geometry, weights=weights)['df']
+                           LIDs=LIDs, IDs=IDs, geometry=geometry, weights=weights)['df']
 
         if output_file:
             print(f"Writing '{output_file}' ...")

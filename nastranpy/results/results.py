@@ -17,15 +17,15 @@ def get_query_from_file(file):
         else:
             query['LIDs'] = [int(row[0]) for row in rows]
 
-    if query['EIDs']:
+    if query['IDs']:
 
-        with open(query['EIDs']) as f:
+        with open(query['IDs']) as f:
             rows = list(csv.reader(f))
 
         if any(len(row) > 1 for row in rows):
-            query['EIDs'] = {row[0]: [int(EID) for EID in row[1:]] for row in rows}
+            query['IDs'] = {row[0]: [int(ID) for ID in row[1:]] for row in rows}
         else:
-            query['EIDs'] = [int(row[0]) for row in rows]
+            query['IDs'] = [int(row[0]) for row in rows]
 
     if query['geometry']:
 

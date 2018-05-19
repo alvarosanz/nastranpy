@@ -5,7 +5,7 @@ from numba import guvectorize
 
 class FieldData(object):
 
-    def __init__(self, name, file, dtype, LIDs, EIDs, LID_name='LID', EID_name='EID'):
+    def __init__(self, name, dtype, file, LIDs, IDs):
         """
         Initialize a FieldData instance.
 
@@ -13,44 +13,34 @@ class FieldData(object):
         ----------
         name: str
             Field name.
-        file: str
-            File path.
         dtype: numpy.dtype
             Field type.
+        file: str
+            File path.
         LIDs: list of int
             List of LIDs.
-        EIDs: list of int
-            List of EIDs.
-        LID_name: str, optional
-            Header name for LIDs.
-        EID_name: str, optional
-            Header name for EIDs.
+        IDs: list of int
+            List of IDs.
         """
         self._name = name
-        self._file = file
         self._dtype = dtype
+        self._file = file
         self._LIDs = LIDs
-        self._EIDs = EIDs
-        self._LID_name = LID_name
-        self._EID_name = EID_name
+        self._IDs = IDs
         self._data_by_LID = None
-        self._data_by_EID = None
+        self._data_by_ID = None
 
     @property
     def name(self):
         return self._name
 
     @property
-    def index_labels(self):
-        return (self._LID_name, self._EID_name)
-
-    @property
     def LIDs(self):
         return np.array(self._LIDs)
 
     @property
-    def EIDs(self):
-        return np.array(self._EIDs)
+    def IDs(self):
+        return np.array(self._IDs)
 
     @property
     def dtype(self):
@@ -61,9 +51,9 @@ class FieldData(object):
         Close mapped files.
         """
         self._data_by_LID = None
-        self._data_by_EID = None
+        self._data_by_ID = None
 
-    def read(self, LIDs=None, EIDs=None, out=None):
+    def read(self, LIDs=None, IDs=None, out=None):
         """
         Returns requested field values.
 
@@ -71,8 +61,8 @@ class FieldData(object):
         ----------
         LIDs: list of int or dict, optional
             List of LIDs. If not provided or None, all LIDs are returned.
-        EIDs: list of int, optional
-            List of EIDs. If not provided or None, all EIDs are returned.
+        IDs: list of int, optional
+            List of IDs. If not provided or None, all IDs are returned.
         out: numpy.ndarray, optional
             A location into which the result is stored. If not provided or None, a freshly-allocated array is returned.
 
@@ -82,21 +72,21 @@ class FieldData(object):
             Field values requested.
         """
 
-        if self._data_by_LID is None and self._data_by_EID  is None:
+        if self._data_by_LID is None and self._data_by_ID  is None:
             self._n_LIDs = len(self._LIDs)
-            self._n_EIDs = len(self._EIDs)
+            self._n_IDs = len(self._IDs)
             self._iLIDs = {LID: i for i, LID in enumerate(self._LIDs)}
-            self._iEIDs = {EID: i for i, EID in enumerate(self._EIDs)}
-            self._offset = self._n_LIDs * self._n_EIDs * np.dtype(self._dtype).itemsize
+            self._iIDs = {ID: i for i, ID in enumerate(self._IDs)}
+            self._offset = self._n_LIDs * self._n_IDs * np.dtype(self._dtype).itemsize
 
             if 2 * self._offset != os.path.getsize(self._file):
                 raise ValueError("Inconsistency found! ('{}')".format(self._file))
 
         LIDs_queried = self._LIDs if LIDs is None else LIDs
-        EIDs_queried = self._EIDs if EIDs is None else EIDs
+        IDs_queried = self._IDs if IDs is None else IDs
 
         if out is None:
-            out = np.empty((len(LIDs_queried), len(EIDs_queried)), dtype=np.float64)
+            out = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
 
         array = out
 
@@ -113,25 +103,25 @@ class FieldData(object):
             LID_combinations = [(LIDs_queried_index[LID] if LID in LIDs_queried_index else None,
                                  np.array([LIDs_queried_index[LID] for _, LID in seq], dtype=np.int64),
                                  np.array([coeff for coeff, _ in seq], dtype=np.float64)) for LID, seq in LIDs.items()]
-            array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(EIDs_queried)), dtype=np.float64)
+            array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(IDs_queried)), dtype=np.float64)
 
-        if len(LIDs_queried) < len(EIDs_queried):
-            iEIDs = slice(None) if EIDs is None else np.array([self._iEIDs[EID] for EID in EIDs_queried])
+        if len(LIDs_queried) < len(IDs_queried):
+            iIDs = slice(None) if IDs is None else np.array([self._iIDs[ID] for ID in IDs_queried])
 
             if self._data_by_LID is None:
-                self._data_by_LID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_LIDs, self._n_EIDs), mode='r')
+                self._data_by_LID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_LIDs, self._n_IDs), mode='r')
 
             for i, LID in enumerate(LIDs_queried):
-                array[i, :] = self._data_by_LID[self._iLIDs[LID], :][iEIDs]
+                array[i, :] = self._data_by_LID[self._iLIDs[LID], :][iIDs]
 
         else:
             iLIDs = slice(None) if LIDs is None else np.array([self._iLIDs[LID] for LID in LIDs_queried])
 
-            if self._data_by_EID is None:
-                self._data_by_EID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_EIDs, self._n_LIDs), mode='r', offset=self._offset)
+            if self._data_by_ID is None:
+                self._data_by_ID = np.memmap(self._file, dtype=self._dtype, shape=(self._n_IDs, self._n_LIDs), mode='r', offset=self._offset)
 
-            for i, EID in enumerate(EIDs_queried):
-                array[:len(LIDs_queried), i] = self._data_by_EID[self._iEIDs[EID], :][iLIDs].T
+            for i, ID in enumerate(IDs_queried):
+                array[:len(LIDs_queried), i] = self._data_by_ID[self._iIDs[ID], :][iLIDs].T
 
         if is_combination:
 

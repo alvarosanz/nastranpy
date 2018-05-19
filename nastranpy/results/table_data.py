@@ -3,7 +3,7 @@ import numpy as np
 
 class TableData(object):
 
-    def __init__(self, fields, LIDs, EIDs, LID_name='LID', EID_name='EID'):
+    def __init__(self, fields, LIDs, IDs):
         """
         Initialize a TableData instance.
 
@@ -13,17 +13,11 @@ class TableData(object):
             List of fields.
         LIDs: list of int
             List of LIDs.
-        EIDs: list of int
-            List of EIDs.
-        LID_name: str, optional
-            Header name for LIDs.
-        EID_name: str, optional
-            Header name for EIDs.
+        IDs: list of int
+            List of IDs.
         """
         self._LIDs = LIDs
-        self._EIDs = EIDs
-        self._LID_name = LID_name
-        self._EID_name = EID_name
+        self._IDs = IDs
         self._fields = {field.name: field for field in fields}
 
     @property
@@ -31,16 +25,12 @@ class TableData(object):
         return [name for name in self._fields]
 
     @property
-    def index_labels(self):
-        return (self._LID_name, self._EID_name)
-
-    @property
     def LIDs(self):
         return np.array(self._LIDs)
 
     @property
-    def EIDs(self):
-        return np.array(self._EIDs)
+    def IDs(self):
+        return np.array(self._IDs)
 
     def __getitem__(self, key):
         return self._fields[key]

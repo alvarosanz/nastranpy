@@ -45,10 +45,9 @@ def create_tables(database_path, files, tables_specs=None,
                     'path': os.path.join(database_path, table.name),
                     'columns': [(field, tables_specs[table.name]['dtypes'][field]) for field in
                                 tables_specs[table.name]['columns']],
+                    'batches': list(),
                     'LIDs': list(),
-                    'EIDs': None,
-                    'files': dict(),
-                    'batches': list()
+                    'IDs': None
                 }
 
                 open_table(headers[table.name], new_table=True)
@@ -77,7 +76,10 @@ def open_table(header, new_table=False):
             f = open(file, 'wb')
         else:
             f = open(file, 'rb+')
-            f.seek(len(header['LIDs']) * len(header['EIDs']) * np.dtype(dtype).itemsize)
+            f.seek(len(header['LIDs']) * len(header['IDs']) * np.dtype(dtype).itemsize)
+
+        if 'files' not in header:
+            header['files'] = dict()
 
         header['files'][field] = f
 
@@ -90,23 +92,23 @@ def append_to_table(table, header):
         return False
 
     header['LIDs'].append(LID)
-    EIDs = table.data[header['columns'][1][0]]
+    IDs = table.data[header['columns'][1][0]]
     index = None
 
-    if header['EIDs'] is None:
-        header['EIDs'] = EIDs
-    elif not np.array_equal(header['EIDs'], EIDs):
-        iEIDs = {EID: i for i, EID in enumerate(EIDs)}
-        label = header['columns'][1][0] + 's'
+    if header['IDs'] is None:
+        header['IDs'] = IDs
+    elif not np.array_equal(header['IDs'], IDs):
+        iIDs = {ID: i for i, ID in enumerate(IDs)}
+        label = header['columns'][1][0]
 
         try:
-            index = np.array([iEIDs[EID] for EID in header['EIDs']])
+            index = np.array([iIDs[ID] for ID in header['IDs']])
         except KeyError:
-            print(f'WARNING: Missing {label}! The whole subcase will be omitted (LID: {LID})')
+            print(f'WARNING: Missing {label}/s! The whole subcase will be omitted (LID: {LID})')
             return False
 
-        if len(index) < len(EIDs):
-            print(f'WARNING: Additional {label} found! These will be ommitted (LID: {LID})')
+        if len(index) < len(IDs):
+            print(f'WARNING: Additional {label}/s found! These will be ommitted (LID: {LID})')
 
     for field, _ in header['columns'][2:]:
 
@@ -120,14 +122,14 @@ def append_to_table(table, header):
 
 def close_table(header):
     np.array(header['LIDs']).tofile(os.path.join(header['path'], header['columns'][0][0] + '.bin'))
-    np.array(header['EIDs']).tofile(os.path.join(header['path'], header['columns'][1][0] + '.bin'))
+    np.array(header['IDs']).tofile(os.path.join(header['path'], header['columns'][1][0] + '.bin'))
 
     try:
 
         for file in header['files'].values():
             file.close()
 
-        header['files'] = dict()
+        del header['files']
 
     except KeyError:
         pass
@@ -149,36 +151,36 @@ def create_transpose(header, max_chunk_size):
     for field, dtype in header['columns'][2:]:
         field_file = os.path.join(header['path'], field + '.bin')
         n_LIDs = len(header['LIDs'])
-        n_EIDs = len(header['EIDs'])
+        n_IDs = len(header['IDs'])
         dtype_size = np.dtype(dtype).itemsize
-        field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_EIDs),
+        field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_IDs),
                                 mode='r')
-        n_EIDs_per_chunk = int(max_chunk_size // (n_LIDs * dtype_size))
-        n_chunks = int(n_EIDs // n_EIDs_per_chunk)
-        n_EIDs_last_chunk = int(n_EIDs % n_EIDs_per_chunk)
+        n_IDs_per_chunk = int(max_chunk_size // (n_LIDs * dtype_size))
+        n_chunks = int(n_IDs // n_IDs_per_chunk)
+        n_IDs_last_chunk = int(n_IDs % n_IDs_per_chunk)
 
-        if n_EIDs != n_EIDs_per_chunk * n_chunks + n_EIDs_last_chunk:
+        if n_IDs != n_IDs_per_chunk * n_chunks + n_IDs_last_chunk:
             raise ValueError(f"Inconsistency found! (table: '{header['name']}', field: '{field}')")
 
         chunks = list()
 
         if n_chunks:
-            chunk = np.empty((n_EIDs_per_chunk, n_LIDs), dtype)
-            chunks += [(chunk, n_EIDs_per_chunk)] * n_chunks
+            chunk = np.empty((n_IDs_per_chunk, n_LIDs), dtype)
+            chunks += [(chunk, n_IDs_per_chunk)] * n_chunks
 
-        if n_EIDs_last_chunk:
-            last_chunk = np.empty((n_EIDs_last_chunk, n_LIDs), dtype)
-            chunks.append((last_chunk, n_EIDs_last_chunk))
+        if n_IDs_last_chunk:
+            last_chunk = np.empty((n_IDs_last_chunk, n_LIDs), dtype)
+            chunks.append((last_chunk, n_IDs_last_chunk))
 
         with open(field_file, 'ab') as f:
             i0 = 0
             i1 = 0
 
-            for chunk, n_EIDs_per_chunk in chunks:
-                i1 += n_EIDs_per_chunk
+            for chunk, n_IDs_per_chunk in chunks:
+                i1 += n_IDs_per_chunk
                 chunk = field_array[:, i0:i1].T
                 chunk.tofile(f)
-                i0 += n_EIDs_per_chunk
+                i0 += n_IDs_per_chunk
 
 
 def create_table_header(header, load_cases_info, batch_name, checksum):

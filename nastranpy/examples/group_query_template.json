@@ -13,8 +13,8 @@
         ["MAX_SHEAR", "AVG-MAX"],
         ["VON_MISES", "AVG-MAX"]
     ],
-    "EIDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/skin_groups.csv",
     "LIDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/LID_combinations.csv",
+    "IDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/skin_groups.csv",
     "geometry": "",
     "weights": ""
 }
