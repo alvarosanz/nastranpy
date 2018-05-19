@@ -148,11 +148,12 @@ def combine(array, indexes, coeffs, out):
         Output argument. Combined field values.
     """
 
-    for i in range(array.shape[1]):
-        aux = 0.0
+    for j in range(array.shape[1]):
+        out[j] = 0
 
-        for j in range(indexes.shape[0]):
-            aux += array[indexes[j], i] * coeffs[j]
+    for i in range(len(indexes)):
+        index = indexes[i]
+        coeff = coeffs[i]
 
-        out[i] = aux
-
+        for j in range(array.shape[1]):
+            out[j] += array[index, j] * coeff
