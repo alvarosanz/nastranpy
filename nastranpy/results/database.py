@@ -232,14 +232,12 @@ class Database(object):
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
-    def query(self, table=None, outputs=None, LIDs=None, IDs=None,
+    def query(self, table=None, outputs=None, LIDs=None, IDs=None, groups=None,
               geometry=None, weights=None, **kwargs):
         import pandas as pd
-        ID_groups = None
 
-        if isinstance(IDs, dict):
-            ID_groups = IDs
-            IDs = sorted({ID for IDs in IDs.values() for ID in IDs})
+        if groups:
+            IDs = sorted({ID for IDs in groups.values() for ID in IDs})
             iIDs = {ID: i for i, ID in enumerate(IDs)}
 
         if geometry:
@@ -260,18 +258,13 @@ class Database(object):
 
         for i, output in enumerate(outputs):
             output_array = data[i, :, :]
+            output_field, is_absolute = self._is_abs(output[0].upper())
+            aggregations = [agg for agg in output[1].strip().upper().split('-') if agg]
 
-            if isinstance(output, str):
-                output_field, is_absolute = self._is_abs(output.upper())
-                aggregations = list()
-            else:
-                output_field, is_absolute = self._is_abs(output[0].upper())
-                aggregations = output[1].strip().upper().split('-')
+            if aggregations and not groups:
+                raise ValueError('A non-grouped query must not be aggregated!')
 
-            if aggregations and not ID_groups:
-                raise ValueError('A pick query must not be aggregated!')
-
-            if not aggregations and ID_groups:
+            if not aggregations and groups:
                 raise ValueError('A grouped query must be aggregated!')
 
             if n_aggregations is None:
@@ -317,26 +310,26 @@ class Database(object):
                 np.abs(output_array, out=output_array)
                 output_field = f'ABS({output_field})'
 
-            if ID_groups:
+            if groups:
                 index0 = LIDs_queried
-                index1 = list(ID_groups)
+                index1 = list(groups)
                 columns.append(f"{output_field} ({'-'.join(aggregations)})")
 
                 if len(aggregations) == 2:
                     index0 = None
-                    array_agg = np.empty((1, len(ID_groups)), dtype=np.float64)
-                    LIDs_agg = np.empty((1, len(ID_groups)), dtype=np.int64)
+                    array_agg = np.empty((1, len(groups)), dtype=np.float64)
+                    LIDs_agg = np.empty((1, len(groups)), dtype=np.int64)
                     aggs[columns[-1]] = array_agg
                     aggs['{} (LID {})'.format(output_field, aggregations[1])] = LIDs_agg
                 else:
 
                     if data_agg is None:
-                        data_agg = np.empty((len(outputs), len(LIDs_queried), len(ID_groups)), dtype=np.float64)
+                        data_agg = np.empty((len(outputs), len(LIDs_queried), len(groups)), dtype=np.float64)
 
                     array_agg = data_agg[i, :, :]
-                    LIDs_agg = np.empty((1, len(ID_groups)), dtype=np.int64)
+                    LIDs_agg = np.empty((1, len(groups)), dtype=np.int64)
 
-                for j, ID_group in enumerate(ID_groups.values()):
+                for j, ID_group in enumerate(groups.values()):
                     self._aggregate(output_array[:, np.array([iIDs[ID] for ID in ID_group])],
                                     array_agg[:, j], aggregations, LIDs_queried, LIDs_agg[:, j],
                                     np.array([weights[ID] for ID in ID_group]) if weights else None)
@@ -349,7 +342,7 @@ class Database(object):
         index_names = [self.header.tables[table]['columns'][0][0],
                        self.header.tables[table]['columns'][1][0]]
 
-        if ID_groups:
+        if groups:
             data = data_agg
             index_names[1] = 'Group'
 

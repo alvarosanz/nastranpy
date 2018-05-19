@@ -14,7 +14,8 @@
         ["VON_MISES", "AVG-MAX"]
     ],
     "LIDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/LID_combinations.csv",
-    "IDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/skin_groups.csv",
+    "IDs": "",
+    "groups": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/skin_groups.csv",
     "geometry": "",
     "weights": ""
 }

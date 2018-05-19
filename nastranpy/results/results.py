@@ -22,10 +22,14 @@ def get_query_from_file(file):
         with open(query['IDs']) as f:
             rows = list(csv.reader(f))
 
-        if any(len(row) > 1 for row in rows):
-            query['IDs'] = {row[0]: [int(ID) for ID in row[1:]] for row in rows}
-        else:
-            query['IDs'] = [int(row[0]) for row in rows]
+        query['IDs'] = [int(row[0]) for row in rows]
+
+    if query['groups']:
+
+        with open(query['groups']) as f:
+            rows = list(csv.reader(f))
+
+        query['groups'] = {row[0]: [int(ID) for ID in row[1:]] for row in rows}
 
     if query['geometry']:
 
