@@ -85,7 +85,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
 
             if  query['request_type'] in ('create_database', 'append_to_database',
                                           'restore_database', 'remove_database'):
-                node = self.server_address[0]
+                node = self.server.server_address[0]
             else:
                 node = None
 
@@ -150,7 +150,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     db.restore(query['batch'])
                     msg = f"Database restored to '{query['batch']}' state succesfully!"
 
-                header = db._export_header()
+                header = db.header.__dict__
                 db = None
 
                 if self.server.current_session['database_modified']:

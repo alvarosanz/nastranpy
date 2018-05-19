@@ -1,7 +1,7 @@
 import getpass
 import json
 import jwt
-from nastranpy.results.database import BaseDatabase
+from nastranpy.results.database import DatabaseHeader
 from nastranpy.results.connection import Connection, get_private_key
 from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import get_hash
@@ -65,15 +65,18 @@ class BaseClient(object):
         return data
 
 
-class DatabaseClient(BaseDatabase, BaseClient):
+class DatabaseClient(BaseClient):
 
-    def __init__(self, server_address, path, private_key, authentication, headers=None):
+    def __init__(self, server_address, path, private_key, authentication, header=None):
         self.server_address = server_address
         self.path = path
         self._private_key = private_key
         self._authentication = authentication
-        self._is_local = False
-        self.reload(headers)
+
+        if header:
+            self.header = DatabaseHeader(header=header)
+        else:
+            self._request(request_type='header')
 
     def info(self, print_to_screen=True, detailed=False):
         print(f"Address: {self.server_address[0]} ({self.server_address[1]})")
@@ -92,8 +95,9 @@ class DatabaseClient(BaseDatabase, BaseClient):
         print(self._request(request_type='append_to_database', files=files, batch=batch_name)['msg'])
 
     def restore(self, batch_name):
+        restore_points = [batch[0] for batch in self.header.batches]
 
-        if batch_name not in self.restore_points or batch_name == self.restore_points[-1]:
+        if batch_name not in restore_points or batch_name == restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
@@ -115,7 +119,7 @@ class DatabaseClient(BaseDatabase, BaseClient):
     def _request(self, **kwargs):
         kwargs['path'] = self.path
         data = super()._request(**kwargs)
-        self.reload(data['header'])
+        self.header = DatabaseHeader(header=data['header'])
         return data
 
 

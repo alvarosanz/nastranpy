@@ -12,144 +12,29 @@ from nastranpy.results.results import get_query_from_file
 from nastranpy.bdf.misc import humansize, get_hasher, hash_bytestr
 
 
-class BaseDatabase(object):
+class DatabaseHeader(object):
 
-    @property
-    def project(self):
-        return self._project
+    def __init__(self, path=None, header=None):
 
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def version(self):
-        return self._version
-
-    @property
-    def restore_points(self):
-        return [batch_name for batch_name, _, _ in self._batches]
-
-    def reload(self, headers=None):
-        self._clear()
-        self._load(headers)
-
-    def _clear(self):
-        self.tables = None
-        self._headers = None
-        self._project = None
-        self._name = None
-        self._version = None
-        self._batches = None
-        self._checksum = None
-        self._checksums = None
-        self._nbytes = 0
-
-    def _load(self, headers=None):
-
-        if self.path:
-            self._set_headers(headers)
-            self.tables = dict()
-
-            for name, header in self._headers.items():
-                LID_name, LID_dtype = header['columns'][0]
-                EID_name, EID_dtype = header['columns'][1]
-
-                if self._is_local:
-                    n_LIDs = header['LIDs']
-                    n_EIDs = header['EIDs']
-                    LIDs_file = os.path.join(header['path'], LID_name + '.bin')
-                    EIDs_file = os.path.join(header['path'], EID_name + '.bin')
-                    self._nbytes += os.path.getsize(LIDs_file)
-                    self._nbytes += os.path.getsize(EIDs_file)
-
-                    if (n_LIDs * np.dtype(LID_dtype).itemsize != os.path.getsize(LIDs_file) or
-                        n_EIDs * np.dtype(EID_dtype).itemsize != os.path.getsize(EIDs_file)):
-                        raise ValueError("Inconsistency found! ('{}')".format(name))
-
-                    header['LIDs'] = np.fromfile(LIDs_file, dtype=LID_dtype)
-                    header['EIDs'] = np.fromfile(EIDs_file, dtype=EID_dtype)
-                    fields = list()
-
-                    for field_name, dtype in header['columns'][2:]:
-                        file = os.path.join(header['path'], field_name + '.bin')
-                        self._nbytes += os.path.getsize(file)
-                        fields.append(FieldData(field_name, file, dtype,
-                                                header['LIDs'], header['EIDs'],
-                                                LID_name, EID_name))
-
-                    self.tables[name] = TableData(fields,
-                                                  header['LIDs'], header['EIDs'],
-                                                  LID_name, EID_name)
-                else:
-                    self.tables[name] = None
-
-    def _set_headers(self, headers=None):
-
-        if self._is_local:
-
-            with open(os.path.join(self.path, '##header.json')) as f:
-                headers = json.load(f)
-
+        if header:
+            self.__dict__ = header
         else:
 
-            if not headers:
-                headers = self._request(request_type='header', path=self.path)['header']
+            with open(os.path.join(path, '##header.json')) as f:
+                self.__dict__ = json.load(f)
 
-            self._headers = headers['headers']
-            self._nbytes = headers['nbytes']
+            self.path = path
+            self.tables = dict()
+            self.nbytes = 0
 
-        self._project = headers['project']
-        self._name = headers['name']
-        self._version = headers['version']
-        self._batches = headers['batches']
-        self._checksum = headers['checksum']
-        self._checksums = headers['tables']
+            for name in self.checksums:
+                table_path = os.path.join(path, name)
 
-        if self._is_local:
-            self._headers = dict()
+                with open(os.path.join(table_path, '#header.json')) as f:
+                    self.tables[name] = json.load(f)
 
-            for name in headers['tables']:
-                table_path = os.path.join(self.path, name)
-
-                if self._is_local:
-
-                    with open(os.path.join(table_path, '#header.json')) as f:
-                        header = json.load(f)
-
-                header['path'] = table_path
-                header['files'] = dict()
-                self._headers[name] = header
-
-    def _export_header(self):
-        header = {'path': self.path,
-                  'project': self._project,
-                  'name': self._name,
-                  'version': self._version,
-                  'batches': self._batches,
-                  'checksum': self._checksum,
-                  'tables': self._checksums,
-                  'nbytes': self._nbytes,
-                  'headers': {name: self._headers[name] for name in self._headers}}
-
-        for table in header['headers']:
-            header['headers'][table]['LIDs'] = [int(x) for x in header['headers'][table]['LIDs']]
-            header['headers'][table]['EIDs'] = [int(x) for x in header['headers'][table]['EIDs']]
-
-        return header
-
-    def _get_tables_specs(self):
-        tables_specs = get_tables_specs()
-
-        for name, header in self._headers.items():
-            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
-            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
-            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
-                                                  field in tables_specs[name]['dtypes'] else
-                                                  dtype) for field, dtype in row] for row in
-                                                tables_specs[name]['pch_format']]
-
-        return tables_specs
+                self.tables[name]['path'] = table_path
+                self.tables[name]['files'] = dict()
 
     def info(self, print_to_screen=True, detailed=False):
         info = list()
@@ -161,24 +46,24 @@ class BaseDatabase(object):
 
         info.append(f'Name: {self.name}')
         info.append(f'Version: {self.version}')
-        info.append(f'Size: {humansize(self._nbytes)}'.format())
+        info.append(f'Size: {humansize(self.nbytes)}'.format())
         info.append('')
 
-        for header in self._headers.values():
-            ncols = len(header['columns'])
-            info.append(f"Table: '{header['name']}' ({header['columns'][0][0]}: {len(header['LIDs'])}, {header['columns'][1][0]}: {len(header['EIDs'])})")
+        for table in self.tables.values():
+            ncols = len(table['columns'])
+            info.append(f"Table: '{table['name']}' ({table['columns'][0][0]}: {len(table['LIDs'])}, {table['columns'][1][0]}: {len(table['EIDs'])})")
             info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
             info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
-            info.append('  |' + '|'.join([field.center(6) for field, _ in header['columns']]) + '|')
+            info.append('  |' + '|'.join([field.center(6) for field, _ in table['columns']]) + '|')
             info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
             info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
-            info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in header['columns']]) + '|')
+            info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table['columns']]) + '|')
             info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
             info.append('')
 
         info.append('Restore points:')
 
-        for i, (batch_name, batch_date, batch_files) in enumerate(self._batches):
+        for i, (batch_name, batch_date, batch_files) in enumerate(self.batches):
             info.append(f"  {i} - '{batch_name}': {batch_date}")
 
             if detailed:
@@ -196,38 +81,66 @@ class BaseDatabase(object):
             return info
 
 
-class Database(BaseDatabase):
+class Database(object):
 
-    def __init__(self, path=None, max_chunk_size=1e8):
+    def __init__(self, path=None):
         self.path = path
-        self._max_chunk_size = max_chunk_size
-        self._is_local = True
-        self.reload()
+        self.load()
+
+    def load(self):
+
+        if self.path:
+            self.header = DatabaseHeader(self.path)
+            self.tables = dict()
+
+            for name, header in self.header.tables.items():
+                LID_name, LID_dtype = header['columns'][0]
+                EID_name, EID_dtype = header['columns'][1]
+
+                LIDs_file = os.path.join(header['path'], LID_name + '.bin')
+                EIDs_file = os.path.join(header['path'], EID_name + '.bin')
+                self.header.nbytes += os.path.getsize(LIDs_file)
+                self.header.nbytes += os.path.getsize(EIDs_file)
+
+                header['LIDs'] = np.fromfile(LIDs_file, dtype=LID_dtype).tolist()
+                header['EIDs'] = np.fromfile(EIDs_file, dtype=EID_dtype).tolist()
+                fields = list()
+
+                for field_name, dtype in header['columns'][2:]:
+                    file = os.path.join(header['path'], field_name + '.bin')
+                    self.header.nbytes += os.path.getsize(file)
+                    fields.append(FieldData(field_name, file, dtype,
+                                            header['LIDs'], header['EIDs'],
+                                            LID_name, EID_name))
+
+                self.tables[name] = TableData(fields,
+                                              header['LIDs'], header['EIDs'],
+                                              LID_name, EID_name)
 
     def check(self, print_to_screen=True):
         files_corrupted = list()
 
-        for header in self._headers.values():
+        for header in self.header.tables.values():
 
             for file, checksum in header['batches'][-1][2].items():
 
                 with open(os.path.join(header['path'], file), 'rb') as f:
 
-                    if checksum != hash_bytestr(f, get_hasher(self._checksum)):
+                    if checksum != hash_bytestr(f, get_hasher(self.header.checksum)):
                         files_corrupted.append(file)
 
             header_file = os.path.join(header['path'], '#header.json')
 
             with open(header_file, 'rb') as f:
 
-                if self._checksums[header['name']] != hash_bytestr(f, get_hasher(self._checksum)):
+                if self.header.checksums[header['name']] != hash_bytestr(f, get_hasher(self.header.checksum)):
                     files_corrupted.append(header_file)
 
         database_header_file = os.path.join(self.path, '##header.json')
 
-        with open(database_header_file, 'rb') as f, open(os.path.splitext(database_header_file)[0] + '.' + self._checksum, 'rb') as f_checksum:
+        with open(database_header_file, 'rb') as f, open(os.path.splitext(database_header_file)[0] + '.' + self.header.checksum, 'rb') as f_checksum:
 
-            if f_checksum.read() != hash_bytestr(f, get_hasher(self._checksum), ashexstr=False):
+            if f_checksum.read() != hash_bytestr(f, get_hasher(self.header.checksum), ashexstr=False):
                 files_corrupted.append(database_header_file)
 
         info = list()
@@ -248,7 +161,7 @@ class Database(BaseDatabase):
 
     def create(self, files, database_path, database_name, database_version,
                database_project=None, tables_specs=None, overwrite=False,
-               table_generator=None):
+               table_generator=None, max_chunk_size=1e8):
         Path(database_path).mkdir(parents=True, exist_ok=overwrite)
         print('Creating database ...')
         self.path = database_path
@@ -260,14 +173,14 @@ class Database(BaseDatabase):
         headers, load_cases_info = create_tables(self.path, files, tables_specs,
                                                  table_generator=table_generator)
         finalize_database(self.path, database_name, database_version, database_project,
-                          headers, load_cases_info, batches, self._max_chunk_size)
+                          headers, load_cases_info, batches, max_chunk_size)
 
-        self.reload()
+        self.load()
         print('Database created succesfully!')
 
-    def append(self, files, batch_name, table_generator=None):
+    def append(self, files, batch_name, table_generator=None, max_chunk_size=1e8):
 
-        if batch_name in {batch_name for batch_name, _, _ in self._batches}:
+        if batch_name in {batch_name for batch_name, _, _ in self.header.batches}:
             raise ValueError(f"'{batch_name}' already exists!")
 
         print('Appending to database ...')
@@ -277,29 +190,30 @@ class Database(BaseDatabase):
 
         self._close()
 
-        for header in self._headers.values():
+        for header in self.header.tables.values():
             open_table(header, new_table=False)
 
-        _, load_cases_info = create_tables(self.path, files, self._get_tables_specs(), self._headers,
+        _, load_cases_info = create_tables(self.path, files, self._get_tables_specs(), self.header.tables,
                                            load_cases_info={name: dict() for name in self.tables},
                                            table_generator=table_generator)
 
-        self._batches.append([batch_name, None, [os.path.basename(file) for file in files]])
-        finalize_database(self.path, self.name, self.version, self.project,
-                          self._headers, load_cases_info, self._batches, self._max_chunk_size, self._checksum)
-        self.reload()
+        self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
+        finalize_database(self.path, self.header.name, self.header.version, self.header.project,
+                          self.header.tables, load_cases_info, self.header.batches, max_chunk_size, self.header.checksum)
+        self.load()
         print('Database updated succesfully!')
 
-    def restore(self, batch_name):
+    def restore(self, batch_name, max_chunk_size=1e8):
+        restore_points = [batch[0] for batch in self.header.batches]
 
-        if batch_name not in self.restore_points or batch_name == self.restore_points[-1]:
+        if batch_name not in restore_points or batch_name == restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
         print(f"Restoring database to '{batch_name}' state ...")
         self._close()
         batch_index = 0
 
-        for name, header in self._headers.items():
+        for name, header in self.header.tables.items():
 
             try:
                 index = [batch_name for batch_name, _, _ in header['batches']].index(batch_name)
@@ -323,11 +237,11 @@ class Database(BaseDatabase):
                 del self.tables[name]
                 shutil.rmtree(header['path'])
 
-        finalize_database(self.path, self.name, self.version, self.project,
-                          {name: self._headers[name] for name in self.tables},
+        finalize_database(self.path, self.header.name, self.header.version, self.header.project,
+                          {name: self.header.tables[name] for name in self.tables},
                           {name: dict() for name in self.tables},
-                          self._batches[:batch_index + 1], self._max_chunk_size, self._checksum)
-        self.reload()
+                          self.header.batches[:batch_index + 1], max_chunk_size, self.header.checksum)
+        self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query(self, table=None, outputs=None, LIDs=None, EIDs=None,
@@ -467,6 +381,19 @@ class Database(BaseDatabase):
 
         for table in self.tables.values():
             table.close()
+
+    def _get_tables_specs(self):
+        tables_specs = get_tables_specs()
+
+        for name, header in self.header.tables.items():
+            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
+            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
+            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
+                                                  field in tables_specs[name]['dtypes'] else
+                                                  dtype) for field, dtype in row] for row in
+                                                tables_specs[name]['pch_format']]
+
+        return tables_specs
 
     @staticmethod
     def _is_abs(field_str):

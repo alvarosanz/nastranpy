@@ -89,12 +89,7 @@ def append_to_table(table, header):
         print(f'WARNING: Subcase already in the database! It will be skipped (LID: {LID})')
         return False
 
-    try:
-        header['LIDs'].append(LID)
-    except AttributeError:
-        header['LIDs'] = list(header['LIDs'])
-        header['LIDs'].append(LID)
-
+    header['LIDs'].append(LID)
     EIDs = table.data[header['columns'][1][0]]
     index = None
 
@@ -190,8 +185,6 @@ def create_table_header(header, load_cases_info, batch_name, checksum):
     table_header = dict()
     table_header['name'] = header['name']
     table_header['columns'] = header['columns']
-    table_header[header['columns'][0][0] + 's'] = len(header['LIDs'])
-    table_header[header['columns'][1][0] + 's'] = len(header['EIDs'])
     set_restore_points(header, batch_name, checksum)
     table_header['batches'] = header['batches']
 
@@ -272,7 +265,7 @@ def create_database_header(database_path, database_name, database_version,
                        'version': database_version,
                        'date': str(datetime.date.today()),
                        'checksum': checksum,
-                       'tables': checksums,
+                       'checksums': checksums,
                        'batches': batches}
 
     database_header_file = os.path.join(database_path, '##header.json')
