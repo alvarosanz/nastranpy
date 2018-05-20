@@ -160,6 +160,24 @@ class Database(object):
         self.load()
         print('Database created succesfully!')
 
+    def _close(self):
+
+        for table in self.tables.values():
+            table.close()
+
+    def _get_tables_specs(self):
+        tables_specs = get_tables_specs()
+
+        for name, header in self.header.tables.items():
+            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
+            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
+            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
+                                                  field in tables_specs[name]['dtypes'] else
+                                                  dtype) for field, dtype in row] for row in
+                                                tables_specs[name]['pch_format']]
+
+        return tables_specs
+
     def append(self, files, batch_name, table_generator=None, max_chunk_size=1e8):
 
         if batch_name in {batch_name for batch_name, _, _ in self.header.batches}:
@@ -229,196 +247,190 @@ class Database(object):
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
-    def query(self, table=None, outputs=None, LIDs=None, IDs=None, groups=None,
+    def query_from_file(self, file):
+        return self.query(**parse_query_file(file))
+
+    def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
               geometry=None, weights=None, **kwargs):
         import pandas as pd
 
+        if not fields:
+            fields = [[name, list()] for name in self.tables[table].names]
+
+        # Check aggregation options
+        aggregation_levels = {len(aggregation) for _, aggregation in fields}
+        aggregation_level = aggregation_levels.pop()
+
+        if aggregation_levels or aggregation_level > 2:
+            raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
+
+        if aggregation_level and not groups:
+            raise ValueError('A non-grouped query must not be aggregated!')
+
+        if not aggregation_level and groups:
+            raise ValueError('A grouped query must be aggregated!')
+
+        # Group data pre-processing
         if groups:
             IDs = sorted({ID for IDs in groups.values() for ID in IDs})
             iIDs = {ID: i for i, ID in enumerate(IDs)}
+            indexes_by_group = {group: np.array([iIDs[ID] for ID in group_IDs]) for
+                                group, group_IDs in groups.items()}
 
+            if weights:
+                weights_by_group = {group: np.array([weights[ID] for ID in group_IDs]) for
+                                    group, group_IDs in groups.items()}
+
+        # Requested LIDs & IDs
+        LIDs_queried = self.tables[table]._LIDs if LIDs is None else list(LIDs)
+        IDs_queried = self.tables[table]._IDs if IDs is None else IDs
+
+        # Group data pre-processing
         if geometry:
-            geometry = {parameter: np.array([geometry[parameter][ID] for ID in IDs]) for
+            geometry = {parameter: np.array([geometry[parameter][ID] for ID in IDs_queried]) for
                         parameter in geometry}
 
-        if not outputs:
-            outputs = self.tables[table].names
-
-        LIDs_queried = self.tables[table].LIDs if LIDs is None else np.array(list(LIDs), dtype=np.int64)
-        IDs_queried = self.tables[table].IDs if IDs is None else np.array(list(IDs), dtype=np.int64)
-        data = np.empty((len(outputs), len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
-        data_agg = None
-        aggs = dict()
+        # Memory pre-allocation
         columns = list()
-        fields = dict()
-        n_aggregations = None
+        data = np.empty((len(fields), len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
+        field_arrays = dict()
+        index_names = [self.header.tables[table]['columns'][0][0],
+                       self.header.tables[table]['columns'][1][0]]
 
-        for i, output in enumerate(outputs):
-            output_array = data[i, :, :]
-            output_field, is_absolute = self._is_abs(output[0].upper())
-            aggregations = [agg for agg in output[1].strip().upper().split('-') if agg]
+        if groups:
+            index_names[1] = 'Group'
 
-            if aggregations and not groups:
-                raise ValueError('A non-grouped query must not be aggregated!')
+            if aggregation_level == 2:
+                index0 = None
+                shape = (len(fields), 1, len(groups))
+                LIDs_agg = np.empty(shape, dtype=np.int64)
+                field_arrays_agg = dict()
+            else:
+                index0 = LIDs_queried
+                shape = (len(fields), len(LIDs_queried), len(groups))
 
-            if not aggregations and groups:
-                raise ValueError('A grouped query must be aggregated!')
+            data_agg = np.empty(shape, dtype=np.float64)
+            index1 = list(groups)
+        else:
+            index0 = LIDs_queried
+            index1 = IDs_queried
 
-            if n_aggregations is None:
-                n_aggregations = len(aggregations)
-            elif len(aggregations) != n_aggregations:
-                raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
+        # Fields processing
+        for i, (field, aggregation) in enumerate(fields):
+            field_array = data[i, :, :]
+            field, is_absolute = is_abs(field.upper())
 
-            if output_field in self.tables[table]:
+            if field in self.tables[table]:
 
-                if output_field not in fields:
-                    fields[output_field] = self.tables[table][output_field].read(LIDs, IDs, out=output_array)
-                else:
-                    output_array[:, :] = fields[output_field]
+                try:
+                    field_array[:, :] = field_arrays[field]
+                except KeyError:
+                    field_arrays[field] = self.tables[table][field].read(LIDs, IDs, out=field_array)
 
             else:
 
-                if output_field in query_functions[table]:
-                    func, func_args = query_functions[table][output_field]
+                if field in query_functions[table]:
+                    func, func_args = query_functions[table][field]
                     args = list()
 
                     for arg in func_args:
 
                         if arg in self.tables[table]:
 
-                            if arg not in fields:
-                                fields[arg] = self.tables[table][arg].read(LIDs, IDs)
+                            if arg not in field_arrays:
+                                field_arrays[arg] = self.tables[table][arg].read(LIDs, IDs)
 
-                            arg = fields[arg]
-                        elif geometry and arg in geometry:
-                            arg = geometry[arg]
+                            args.append(field_arrays[arg])
                         else:
-                            continue
+                            args.append(geometry[arg])
 
-                        args.append(arg)
-
-                    args.append(output_array)
+                    args.append(field_array)
                     func(*args)
                 else:
-                    raise ValueError(f"Unsupported output: '{output_field}'")
+                    raise ValueError(f"Unsupported output: '{field}'")
 
             if is_absolute:
-                fields[output_field] =np.array(output_array)
-                np.abs(output_array, out=output_array)
-                output_field = f'ABS({output_field})'
+                field_arrays[field] =np.array(field_array)
+                np.abs(field_array, out=field_array)
+                field = f'ABS({field})'
 
-            if groups:
-                index0 = LIDs_queried
-                index1 = list(groups)
-                columns.append(f"{output_field} ({'-'.join(aggregations)})")
+            for agg in aggregation:
+                agg, is_absolute = is_abs(agg)
 
-                if len(aggregations) == 2:
-                    index0 = None
-                    array_agg = np.empty((1, len(groups)), dtype=np.float64)
-                    LIDs_agg = np.empty((1, len(groups)), dtype=np.int64)
-                    aggs[columns[-1]] = array_agg
-                    aggs['{} (LID {})'.format(output_field, aggregations[1])] = LIDs_agg
+                if is_absolute:
+                    field = f'ABS({agg}({field}))'
                 else:
+                    field = f'{agg}({field})'
 
-                    if data_agg is None:
-                        data_agg = np.empty((len(outputs), len(LIDs_queried), len(groups)), dtype=np.float64)
+            columns.append(field)
 
-                    array_agg = data_agg[i, :, :]
-                    LIDs_agg = np.empty((1, len(groups)), dtype=np.int64)
+            # Field aggregation
+            if groups:
 
-                for j, ID_group in enumerate(groups.values()):
-                    self._aggregate(output_array[:, np.array([iIDs[ID] for ID in ID_group])],
-                                    array_agg[:, j], aggregations, LIDs_queried, LIDs_agg[:, j],
-                                    np.array([weights[ID] for ID in ID_group]) if weights else None)
+                for j, group in enumerate(groups):
+                    aggregate(field_array[:, indexes_by_group[group]],
+                                  data_agg[i, :, j], aggregation, LIDs_queried,
+                                  LIDs_agg[i, :, j] if aggregation_level == 2 else None,
+                                  weights_by_group[group] if weights else None)
 
-            else:
-                index0 = LIDs_queried
-                index1 = IDs_queried
-                columns.append(output_field)
+                if aggregation_level == 2:
+                    field_arrays_agg[field] = data_agg[i, :, :]
+                    field_arrays_agg[f'{field}: LID'] = LIDs_agg[i, :, :]
 
-        index_names = [self.header.tables[table]['columns'][0][0],
-                       self.header.tables[table]['columns'][1][0]]
-
+        # DataFrame creation
         if groups:
             data = data_agg
-            index_names[1] = 'Group'
 
-        if len(aggregations) < 2:
-            data = data.reshape((len(outputs), len(index0) * len(index1))).T
+        if aggregation_level < 2:
+            data = data.reshape((len(fields), len(index0) * len(index1))).T
             index = pd.MultiIndex.from_product([index0, index1], names=index_names)
         else:
-            data = {field: aggs[field].ravel() for field in aggs}
-            columns = list(aggs)
+            data = {field: field_arrays_agg[field].ravel() for field in field_arrays_agg}
             index = pd.Index(index1, name=index_names[1])
+            columns = list(field_arrays_agg)
 
         return pd.DataFrame(data, columns=columns, index=index, copy=False)
 
-    def query_from_file(self, file):
-        return self.query(**parse_query_file(file))
 
-    def _close(self):
+def aggregate(array, array_agg, aggregations, LIDs, LIDs_agg, weights):
 
-        for table in self.tables.values():
-            table.close()
+    for i, aggregation in enumerate(aggregations):
+        axis = 1 - i
+        aggregation, is_absolute = is_abs(aggregation)
 
-    def _get_tables_specs(self):
-        tables_specs = get_tables_specs()
-
-        for name, header in self.header.tables.items():
-            tables_specs[name]['columns'] = [field for field, _ in header['columns']]
-            tables_specs[name]['dtypes'] = {field: dtype for field, dtype in header['columns']}
-            tables_specs[name]['pch_format'] = [[(field, tables_specs[name]['dtypes'][field] if
-                                                  field in tables_specs[name]['dtypes'] else
-                                                  dtype) for field, dtype in row] for row in
-                                                tables_specs[name]['pch_format']]
-
-        return tables_specs
-
-    @staticmethod
-    def _is_abs(field_str):
-
-        if field_str[:4] == 'ABS(' and field_str[-1] == ')':
-            return field_str[4:-1], True
-        else:
-            return field_str, False
-
-    @classmethod
-    def _aggregate(cls, array, array_agg, aggregations, LIDs, LIDs_agg, weights):
-
-        for i, aggregation in enumerate(aggregations):
-            axis = 1 - i
-            aggregation, is_absolute = cls._is_abs(aggregation)
+        if aggregation == 'AVG':
 
             if axis == 0:
-                LIDs = np.array(list(LIDs), dtype=np.int64)
+                raise ValueError("'AVG' aggregation cannot be applied to LIDs!")
 
-            if aggregation == 'AVG':
+            array = np.average(array, axis, weights)
+        elif aggregation == 'MAX':
 
-                if axis == 0:
-                    raise ValueError("'AVG' aggregation cannot be applied to LIDs!")
+            if axis == 0:
+                LIDs_agg[:] = LIDs[array.argmax(axis)]
 
-                array = np.average(array, axis, weights)
-            elif aggregation == 'MAX':
+            array = np.max(array, axis)
+        elif aggregation == 'MIN':
 
-                if axis == 0:
-                    LIDs_agg[0] = LIDs[array.argmax(axis)]
-                    array = np.array([np.max(array, axis)])
-                else:
-                    array = np.max(array, axis)
-            elif aggregation == 'MIN':
+            if axis == 0:
+                LIDs_agg[:] = LIDs[array.argmin(axis)]
 
-                if axis == 0:
-                    LIDs_agg[0] = LIDs[array.argmin(axis)]
-                    array = np.array([np.min(array, axis)])
-                else:
-                    array = np.min(array, axis)
-            else:
-                raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
+            array = np.min(array, axis)
+        else:
+            raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
 
-            if is_absolute:
-                np.abs(array, out=array)
+        if is_absolute:
+            np.abs(array, out=array)
 
-        array_agg[:] = array
+    array_agg[:] = array
+
+
+def is_abs(field_str):
+
+    if field_str[:4] == 'ABS(' and field_str[-1] == ')':
+        return field_str[4:-1], True
+    else:
+        return field_str, False
 
 
 def parse_query_file(file):

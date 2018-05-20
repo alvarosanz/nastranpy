@@ -101,9 +101,12 @@ class DatabaseClient(BaseClient):
 
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
-    def query(self, table=None, outputs=None, LIDs=None, IDs=None,
+    def query_from_file(self, file):
+        return self.query(**parse_query_file(file))
+
+    def query(self, table=None, fields=None, LIDs=None, IDs=None,
               geometry=None, weights=None, output_file=None, **kwargs):
-        df = self._request(request_type='query', table=table, outputs=outputs,
+        df = self._request(request_type='query', table=table, fields=fields,
                            LIDs=LIDs, IDs=IDs, geometry=geometry, weights=weights)['df']
 
         if output_file:
@@ -111,9 +114,6 @@ class DatabaseClient(BaseClient):
             df.to_csv(output_file)
 
         return df
-
-    def query_from_file(self, file):
-        return self.query(**parse_query_file(file))
 
     def _request(self, **kwargs):
         kwargs['path'] = self.path
