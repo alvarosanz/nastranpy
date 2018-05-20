@@ -88,14 +88,13 @@ class Connection(object):
         elif data_type == '#':
             raise ConnectionError(buffer.read().decode())
 
-    def send_dataframe(self, dataframe):
-        batch = pa.RecordBatch.from_pandas(dataframe)
+    def send_batch(self, batch):
         writer = pa.RecordBatchStreamWriter(self.socket.makefile('wb'), batch.schema)
         writer.write_batch(batch)
 
-    def recv_dataframe(self):
+    def recv_batch(self):
         reader = pa.RecordBatchStreamReader(self.socket.makefile('rb'))
-        return reader.read_pandas()
+        return reader.read_next_batch()
 
     def send_tables(self, files, tables_specs):
         ignored_tables = set()

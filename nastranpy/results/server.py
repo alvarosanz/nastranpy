@@ -121,7 +121,6 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                                                                                     'restore_database'))):
                 path = os.path.join(self.server.root_path, query['path'])
                 msg = ''
-                df = None
 
                 if query['request_type'] == 'create_database':
 
@@ -140,7 +139,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 if query['request_type'] == 'check':
                     msg = db.check(print_to_screen=False)
                 elif query['request_type'] == 'query':
-                    df = db.query(**parse_query(query))
+                    batch = db.query(**parse_query(query), return_dataframe=False)
                 elif query['request_type'] == 'append_to_database':
                     connection.send(msg=db._get_tables_specs())
                     db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
@@ -157,8 +156,10 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
             connection.send(msg={'msg': msg, 'header': header})
 
-            if not df is None:
-                connection.send_dataframe(df)
+            try:
+                connection.send_batch(batch)
+            except NameError:
+                pass
 
 
 class DatabaseServer(socketserver.TCPServer):

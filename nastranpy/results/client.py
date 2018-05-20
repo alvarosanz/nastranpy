@@ -56,7 +56,7 @@ class BaseClient(object):
                 connection.send_tables(kwargs['files'], data)
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
-                data['df'] = connection.recv_dataframe()
+                data['batch'] = connection.recv_batch()
 
         finally:
             connection.kill()
@@ -101,13 +101,20 @@ class DatabaseClient(BaseClient):
 
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
-    def query_from_file(self, file):
-        return self.query(**parse_query_file(file))
+    def query_from_file(self, file, return_dataframe=True):
+        return self.query(**parse_query_file(file), return_dataframe=return_dataframe)
 
-    def query(self, table=None, fields=None, LIDs=None, IDs=None,
-              geometry=None, weights=None, output_file=None, **kwargs):
-        df = self._request(request_type='query', table=table, fields=fields,
-                           LIDs=LIDs, IDs=IDs, geometry=geometry, weights=weights)['df']
+    def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
+              geometry=None, weights=None, output_file=None, return_dataframe=True, **kwargs):
+        batch = self._request(request_type='query', table=table, fields=fields,
+                              LIDs=LIDs, IDs=IDs, groups=groups,
+                              geometry=geometry, weights=weights)['batch']
+
+        if return_dataframe:
+            df = batch.to_pandas()
+            df.set_index(json.loads(batch.schema.metadata[b'index_columns'].decode()), inplace=True)
+        else:
+            return batch
 
         if output_file:
             print(f"Writing '{output_file}' ...")

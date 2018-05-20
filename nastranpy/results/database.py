@@ -4,6 +4,8 @@ import csv
 import json
 import shutil
 import numpy as np
+import pyarrow as pa
+from numba import guvectorize
 from nastranpy.results.table_data import TableData
 from nastranpy.results.queries import query_functions
 from nastranpy.results.tables_specs import get_tables_specs
@@ -247,12 +249,11 @@ class Database(object):
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
-    def query_from_file(self, file):
-        return self.query(**parse_query_file(file))
+    def query_from_file(self, file, return_dataframe=True):
+        return self.query(**parse_query_file(file), return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, weights=None, **kwargs):
-        import pandas as pd
+              geometry=None, weights=None, return_dataframe=True, **kwargs):
 
         if not fields:
             fields = [[name, list()] for name in self.tables[table].names]
@@ -294,26 +295,18 @@ class Database(object):
         columns = list()
         data = np.empty((len(fields), len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
         field_arrays = dict()
-        index_names = [self.header.tables[table]['columns'][0][0],
-                       self.header.tables[table]['columns'][1][0]]
 
-        if groups:
-            index_names[1] = 'Group'
-
-            if aggregation_level == 2:
-                index0 = None
-                shape = (len(fields), 1, len(groups))
-                LIDs_agg = np.empty(shape, dtype=np.int64)
-                field_arrays_agg = dict()
-            else:
-                index0 = LIDs_queried
-                shape = (len(fields), len(LIDs_queried), len(groups))
-
-            data_agg = np.empty(shape, dtype=np.float64)
-            index1 = list(groups)
+        if aggregation_level == 0:
+            index_names = [self.header.tables[table]['columns'][0][0],
+                           self.header.tables[table]['columns'][1][0]]
+        elif aggregation_level == 1:
+            index_names = [self.header.tables[table]['columns'][0][0], 'Group']
+            data_agg = np.empty((len(fields), len(LIDs_queried), len(groups)), dtype=np.float64)
         else:
-            index0 = LIDs_queried
-            index1 = IDs_queried
+            index_names = ['Group']
+            data_agg = np.empty((len(fields), 1, len(groups)), dtype=np.float64)
+            LIDs_agg = np.empty((len(fields), 1, len(groups)), dtype=np.int64)
+            field_arrays_agg = dict()
 
         # Fields processing
         for i, (field, aggregation) in enumerate(fields):
@@ -376,20 +369,49 @@ class Database(object):
                 if aggregation_level == 2:
                     field_arrays_agg[field] = data_agg[i, :, :]
                     field_arrays_agg[f'{field}: LID'] = LIDs_agg[i, :, :]
+                    columns.append(f'{field}: LID')
 
         # DataFrame creation
-        if groups:
-            data = data_agg
-
-        if aggregation_level < 2:
-            data = data.reshape((len(fields), len(index0) * len(index1))).T
-            index = pd.MultiIndex.from_product([index0, index1], names=index_names)
+        if aggregation_level == 0:
+            data = data.reshape((len(fields), len(LIDs_queried) * len(IDs_queried))).T
+        elif aggregation_level == 1:
+            data = data_agg.reshape((len(fields), len(LIDs_queried) * len(groups))).T
         else:
             data = {field: field_arrays_agg[field].ravel() for field in field_arrays_agg}
-            index = pd.Index(index1, name=index_names[1])
-            columns = list(field_arrays_agg)
 
-        return pd.DataFrame(data, columns=columns, index=index, copy=False)
+        if return_dataframe:
+            import pandas as pd
+
+            if aggregation_level == 0:
+                index = pd.MultiIndex.from_product([LIDs_queried, IDs_queried], names=index_names)
+            elif aggregation_level == 1:
+                index = pd.MultiIndex.from_product([LIDs_queried, list(groups)], names=index_names)
+            else:
+                index = pd.Index(list(groups), name=index_names[0])
+
+            return pd.DataFrame(data, columns=columns, index=index, copy=False)
+        else:
+
+            if aggregation_level == 0:
+                index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
+                index1 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
+                set_index(np.array(LIDs_queried), np.array(IDs_queried), index0, index1)
+                arrays = [pa.array(index0.ravel()), pa.array(index1.ravel())]
+                arrays += [pa.array(data[:, i]) for i in range(len(fields))]
+            elif aggregation_level == 1:
+                index0 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
+                index1 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
+                set_index(np.array(LIDs_queried), np.arange(len(groups), dtype=np.int64), index0, index1)
+                arrays = [pa.array(index0.ravel()),
+                          pa.DictionaryArray.from_arrays(pa.array(index1.ravel()), pa.array(list(groups)))]
+                arrays += [pa.array(data[:, i]) for i in range(len(fields))]
+            else:
+                index = np.arange(len(groups), dtype=np.int64)
+                arrays = [pa.DictionaryArray.from_arrays(pa.array(index.ravel()), pa.array(list(groups)))]
+                arrays += [pa.array(data[field]) for field in data]
+
+            return pa.RecordBatch.from_arrays(arrays, index_names + columns,
+                                              metadata={b'index_columns': json.dumps(index_names).encode()})
 
 
 def aggregate(array, array_agg, aggregations, LIDs, LIDs_agg, weights):
@@ -423,6 +445,18 @@ def aggregate(array, array_agg, aggregations, LIDs, LIDs_agg, weights):
             np.abs(array, out=array)
 
     array_agg[:] = array
+
+
+@guvectorize(['(int64[:], int64[:], int64[:, :], int64[:, :])'],
+             '(n), (m) -> (n, m), (n, m)',
+             target='cpu', nopython=True)
+def set_index(index0, index1, out0, out1):
+
+    for i in range(len(index0)):
+
+        for j in range(len(index1)):
+            out0[i, j] = index0[i]
+            out1[i, j] = index1[j]
 
 
 def is_abs(field_str):
