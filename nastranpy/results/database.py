@@ -16,22 +16,39 @@ from nastranpy.bdf.misc import humansize, get_hasher, hash_bytestr
 class DatabaseHeader(object):
 
     def __init__(self, path=None, header=None):
+        """
+        Initialize a DatabaseHeader instance.
 
-        if header:
+        Parameters
+        ----------
+        path : str, optional
+            Database path.
+        header : dict, optional
+            Already constructed database header.
+        """
+        if header: # Load header from dict
             self.__dict__ = header
-        else:
+        else: # Load header from path
 
+            # Load database header
             with open(os.path.join(path, '##header.json')) as f:
                 self.__dict__ = json.load(f)
+
+            # Load database header checksum
+            with open(os.path.join(path, f'##header.{self.checksum_method}'), 'rb') as f:
+                self.checksum = binascii.hexlify(f.read()).decode()
 
             self.nbytes = 0
             self.tables = dict()
 
+            # Load tables headers
             for name in self.checksums:
 
+                # Load table header
                 with open(os.path.join(os.path.join(path, name), '#header.json')) as f:
                     self.tables[name] = json.load(f)
 
+                # Load LIDs & EIDs and calculate total size in bytes
                 for i, (field_name, dtype) in enumerate(self.tables[name]['columns']):
                     file = os.path.join(path, name, field_name + '.bin')
                     self.nbytes += os.path.getsize(file)
@@ -42,8 +59,24 @@ class DatabaseHeader(object):
                         self.tables[name]['IDs'] = np.fromfile(file, dtype=dtype).tolist()
 
     def info(self, print_to_screen=True, detailed=False):
+        """
+        Display database info.
+
+        Parameters
+        ----------
+        print_to_screen : bool, optional
+            Whether to print to screen or return an string instead.
+        detailed : bool, optional
+            Whether to show detailed info or not.
+
+        Returns
+        -------
+        str, optional
+            Database info.
+        """
         info = list()
 
+        # General database info
         if self.project:
             info.append(f'Project: {self.project}')
 
@@ -52,6 +85,7 @@ class DatabaseHeader(object):
         info.append(f'Size: {humansize(self.nbytes)}'.format())
         info.append('')
 
+        # Tables info
         for table in self.tables.values():
             ncols = len(table['columns'])
             info.append(f"Table: '{table['name']}' ({table['columns'][0][0]}: {len(table['LIDs'])}, {table['columns'][1][0]}: {len(table['IDs'])})")
@@ -64,6 +98,7 @@ class DatabaseHeader(object):
             info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
             info.append('')
 
+        # Restore points info
         info.append('Restore points:')
 
         for i, (batch_name, batch_date, batch_files) in enumerate(self.batches):
@@ -76,6 +111,7 @@ class DatabaseHeader(object):
 
                 info.append('')
 
+        # Summary
         info = '\n'.join(info)
 
         if print_to_screen:
@@ -87,13 +123,27 @@ class DatabaseHeader(object):
 class Database(object):
 
     def __init__(self, path=None):
+        """
+        Initialize a Database instance.
+
+        Parameters
+        ----------
+        path : str, optional
+            Database path.
+        """
         self.path = path
         self.load()
 
     def load(self):
+        """
+        Load the database
+        """
 
         if self.path:
+            # Load database header
             self.header = DatabaseHeader(self.path)
+
+            # Load tables
             self.tables = dict()
 
             for name, header in self.header.tables.items():
@@ -102,31 +152,49 @@ class Database(object):
                 self.tables[name] = TableData(fields, header['LIDs'], header['IDs'])
 
     def check(self, print_to_screen=True):
+        """
+        Check database integrity.
+
+        Parameters
+        ----------
+        print_to_screen : bool, optional
+            Whether to print to screen or return an string instead.
+
+        Returns
+        -------
+        str, optional
+            Database check integrity results.
+        """
         files_corrupted = list()
 
+        # Check tables integrity
         for name, header in self.header.tables.items():
 
+            # Check table fields integrity
             for file, checksum in header['batches'][-1][2].items():
 
                 with open(os.path.join(self.path, name, file), 'rb') as f:
 
-                    if checksum != hash_bytestr(f, get_hasher(self.header.checksum)):
+                    if checksum != hash_bytestr(f, get_hasher(self.header.checksum_method)):
                         files_corrupted.append(file)
 
+            # Check table header integrity
             header_file = os.path.join(self.path, name, '#header.json')
 
             with open(header_file, 'rb') as f:
 
-                if self.header.checksums[header['name']] != hash_bytestr(f, get_hasher(self.header.checksum)):
+                if self.header.checksums[header['name']] != hash_bytestr(f, get_hasher(self.header.checksum_method)):
                     files_corrupted.append(header_file)
 
+        # Check database header integrity
         database_header_file = os.path.join(self.path, '##header.json')
 
-        with open(database_header_file, 'rb') as f, open(os.path.splitext(database_header_file)[0] + '.' + self.header.checksum, 'rb') as f_checksum:
+        with open(database_header_file, 'rb') as f:
 
-            if f_checksum.read() != hash_bytestr(f, get_hasher(self.header.checksum), ashexstr=False):
+            if self.header.checksum != hash_bytestr(f, get_hasher(self.header.checksum_method)):
                 files_corrupted.append(database_header_file)
 
+        # Summary
         info = list()
 
         if files_corrupted:
@@ -146,28 +214,58 @@ class Database(object):
     def create(self, files, database_path, database_name, database_version,
                database_project=None, tables_specs=None, overwrite=False,
                table_generator=None, max_chunk_size=1e8):
+        """
+        Create a new database from .pch files.
+
+        Parameters
+        ----------
+        files : list of str
+            List of .pch files.
+        database_path : str
+            Database path.
+        database_name : str
+            Database name.
+        database_version : str
+            Database version.
+        database_project : str, optional
+            Database project.
+        tables_specs : dict, optional
+            Tables specifications. If not provided or None, default ones are used.
+        overwrite : bool, optional
+            Whether to rewrite or not an already existing database.
+        table_generator : generator, optional
+            A generator which yields tables.
+        max_chunk_size : int, optional
+            Maximum chunk size (in bytes) when dealing with database data files creation.
+        """
         Path(database_path).mkdir(parents=True, exist_ok=overwrite)
         print('Creating database ...')
         self.path = database_path
-
-        if isinstance(files, str):
-            files = [files]
-
         batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
         headers, load_cases_info = create_tables(self.path, files, tables_specs,
                                                  table_generator=table_generator)
         finalize_database(self.path, database_name, database_version, database_project,
                           headers, load_cases_info, batches, max_chunk_size)
-
         self.load()
         print('Database created succesfully!')
 
     def _close(self):
+        """
+        Close tables.
+        """
 
         for table in self.tables.values():
             table.close()
 
     def _get_tables_specs(self):
+        """
+        Get tables specifications.
+
+        Returns
+        -------
+        dict
+            Tables specifications.
+        """
         tables_specs = get_tables_specs()
 
         for name, header in self.header.tables.items():
@@ -181,14 +279,25 @@ class Database(object):
         return tables_specs
 
     def append(self, files, batch_name, table_generator=None, max_chunk_size=1e8):
+        """
+        Append new results to database. This operation is reversible.
+
+        Parameters
+        ----------
+        files : list of str
+            List of .pch files.
+        batch_name : str
+            Batch name.
+        table_generator : generator, optional
+            A generator which yields tables.
+        max_chunk_size : int, optional
+            Maximum chunk size (in bytes) when dealing with database data files creation.
+        """
 
         if batch_name in {batch_name for batch_name, _, _ in self.header.batches}:
             raise ValueError(f"'{batch_name}' already exists!")
 
         print('Appending to database ...')
-
-        if isinstance(files, str):
-            files = [files]
 
         self._close()
 
@@ -202,11 +311,21 @@ class Database(object):
 
         self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
         finalize_database(self.path, self.header.name, self.header.version, self.header.project,
-                          self.header.tables, load_cases_info, self.header.batches, max_chunk_size, self.header.checksum)
+                          self.header.tables, load_cases_info, self.header.batches, max_chunk_size, self.header.checksum_method)
         self.load()
         print('Database updated succesfully!')
 
     def restore(self, batch_name, max_chunk_size=1e8):
+        """
+        Restore database to a previous batch. This operation is not reversible.
+
+        Parameters
+        ----------
+        batch_name : str
+            Batch name.
+        max_chunk_size : int, optional
+            Maximum chunk size (in bytes) when dealing with database data files creation.
+        """
         restore_points = [batch[0] for batch in self.header.batches]
 
         if batch_name not in restore_points or batch_name == restore_points[-1]:
@@ -245,16 +364,43 @@ class Database(object):
         finalize_database(self.path, self.header.name, self.header.version, self.header.project,
                           {name: self.header.tables[name] for name in self.tables},
                           {name: dict() for name in self.tables},
-                          self.header.batches[:batch_index + 1], max_chunk_size, self.header.checksum)
+                          self.header.batches[:batch_index + 1], max_chunk_size, self.header.checksum_method)
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
     def query_from_file(self, file, return_dataframe=True):
+        """
+        Perform a query from a file.
+
+        Parameters
+        ----------
+        file : str
+            Query file.
+        return_dataframe : bool, optional
+            Whether to return a pandas dataframe or a pyarrow RecordBatch.
+
+        Returns
+        -------
+        pandas.DataFrame or pyarrow.RecordBatch
+            Data queried.
+        """
         return self.query(**parse_query_file(file), return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
               geometry=None, weights=None, return_dataframe=True, **kwargs):
+        """
+        Perform a query.
 
+        Parameters
+        ----------
+        return_dataframe : bool, optional
+            Whether to return a pandas dataframe or a pyarrow RecordBatch.
+
+        Returns
+        -------
+        pandas.DataFrame or pyarrow.RecordBatch
+            Data queried.
+        """
         if not fields:
             fields = [[name, list()] for name in self.tables[table].names]
 
@@ -513,7 +659,7 @@ def parse_query_file(file):
 
 
 def parse_query(query):
-    query = {key: value if value else None for key, value in query.items()}
+    query = {key: value for key, value in query.items() if value}
 
     for field in ('LIDs', 'geometry', 'weights'):
 

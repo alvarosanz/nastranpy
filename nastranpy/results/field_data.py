@@ -1,4 +1,3 @@
-import os
 import numpy as np
 from numba import guvectorize
 
@@ -11,19 +10,19 @@ class FieldData(object):
 
         Parameters
         ----------
-        name: str
+        name : str
             Field name.
-        dtype: numpy.dtype
+        dtype : numpy.dtype
             Field type.
-        file: str
+        file : str
             File path.
-        LIDs: list of int
+        LIDs : list of int
             List of LIDs.
-        IDs: list of int
+        IDs : list of int
             List of IDs.
-        iLIDs: dict of int: int
+        iLIDs : dict of int: int
             Dict of LID indexes.
-        iIDs: dict of int: int
+        iIDs : dict of int: int
             Dict of ID indexes.
         """
         self.name = name
@@ -59,11 +58,19 @@ class FieldData(object):
 
         Parameters
         ----------
-        LIDs: list of int or dict, optional
-            List of LIDs. If not provided or None, all LIDs are returned.
-        IDs: list of int, optional
-            List of IDs. If not provided or None, all IDs are returned.
-        out: numpy.ndarray, optional
+        LIDs : list of int or dict of int: [float, int, float, int, ...], optional
+            List of requested LIDs. If not provided or None, all LIDs are considered.
+            Alternatively, a dict with the LID combinations can be specified as
+            follows (d letter stands for derived load case):
+
+                dLID0: [coeff0, LID0, coeff1, LID1, coeff2, LID2, ...]
+                dLID1: [coeff0, dLID0, coeff1, LID1, coeff2, LID2, ...]
+                LID2: []
+                dLID3: [coeff0, dLID0, coeff1, dLID1, coeff2, LID2, ...]
+
+        IDs : list of int, optional
+            List of requested IDs. If not provided or None, all IDs are considered.
+        out : numpy.ndarray, optional
             A location into which the result is stored. If not provided or None, a freshly-allocated array is returned.
 
         Returns
@@ -72,12 +79,15 @@ class FieldData(object):
             Field values requested.
         """
 
+        # Request all items if not specified
         LIDs_queried = self._LIDs if LIDs is None else LIDs
         IDs_queried = self._IDs if IDs is None else IDs
 
+        # Pre-allocate memory if necessary
         if out is None:
             out = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
 
+        # Process LID combination data
         is_combination = isinstance(LIDs, dict)
 
         if is_combination:
@@ -95,36 +105,40 @@ class FieldData(object):
         else:
             array = out
 
-        if len(LIDs_queried) < len(IDs_queried):
+        # Read fields mapped files
+        if len(LIDs_queried) < len(IDs_queried): # Use LID-ordered mapped file (less disk seeks required)
             iIDs = slice(None) if IDs is None else np.array([self._iIDs[ID] for ID in IDs_queried])
 
-            if self._data_by_LID is None:
+            if self._data_by_LID is None: # Open file (if not already open)
                 self._data_by_LID = np.memmap(self.file, dtype=self.dtype, shape=self.shape, mode='r')
 
+            # Read data from mapped file
             for i, LID in enumerate(LIDs_queried):
                 array[i, :] = self._data_by_LID[self._iLIDs[LID], :][iIDs]
 
-        else:
+        else: # Use ID-ordered mapped file (less disk seeks required)
             iLIDs = slice(None) if LIDs is None else np.array([self._iLIDs[LID] for LID in LIDs_queried])
 
-            if self._data_by_ID is None:
+            if self._data_by_ID is None: # Open file (if not already open)
                 self._data_by_ID = np.memmap(self.file, dtype=self.dtype, shape=self.shape, mode='r',
                                              offset=self._offset, order='C')
 
+            # Read data from mapped file
             for i, ID in enumerate(IDs_queried):
                 array[:len(LIDs_queried), i] = self._data_by_ID[:, self._iIDs[ID]][iLIDs]
 
+        # Combine load cases
         if is_combination:
 
             for i, (index, indexes, coeffs) in enumerate(LID_combinations):
 
-                if len(coeffs):
+                if len(coeffs): # Combined load case
                     combine(array, indexes, coeffs, out[i, :])
 
-                    if index:
+                    if index: # Store it in order to be used in the future
                         array[index, :] = out[i, :]
 
-                else:
+                else: # Pure load case (not required to combine)
                     out[i, :] = array[index, :]
 
         return out
@@ -138,13 +152,13 @@ def combine(array, indexes, coeffs, out):
 
     Parameters
     ----------
-    array: numpy.ndarray
+    array : numpy.ndarray
         Field values (not combined).
-    indexes: numpy.ndarray
+    indexes : numpy.ndarray
         Indexes of LIDs to combine.
-    coeffs: numpy.ndarray
+    coeffs : numpy.ndarray
         Multiplication coefficients.
-    out: numpy.ndarray
+    out : numpy.ndarray
         Output argument. Combined field values.
     """
 

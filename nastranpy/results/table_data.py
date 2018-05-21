@@ -10,11 +10,13 @@ class TableData(object):
 
         Parameters
         ----------
-        fields: list of FieldData
-            List of fields.
-        LIDs: list of int
+        fields : list of (str, np.dtype, str)
+            List of tuples for each field. Each tuple contains the following info:
+                (field name, field type, field file)
+
+        LIDs : list of int
             List of LIDs.
-        IDs: list of int
+        IDs : list of int
             List of IDs.
         """
         self._LIDs = LIDs

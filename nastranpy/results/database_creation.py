@@ -266,7 +266,7 @@ def create_database_header(database_path, database_name, database_version,
                        'name': database_name,
                        'version': database_version,
                        'date': str(datetime.date.today()),
-                       'checksum': checksum,
+                       'checksum_method': checksum,
                        'checksums': checksums,
                        'batches': batches}
 
