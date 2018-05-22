@@ -404,19 +404,6 @@ class Database(object):
         if not fields:
             fields = [[name, list()] for name in self.tables[table].names]
 
-        # Check aggregation options
-        aggregation_levels = {len(aggregation) for _, aggregation in fields}
-        aggregation_level = aggregation_levels.pop()
-
-        if aggregation_levels or aggregation_level > 2:
-            raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
-
-        if aggregation_level and not groups:
-            raise ValueError('A non-grouped query must not be aggregated!')
-
-        if not aggregation_level and groups:
-            raise ValueError('A grouped query must be aggregated!')
-
         # Group data pre-processing
         if groups:
             IDs = sorted({ID for IDs in groups.values() for ID in IDs})
@@ -438,23 +425,11 @@ class Database(object):
                         parameter in geometry}
 
         # Memory pre-allocation
-        columns = list()
-        data = np.empty((len(fields), len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
-        field_arrays = dict()
-
-        if aggregation_level == 0:
-            index_names = [self.header.tables[table]['columns'][0][0],
-                           self.header.tables[table]['columns'][1][0]]
-        elif aggregation_level == 1:
-            index_names = [self.header.tables[table]['columns'][0][0], 'Group']
-            data_agg = np.empty((len(fields), len(LIDs_queried), len(groups)), dtype=np.float64)
-        else:
-            index_names = ['Group']
-            data_agg = np.empty((len(fields), 1, len(groups)), dtype=np.float64)
-            LIDs_agg = np.empty((len(fields), 1, len(groups)), dtype=np.int64)
-            field_arrays_agg = dict()
+        mem_handler = MemoryHandler(fields, LIDs_queried, IDs_queried, groups)
 
         # Fields processing
+        columns = list()
+
         for i, (field, aggregation) in enumerate(fields):
             field_array = data[i, :, :]
             field, is_absolute = is_abs(field.upper())
@@ -519,10 +494,14 @@ class Database(object):
 
         # DataFrame creation
         if aggregation_level == 0:
+            index_names = [self.header.tables[table]['columns'][0][0],
+                           self.header.tables[table]['columns'][1][0]]
             data = data.reshape((len(fields), len(LIDs_queried) * len(IDs_queried))).T
         elif aggregation_level == 1:
+            index_names = [self.header.tables[table]['columns'][0][0], 'Group']
             data = data_agg.reshape((len(fields), len(LIDs_queried) * len(groups))).T
         else:
+            index_names = ['Group']
             data = {field: field_arrays_agg[field].ravel() for field in field_arrays_agg}
 
         if return_dataframe:
@@ -558,6 +537,50 @@ class Database(object):
 
             return pa.RecordBatch.from_arrays(arrays, index_names + columns,
                                               metadata={b'index_columns': json.dumps(index_names).encode()})
+
+
+class MemoryHandler(object):
+
+    def __init__(self, fields, LIDs, IDs, groups=None):
+        self.fields = fields
+        self.LIDs = LIDs
+        self.IDs = IDs
+        self.groups = groups
+
+        # Check aggregation options
+        aggregation_levels = {field.count('-') for field in self.fields}
+        self.aggregation_level = aggregation_levels.pop()
+
+        if aggregation_levels or self.aggregation_level > 2:
+            raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
+
+        if self.aggregation_level and not self.groups:
+            raise ValueError('A non-grouped query must not be aggregated!')
+
+        if not self.aggregation_level and self.groups:
+            raise ValueError('A grouped query must be aggregated!')
+
+        # Memory pre-allocation
+        self._arrays = dict()
+
+        if self.aggregation_level == 0:
+            self.data0 = np.empty((len(self.fields), len(self.LIDs), len(self.IDs)), dtype=np.float64)
+            pass
+        elif self.aggregation_level == 1:
+            data_agg = np.empty((len(self.fields), len(self.LIDs), len(groups)), dtype=np.float64)
+        else:
+            data_agg = np.empty((len(self.fields), 1, len(groups)), dtype=np.float64)
+            LIDs_agg = np.empty((len(self.fields), 1, len(groups)), dtype=np.int64)
+            field_arrays_agg = dict()
+
+    def __getitem__(self, index):
+        return self._arrays
+
+    def __setitem__(self, index, value):
+        self._arrays[index][:] = value
+
+    def __contains__(self, value):
+        return value in self._arrays
 
 
 def aggregate(array, array_agg, aggregations, LIDs, LIDs_agg, weights):

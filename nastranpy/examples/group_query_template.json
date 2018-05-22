@@ -5,13 +5,13 @@
     "output_file": "",
     "table": "ELEMENT FORCES - QUAD4 (33)",
     "fields": [
-        ["NX", ["AVG", "MAX"]],
-        ["NY", ["AVG", "MAX"]],
-        ["NXY", ["ABS(AVG)", "MAX"]],
-        ["MAX_PPAL", ["AVG", "MAX"]],
-        ["MIN_PPAL", ["AVG", "MAX"]],
-        ["MAX_SHEAR", ["AVG", "MAX"]],
-        ["VON_MISES", ["AVG", "MAX"]]
+        "NX-AVG-MAX",
+        "NY-AVG-MAX",
+        "NXY-ABS(AVG)-MAX",
+        "MaxPpal-AVG-MAX",
+        "MinPpal-AVG-MAX",
+        "MaxShear-AVG-MAX",
+        "VolMises-AVG-MAX"
     ],
     "LIDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/LID_combinations.csv",
     "IDs": "",

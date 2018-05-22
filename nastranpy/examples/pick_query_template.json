@@ -5,13 +5,13 @@
     "output_file": "",
     "table": "ELEMENT FORCES - QUAD4 (33)",
     "fields": [
-        ["NX", []],
-        ["NY", []],
-        ["ABS(NXY)", []],
-        ["MAX_PPAL", []],
-        ["MIN_PPAL", []],
-        ["MAX_SHEAR", []],
-        ["VON_MISES", []]
+        "NX",
+        "NY",
+        "ABS(NXY)",
+        "MaxPpal",
+        "MinPpal",
+        "MaxShear",
+        "VonMises"
     ],
     "LIDs": "",
     "IDs": "",
