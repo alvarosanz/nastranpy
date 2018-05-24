@@ -11,7 +11,7 @@
         "MaxPpal-AVG-MAX",
         "MinPpal-AVG-MAX",
         "MaxShear-AVG-MAX",
-        "VolMises-AVG-MAX"
+        "VonMises-AVG-MAX"
     ],
     "LIDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/LID_combinations.csv",
     "IDs": "",
