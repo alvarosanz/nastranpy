@@ -4,6 +4,7 @@ from nastranpy.bdf.cards.class_factory import card_classes
 from nastranpy.bdf.read_bdf import cards_in_file
 from nastranpy.bdf.write_bdf import print_card
 from nastranpy.setup_logging import setup_logging
+import nastranpy.utils as utils
 
 
 def card_help(card_name):
