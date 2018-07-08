@@ -54,13 +54,15 @@ class IncludeCard(Card):
     def write(self):
         assure_path_exists(self._file)
 
-        with open(self._file, 'w') as f:
+        if self.commentted_cards or self.cards:
 
-            for card in sorted_cards(self.commentted_cards):
-                f.write(card.print(print_comment=True, is_commented=True, comment_symbol='$ -> ') + '\n')
+            with open(self._file, 'w') as f:
 
-            for card in sorted_cards(self.cards):
-                f.write(card.print(print_comment=True) + '\n')
+                for card in sorted_cards(self.commentted_cards):
+                    f.write(card.print(print_comment=True, is_commented=True, comment_symbol='$ -> ') + '\n')
+
+                for card in sorted_cards(self.cards):
+                    f.write(card.print(print_comment=True) + '\n')
 
     def clear_commented_cards(self):
         self.commentted_cards.clear()

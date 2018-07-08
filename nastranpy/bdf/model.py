@@ -37,6 +37,7 @@ class Model(object):
         """Clear the model."""
         self.items = {item_type: dict() for item_type in item_types}
         self.sets = {set_type: dict() for set_type in set_types}
+        self.all_items = {**self.items, **self.sets}
         self.unsupported_cards = set()
         self.warnings = 0
         self.errors = 0
@@ -92,12 +93,9 @@ class Model(object):
         self._log.info('Processing cards ...')
 
         if self._link_cards:
-            all_items = {card_type: self.items[card_type] if card_type in self.items else
-                         self.sets[card_type] for
-                         card_type in list(self.items) + list(self.sets)}
 
             for card in self._cards():
-                card._process_fields(all_items)
+                card._process_fields(self.all_items)
 
             self._arrange_grids()
         else:
@@ -558,7 +556,7 @@ class Model(object):
             for card in sorted_cards(cards):
                 csv_writer.writerow(card.get_fields())
 
-    def create_card(self, fields, include, large_field=False, free_field=False):
+    def create_card(self, fields, include=None, large_field=False, free_field=False):
         """
         Create a new card in the database.
 
@@ -566,22 +564,26 @@ class Model(object):
         ----------
         fields : list of int, float or str
             List of fields.
-        include : str
+        include : str, optional
             Include filename.
         large_field : bool, optional
             Use large-field format.
         free_field : bool, optional
             Use free-field format.
         """
-        card = card_factory.get_card(card, large_field=large_field, free_field=free_field)
+        card = card_factory.get_card(fields, large_field=large_field, free_field=free_field)
+        self._classify_card(card)
+        card._process_fields(self.all_items)
 
         try:
             card._settle()
         except AttributeError:
             pass
 
-        self._classify_card(card)
-        card.include = self.includes[include]
+        if include:
+            card.include = self.includes[include]
+
+        return card
 
     def delete_card(self, card):
         """
