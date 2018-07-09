@@ -28,6 +28,7 @@ def bar_settle_factory(card_name):
             G2 += self.offsetB
 
         self._coord = CoordSystem(G1, G2, G1 + v, method=2)
+        self._length = np.linalg.norm(G2 - G1)
         self._axis = self._coord.M[0]
         self._centroid = (G1 + G2) / 2
 
@@ -155,6 +156,14 @@ def bar_area_factory(card_name):
     return wrapped
 
 
+def bar_length(self):
+
+    if not self._coord:
+        self._settle()
+
+    return self._length
+
+
 def bar_axis(self):
 
     if not self._coord:
@@ -212,24 +221,28 @@ card_interfaces_additional = {
     # Elements
     'CROD': {
         '_settle': (bar_settle_factory('CROD'), False),
+        'length': (bar_length, True),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CROD'), True),
         'centroid': (centroid, True),
     },
     'CONROD': {
         '_settle': (bar_settle_factory('CONROD'), False),
+        'length': (bar_length, True),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CONROD'), True),
         'centroid': (centroid, True),
     },
     'CBAR': {
         '_settle': (bar_settle_factory('CBAR'), False),
+        'length': (bar_length, True),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CBAR'), True),
         'centroid': (centroid, True),
     },
     'CBEAM': {
         '_settle': (bar_settle_factory('CBEAM'), False),
+        'length': (bar_length, True),
         'axis': (bar_axis, True),
         'area': (bar_area_factory('CBEAM'), True),
         'centroid': (centroid, True),

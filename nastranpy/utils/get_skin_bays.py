@@ -3,13 +3,27 @@ import numpy as np
 from nastranpy.bdf.model import Model
 
 
-def get_skin_bays_geom(bdf_files, EIDs_file, output_file):
+def get_skin_bays_geometry(bdf_files, EIDs_file, output_file):
+    """
+    Export skin bays geometry (a, b, t, R)) to an .csv file.
+
+    Parameters
+    ----------
+    bdf_files : list of str
+        List of the model bdf files.
+    EIDs_file : str
+        Path of the skin bays EIDs file (*.csv). Format is as follows (use no headers!):
+        Location, EID0, EID1, EID2, ...
+    output_file : str
+        Path of the output file (*.csv).
+    """
+
     # Import model
     model_0 = Model()
     model_0.read(bdf_files)
 
-
     # Generate dummy mesh
+    print('Processing skin bays...')
     skin_bays = dict()
     model = Model()
 
@@ -50,6 +64,7 @@ def get_skin_bays_geom(bdf_files, EIDs_file, output_file):
                     model.create_card(['GRID', grid.id, None, grid.xyz0[0], grid.xyz0[1], grid.xyz0[2]])
 
             skin_bays[bay_name] = SkinBay(model.create_card(['CQUAD4', bay_id + 1, None] + [grid.id for grid in bay_grids]))
+            skin_bays[bay_name].thickness = sum(shell.thickness for shell in shells) / len(shells)
 
 
     # Link bays & process geometry
@@ -67,13 +82,16 @@ def get_skin_bays_geom(bdf_files, EIDs_file, output_file):
     # Print output file
     with open(output_file, 'w') as f:
         writer = csv.writer(f, lineterminator='\n')
+        writer.writerow(['Location', 'a', 'b', 't', 'R'])
 
         for bay_name, geometry in bay_geometry.items():
 
             if geometry:
                 writer.writerow([bay_name] + list(geometry))
             else:
-                writer.writerow([bay_name, 'N/A', 'N/A', 'N/A'])
+                writer.writerow([bay_name, 'N/A', 'N/A', 'N/A', 'N/A'])
+
+    print('Done!')
 
 
 class SkinBay(object):
@@ -84,6 +102,7 @@ class SkinBay(object):
         self.right = None
         self.fwd = None
         self.aft = None
+        self.thickness = None
 
     def link(self):
 
@@ -102,11 +121,15 @@ class SkinBay(object):
                 self.aft = bay
 
     def get_geometry(self):
+        # Bay length
         a = (np.linalg.norm(self.me.grids[1].xyz0 - self.me.grids[0].xyz0) +
              np.linalg.norm(self.me.grids[2].xyz0 - self.me.grids[3].xyz0)) / 2
+
+        # Bay width
         b = (np.linalg.norm(self.me.grids[3].xyz0 - self.me.grids[0].xyz0) +
              np.linalg.norm(self.me.grids[2].xyz0 - self.me.grids[1].xyz0)) / 2
 
+        # Bay curvature
         p_left = (self.me.grids[0].xyz0 + self.me.grids[1].xyz0) / 2
         p_right = (self.me.grids[3].xyz0 + self.me.grids[2].xyz0) / 2
         d = np.linalg.norm(p_right - p_left)
@@ -124,4 +147,4 @@ class SkinBay(object):
 
         R = sum(Rs) / len(Rs)
 
-        return a, b, R
+        return a, b, self.thickness, R
