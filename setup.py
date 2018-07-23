@@ -6,7 +6,7 @@ setup(
     version='0.1.2',
     description='A library to interact with nastran models',
     url='https://github.com/alvarosanz/nastranpy',
-    author='Álvaro Sanz Oriz',
+    author='Alvaro Sanz Oriz',
     author_email='alvaro.sanz.oriz@gmail.com',
     packages=find_packages(),
     license='MIT',

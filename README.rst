@@ -160,4 +160,4 @@ Make include self-contained::
 
 Contact
 =======
-Álvaro Sanz Oriz – alvaro.sanz.oriz@gmail.com
+Alvaro Sanz Oriz – alvaro.sanz.oriz@gmail.com
