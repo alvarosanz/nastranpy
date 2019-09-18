@@ -82,7 +82,7 @@ def prop_area_factory(card_name):
         def wrapped(self):
             return self.A
 
-    elif card_name == 'PBARL':
+    elif card_name in ('PBARL', 'PBEAML'):
 
         def wrapped(self):
             section_type = self.TYPE
@@ -132,11 +132,6 @@ def prop_area_factory(card_name):
                 area = None
 
             return area
-
-    elif card_name == 'PBEAML':
-
-        def wrapped(self):
-            return 0.0
 
     return wrapped
 
